@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
 export class GeminiService {
@@ -65,51 +64,34 @@ export class GeminiService {
               },
             },
             {
-              text: `Analyze this image of an HSC syllabus. 
+              text: `Analyze this image of an HSC syllabus for the ${userProfile.group} group in Bangladesh (NCTB). 
               1. Extract all subjects and their chapters.
-              2. Match them with official NCTB standards for the ${userProfile.group} group.
-              3. Return the data in a strict JSON format.
+              2. Use standardized NCTB subject names (e.g., "Physics", "Chemistry", "ICT").
+              3. Identify if it's 1st Paper or 2nd Paper.
+              4. Return the data in a strict JSON format.
               
               JSON structure:
               {
                 "subjects": [
                   {
-                    "name": "Subject Name",
+                    "name": "Standard Subject Name",
                     "paper": 1,
-                    "chapters": ["Chapter 1 Name", "Chapter 2 Name"]
+                    "chapters": ["Full Chapter Name 1", "Full Chapter Name 2"]
                   }
                 ]
               }`
             },
           ],
         },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              subjects: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    paper: { type: Type.NUMBER },
-                    chapters: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING }
-                    }
-                  },
-                  required: ["name", "paper", "chapters"]
-                }
-              }
-            },
-            required: ["subjects"]
-          }
-        }
+        // responseMimeType and responseSchema are NOT supported for gemini-2.5-flash-image per guidelines
+        config: {}
       });
 
-      return JSON.parse(response.text);
+      // Manually extract and parse JSON from the response text
+      const text = response.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : text;
+      return JSON.parse(jsonStr);
     } catch (error: any) {
       console.error("Gemini Vision Error:", error);
       throw error;
@@ -131,15 +113,17 @@ export class GeminiService {
               },
             },
             {
-              text: `Analyze this image of a Bangladesh HSC Exam Routine. 
-              1. Extract the exam dates for each subject and paper mentioned.
-              2. Return the data in a strict JSON format.
+              text: `Analyze this image of a Bangladesh HSC Exam Routine (NCTB). 
+              1. Extract exam dates specifically for the subjects relevant to a ${userProfile.group} group student.
+              2. Match subject names to standard forms (e.g., "Physics", "Bangla").
+              3. Correctly identify the Paper (1 or 2).
+              4. Return the data in a strict JSON format with ISO dates.
               
               JSON structure:
               {
                 "exams": [
                   {
-                    "subjectName": "Subject Name (e.g. Physics)",
+                    "subjectName": "Standard Subject Name",
                     "paper": 1,
                     "date": "YYYY-MM-DD"
                   }
@@ -148,30 +132,15 @@ export class GeminiService {
             },
           ],
         },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              exams: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    subjectName: { type: Type.STRING },
-                    paper: { type: Type.NUMBER },
-                    date: { type: Type.STRING, description: "ISO date format YYYY-MM-DD" }
-                  },
-                  required: ["subjectName", "paper", "date"]
-                }
-              }
-            },
-            required: ["exams"]
-          }
-        }
+        // responseMimeType and responseSchema are NOT supported for gemini-2.5-flash-image per guidelines
+        config: {}
       });
 
-      return JSON.parse(response.text);
+      // Manually extract and parse JSON from the response text
+      const text = response.text || "";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : text;
+      return JSON.parse(jsonStr);
     } catch (error: any) {
       console.error("Gemini Routine Analysis Error:", error);
       throw error;

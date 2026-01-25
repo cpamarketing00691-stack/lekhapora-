@@ -1,11 +1,10 @@
-
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter } from '../types';
 import { geminiService } from '../services/gemini';
 import { 
   Camera, Plus, Trash2, Calendar, CheckCircle2, 
   Loader2, AlertTriangle, FileText, CheckCircle, 
-  Circle, MoreVertical, LayoutGrid, List
+  Circle, LayoutGrid
 } from 'lucide-react';
 
 interface SyllabusManagerProps {
@@ -36,21 +35,46 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         const result = await geminiService.analyzeSyllabusImage(userState.profile, base64, file.type);
         
         if (result && result.subjects) {
-          const newSubjects: Subject[] = result.subjects.map((s: any, idx: number) => ({
-            id: `extracted-${Date.now()}-${idx}`,
-            name: s.name,
-            paper: s.paper as 1 | 2,
-            chapters: s.chapters.map((chName: string, chIdx: number) => ({
-              id: `ch-${Date.now()}-${idx}-${chIdx}`,
-              name: chName,
-              isCompleted: false
-            }))
-          }));
+          onUpdateState(prev => {
+            const currentSubjects = [...prev.subjects];
+            
+            result.subjects.forEach((scannedSub: any) => {
+              // Try to find if the subject already exists to avoid duplicates
+              const existingIdx = currentSubjects.findIndex(s => 
+                s.name.toLowerCase() === scannedSub.name.toLowerCase() && 
+                s.paper === scannedSub.paper
+              );
 
-          onUpdateState(prev => ({
-            ...prev,
-            subjects: [...prev.subjects, ...newSubjects]
-          }));
+              const chapters: Chapter[] = scannedSub.chapters.map((chName: string, chIdx: number) => ({
+                id: `ch-${Date.now()}-${chIdx}`,
+                name: chName,
+                isCompleted: false
+              }));
+
+              if (existingIdx > -1) {
+                // Merge chapters, avoiding duplicates by name
+                const existingSub = currentSubjects[existingIdx];
+                const newChapters = [...existingSub.chapters];
+                chapters.forEach(c => {
+                  if (!newChapters.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())) {
+                    newChapters.push(c);
+                  }
+                });
+                currentSubjects[existingIdx] = { ...existingSub, chapters: newChapters };
+              } else {
+                // Add as new
+                currentSubjects.push({
+                  id: `scanned-${Date.now()}-${Math.random()}`,
+                  name: scannedSub.name,
+                  paper: scannedSub.paper as 1 | 2,
+                  chapters
+                });
+              }
+            });
+
+            return { ...prev, subjects: currentSubjects };
+          });
+          alert(t("সিলেবাস সফলভাবে আপডেট করা হয়েছে!", "Syllabus updated successfully!"));
         }
       };
       reader.readAsDataURL(file);
@@ -75,20 +99,30 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
         
         if (result && result.exams) {
+          let matchCount = 0;
           onUpdateState(prev => {
             const updatedSubjects = prev.subjects.map(sub => {
-              const match = result.exams.find((ex: any) => 
-                ex.subjectName.toLowerCase().includes(sub.name.toLowerCase()) && 
-                ex.paper === sub.paper
-              );
+              // Flexible matching: check if either name contains the other
+              const match = result.exams.find((ex: any) => {
+                const exName = ex.subjectName.toLowerCase();
+                const subName = sub.name.toLowerCase();
+                return (exName.includes(subName) || subName.includes(exName)) && ex.paper === sub.paper;
+              });
+
               if (match) {
+                matchCount++;
                 return { ...sub, examDate: match.date };
               }
               return sub;
             });
             return { ...prev, subjects: updatedSubjects };
           });
-          alert(t("পরীক্ষার রুটিন আপডেট করা হয়েছে!", "Exam routine updated successfully!"));
+
+          if (matchCount > 0) {
+            alert(t(`${matchCount}টি বিষয়ের পরীক্ষার তারিখ আপডেট করা হয়েছে!`, `Updated exam dates for ${matchCount} subjects!`));
+          } else {
+            alert(t("রুটিন থেকে কোনো বিষয়ের মিল পাওয়া যায়নি।", "No matching subjects found in the routine image."));
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -163,7 +197,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             className="group flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 border-2 border-emerald-100 dark:border-emerald-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:bg-emerald-50 transition-all disabled:opacity-50"
           >
             {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <Camera size={16} />}
-            {t('স্ক্যান', 'Scan')}
+            {t('সিলেবাস স্ক্যান', 'Scan Syllabus')}
           </button>
           
           <button 
@@ -172,7 +206,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             className="group flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-2 border-blue-100 dark:border-blue-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:bg-blue-50 transition-all disabled:opacity-50"
           >
             {isRoutineProcessing ? <Loader2 className="animate-spin" size={16} /> : <FileText size={16} />}
-            {t('রুটিন', 'Routine')}
+            {t('রুটিন আপলোড', 'Upload Routine')}
           </button>
           
           <button 
@@ -180,7 +214,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-900/20 active:scale-95 transition-all"
           >
             <Plus size={16} />
-            {t('অ্যাড', 'Add')}
+            {t('ম্যানুয়াল অ্যাড', 'Add Manual')}
           </button>
         </div>
       </div>
@@ -302,6 +336,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                     </button>
                     
                     <button 
+                      // Fix: Use sub.id instead of id to correctly reference the subject in the map loop
                       onClick={() => deleteSubject(sub.id)}
                       className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100"
                     >

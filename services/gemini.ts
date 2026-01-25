@@ -18,6 +18,11 @@ export class GeminiService {
     8. No lecturing. Just supportive tips.`;
   }
 
+  private cleanJsonResponse(text: string): string {
+    // Remove markdown code block wrappers if present
+    return text.replace(/```json\n?|```/g, '').trim();
+  }
+
   async chat(userProfile: any, message: string, history: { role: 'ai' | 'user', text: string }[]) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
@@ -69,7 +74,7 @@ export class GeminiService {
               1. Extract all subjects and their chapters.
               2. Use standardized NCTB subject names (e.g., "Physics", "Chemistry", "ICT").
               3. Identify if it's 1st Paper or 2nd Paper.
-              4. Return the data in the specified JSON format.`
+              4. Return the data in the specified JSON format. Ensure the response is VALID JSON only.`
             },
           ],
         },
@@ -99,7 +104,8 @@ export class GeminiService {
         }
       });
 
-      return JSON.parse(response.text || "{}");
+      const cleaned = this.cleanJsonResponse(response.text || "{}");
+      return JSON.parse(cleaned);
     } catch (error: any) {
       console.error("Gemini Vision Error:", error);
       throw error;
@@ -125,7 +131,7 @@ export class GeminiService {
               1. Extract exam dates specifically for the subjects relevant to a ${userProfile.group} group student.
               2. Match subject names to standard forms (e.g., "Physics", "Bangla").
               3. Correctly identify the Paper (1 or 2).
-              4. Return the data in strict JSON format with ISO dates (YYYY-MM-DD).`
+              4. Return the data in strict JSON format with ISO dates (YYYY-MM-DD). Ensure the response is VALID JSON only.`
             },
           ],
         },
@@ -152,7 +158,8 @@ export class GeminiService {
         }
       });
 
-      return JSON.parse(response.text || "{}");
+      const cleaned = this.cleanJsonResponse(response.text || "{}");
+      return JSON.parse(cleaned);
     } catch (error: any) {
       console.error("Gemini Routine Analysis Error:", error);
       throw error;

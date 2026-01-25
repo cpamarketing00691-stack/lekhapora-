@@ -1,10 +1,11 @@
+
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter } from '../types';
 import { geminiService } from '../services/gemini';
 import { 
   Camera, Plus, Trash2, Calendar, CheckCircle2, 
   Loader2, AlertTriangle, FileText, CheckCircle, 
-  Circle, LayoutGrid
+  Circle, LayoutGrid, Clock
 } from 'lucide-react';
 
 interface SyllabusManagerProps {
@@ -16,12 +17,26 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRoutineProcessing, setIsRoutineProcessing] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
+  const [showManualRoutine, setShowManualRoutine] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const routineFileInputRef = useRef<HTMLInputElement>(null);
   
   const [manualSubject, setManualSubject] = useState({ name: '', paper: 1, chapters: '' });
+  const [bulkRoutine, setBulkRoutine] = useState('');
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
+
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -29,55 +44,50 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     setIsProcessing(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const result = await geminiService.analyzeSyllabusImage(userState.profile, base64, file.type);
-        
-        if (result && result.subjects) {
-          onUpdateState(prev => {
-            const currentSubjects = [...prev.subjects];
-            
-            result.subjects.forEach((scannedSub: any) => {
-              // Try to find if the subject already exists to avoid duplicates
-              const existingIdx = currentSubjects.findIndex(s => 
-                s.name.toLowerCase() === scannedSub.name.toLowerCase() && 
-                s.paper === scannedSub.paper
-              );
+      const base64 = await readFileAsBase64(file);
+      const result = await geminiService.analyzeSyllabusImage(userState.profile, base64, file.type);
+      
+      if (result && result.subjects) {
+        onUpdateState(prev => {
+          const currentSubjects = [...prev.subjects];
+          
+          result.subjects.forEach((scannedSub: any) => {
+            const existingIdx = currentSubjects.findIndex(s => 
+              s.name.toLowerCase() === scannedSub.name.toLowerCase() && 
+              s.paper === scannedSub.paper
+            );
 
-              const chapters: Chapter[] = scannedSub.chapters.map((chName: string, chIdx: number) => ({
-                id: `ch-${Date.now()}-${chIdx}`,
-                name: chName,
-                isCompleted: false
-              }));
+            const chapters: Chapter[] = scannedSub.chapters.map((chName: string, chIdx: number) => ({
+              id: `ch-${Date.now()}-${chIdx}-${Math.random()}`,
+              name: chName,
+              isCompleted: false
+            }));
 
-              if (existingIdx > -1) {
-                // Merge chapters, avoiding duplicates by name
-                const existingSub = currentSubjects[existingIdx];
-                const newChapters = [...existingSub.chapters];
-                chapters.forEach(c => {
-                  if (!newChapters.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())) {
-                    newChapters.push(c);
-                  }
-                });
-                currentSubjects[existingIdx] = { ...existingSub, chapters: newChapters };
-              } else {
-                // Add as new
-                currentSubjects.push({
-                  id: `scanned-${Date.now()}-${Math.random()}`,
-                  name: scannedSub.name,
-                  paper: scannedSub.paper as 1 | 2,
-                  chapters
-                });
-              }
-            });
-
-            return { ...prev, subjects: currentSubjects };
+            if (existingIdx > -1) {
+              const existingSub = currentSubjects[existingIdx];
+              const newChapters = [...existingSub.chapters];
+              chapters.forEach(c => {
+                if (!newChapters.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())) {
+                  newChapters.push(c);
+                }
+              });
+              currentSubjects[existingIdx] = { ...existingSub, chapters: newChapters };
+            } else {
+              currentSubjects.push({
+                id: `scanned-${Date.now()}-${Math.random()}`,
+                name: scannedSub.name,
+                paper: scannedSub.paper as 1 | 2,
+                chapters
+              });
+            }
           });
-          alert(t("সিলেবাস সফলভাবে আপডেট করা হয়েছে!", "Syllabus updated successfully!"));
-        }
-      };
-      reader.readAsDataURL(file);
+
+          return { ...prev, subjects: currentSubjects };
+        });
+        alert(t("সিলেবাস সফলভাবে আপডেট করা হয়েছে!", "Syllabus updated successfully!"));
+      } else {
+        throw new Error("Invalid result format");
+      }
     } catch (error) {
       console.error("Failed to process image:", error);
       alert(t("সিলেবাস এক্সট্রাক্ট করতে সমস্যা হয়েছে। আবার চেষ্টা করো।", "Failed to extract syllabus. Please try again."));
@@ -93,39 +103,36 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     setIsRoutineProcessing(true);
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
-        
-        if (result && result.exams) {
-          let matchCount = 0;
-          onUpdateState(prev => {
-            const updatedSubjects = prev.subjects.map(sub => {
-              // Flexible matching: check if either name contains the other
-              const match = result.exams.find((ex: any) => {
-                const exName = ex.subjectName.toLowerCase();
-                const subName = sub.name.toLowerCase();
-                return (exName.includes(subName) || subName.includes(exName)) && ex.paper === sub.paper;
-              });
-
-              if (match) {
-                matchCount++;
-                return { ...sub, examDate: match.date };
-              }
-              return sub;
+      const base64 = await readFileAsBase64(file);
+      const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
+      
+      if (result && result.exams) {
+        let matchCount = 0;
+        onUpdateState(prev => {
+          const updatedSubjects = prev.subjects.map(sub => {
+            const match = result.exams.find((ex: any) => {
+              const exName = ex.subjectName.toLowerCase();
+              const subName = sub.name.toLowerCase();
+              return (exName.includes(subName) || subName.includes(exName)) && ex.paper === sub.paper;
             });
-            return { ...prev, subjects: updatedSubjects };
-          });
 
-          if (matchCount > 0) {
-            alert(t(`${matchCount}টি বিষয়ের পরীক্ষার তারিখ আপডেট করা হয়েছে!`, `Updated exam dates for ${matchCount} subjects!`));
-          } else {
-            alert(t("রুটিন থেকে কোনো বিষয়ের মিল পাওয়া যায়নি।", "No matching subjects found in the routine image."));
-          }
+            if (match) {
+              matchCount++;
+              return { ...sub, examDate: match.date };
+            }
+            return sub;
+          });
+          return { ...prev, subjects: updatedSubjects };
+        });
+
+        if (matchCount > 0) {
+          alert(t(`${matchCount}টি বিষয়ের পরীক্ষার তারিখ আপডেট করা হয়েছে!`, `Updated exam dates for ${matchCount} subjects!`));
+        } else {
+          alert(t("রুটিন থেকে কোনো বিষয়ের মিল পাওয়া যায়নি।", "No matching subjects found in the routine image."));
         }
-      };
-      reader.readAsDataURL(file);
+      } else {
+        throw new Error("Invalid result format");
+      }
     } catch (error) {
       console.error("Failed to process routine:", error);
       alert(t("রুটিন প্রসেস করতে সমস্যা হয়েছে।", "Failed to process routine."));
@@ -161,6 +168,39 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     setManualSubject({ name: '', paper: 1, chapters: '' });
     setShowManualAdd(false);
+  };
+
+  const handleBulkRoutineAdd = () => {
+    if (!bulkRoutine.trim()) return;
+
+    // Expected format: "Physics 1: 2025-05-20" or "Chemistry 2, 2025-06-10"
+    const lines = bulkRoutine.split('\n');
+    let updatedCount = 0;
+
+    onUpdateState(prev => {
+      const updatedSubjects = prev.subjects.map(sub => {
+        const foundLine = lines.find(line => {
+          const l = line.toLowerCase();
+          const sName = sub.name.toLowerCase();
+          return l.includes(sName) && l.includes(sub.paper.toString());
+        });
+
+        if (foundLine) {
+          // Extract date (very simple regex for YYYY-MM-DD)
+          const dateMatch = foundLine.match(/\d{4}-\d{2}-\d{2}/);
+          if (dateMatch) {
+            updatedCount++;
+            return { ...sub, examDate: dateMatch[0] };
+          }
+        }
+        return sub;
+      });
+      return { ...prev, subjects: updatedSubjects };
+    });
+
+    alert(t(`${updatedCount}টি বিষয়ের তারিখ আপডেট করা হয়েছে।`, `Updated dates for ${updatedCount} subjects.`));
+    setBulkRoutine('');
+    setShowManualRoutine(false);
   };
 
   const deleteSubject = (id: string) => {
@@ -209,13 +249,22 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             {t('রুটিন আপলোড', 'Upload Routine')}
           </button>
           
-          <button 
-            onClick={() => setShowManualAdd(!showManualAdd)}
-            className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-900/20 active:scale-95 transition-all"
-          >
-            <Plus size={16} />
-            {t('ম্যানুয়াল অ্যাড', 'Add Manual')}
-          </button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button 
+              onClick={() => { setShowManualAdd(!showManualAdd); setShowManualRoutine(false); }}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-900/20 active:scale-95 transition-all"
+            >
+              <Plus size={16} />
+              {t('ম্যানুয়াল অ্যাড', 'Add Manual')}
+            </button>
+            <button 
+              onClick={() => { setShowManualRoutine(!showManualRoutine); setShowManualAdd(false); }}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+            >
+              <Calendar size={16} />
+              {t('ম্যানুয়াল রুটিন', 'Manual Routine')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -227,7 +276,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
           <div className="flex items-center justify-between mb-6 md:mb-8">
             <h3 className="font-black text-lg md:text-xl flex items-center gap-3">
               <Plus className="text-emerald-500" />
-              {t('নতুন বিষয়', 'New Subject')}
+              {t('নতুন বিষয় যোগ করো', 'Add New Subject')}
             </h3>
             <button onClick={() => setShowManualAdd(false)} className="text-slate-400 hover:text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('বন্ধ', 'Close')}</button>
           </div>
@@ -255,7 +304,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             </div>
           </div>
           <div className="space-y-2 mb-8 md:mb-10">
-            <label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">{t('চ্যাপ্টার লিস্ট', 'Chapter Titles')}</label>
+            <label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">{t('চ্যাপ্টার লিস্ট', 'Chapter Titles (One per line)')}</label>
             <textarea 
               value={manualSubject.chapters}
               onChange={e => setManualSubject({...manualSubject, chapters: e.target.value})}
@@ -268,6 +317,37 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-emerald-500/10 uppercase tracking-widest text-xs transition-all"
           >
             {t('সেভ করো', 'Add Subject')}
+          </button>
+        </div>
+      )}
+
+      {showManualRoutine && (
+        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border-2 border-dashed border-indigo-200 dark:border-indigo-800 animate-in zoom-in-95 duration-300">
+          <div className="flex items-center justify-between mb-6 md:mb-8">
+            <h3 className="font-black text-lg md:text-xl flex items-center gap-3">
+              <Calendar className="text-indigo-500" />
+              {t('ম্যানুয়াল রুটিন অ্যাড', 'Manual Routine Entry')}
+            </h3>
+            <button onClick={() => setShowManualRoutine(false)} className="text-slate-400 hover:text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('বন্ধ', 'Close')}</button>
+          </div>
+          
+          <div className="space-y-4 mb-8">
+            <p className="text-xs font-medium text-slate-500 leading-relaxed">
+              {t('নিচে প্রতিটি লাইনে একটি করে বিষয় ও তারিখ লিখুন। উদাহরণ: Physics 1: 2025-05-20', 'Enter one subject and date per line. Example: Physics 1: 2025-05-20')}
+            </p>
+            <textarea 
+              value={bulkRoutine}
+              onChange={e => setBulkRoutine(e.target.value)}
+              placeholder="Physics 1: 2025-05-20&#10;Chemistry 2: 2025-06-15"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold min-h-[150px] outline-none"
+            />
+          </div>
+          
+          <button 
+            onClick={handleBulkRoutineAdd}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-600/10 uppercase tracking-widest text-xs transition-all"
+          >
+            {t('রুটিন আপডেট করো', 'Update Routine')}
           </button>
         </div>
       )}
@@ -336,7 +416,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                     </button>
                     
                     <button 
-                      // Fix: Use sub.id instead of id to correctly reference the subject in the map loop
                       onClick={() => deleteSubject(sub.id)}
                       className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100"
                     >

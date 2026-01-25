@@ -47,13 +47,14 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       const base64 = await readFileAsBase64(file);
       const result = await geminiService.analyzeSyllabusImage(userState.profile, base64, file.type);
       
-      if (result && result.subjects) {
+      if (result && result.subjects && result.subjects.length > 0) {
         onUpdateState(prev => {
           const currentSubjects = [...prev.subjects];
           
           result.subjects.forEach((scannedSub: any) => {
             const existingIdx = currentSubjects.findIndex(s => 
-              s.name.toLowerCase() === scannedSub.name.toLowerCase() && 
+              s.name.toLowerCase().includes(scannedSub.name.toLowerCase()) || 
+              scannedSub.name.toLowerCase().includes(s.name.toLowerCase()) && 
               s.paper === scannedSub.paper
             );
 
@@ -86,7 +87,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         });
         alert(t("সিলেবাস সফলভাবে আপডেট করা হয়েছে!", "Syllabus updated successfully!"));
       } else {
-        throw new Error("Invalid result format");
+        alert(t("সিলেবাসে কোনো তথ্য পাওয়া যায়নি। ছবি পরিষ্কার করে আবার তোলো।", "No syllabus data found. Please take a clearer photo."));
       }
     } catch (error) {
       console.error("Failed to process image:", error);
@@ -106,14 +107,16 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       const base64 = await readFileAsBase64(file);
       const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
       
-      if (result && result.exams) {
+      if (result && result.exams && result.exams.length > 0) {
         let matchCount = 0;
         onUpdateState(prev => {
           const updatedSubjects = prev.subjects.map(sub => {
             const match = result.exams.find((ex: any) => {
               const exName = ex.subjectName.toLowerCase();
               const subName = sub.name.toLowerCase();
-              return (exName.includes(subName) || subName.includes(exName)) && ex.paper === sub.paper;
+              // More flexible matching for NCTB routines
+              const nameMatch = exName.includes(subName) || subName.includes(exName);
+              return nameMatch && parseInt(ex.paper) === sub.paper;
             });
 
             if (match) {
@@ -126,12 +129,12 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         });
 
         if (matchCount > 0) {
-          alert(t(`${matchCount}টি বিষয়ের পরীক্ষার তারিখ আপডেট করা হয়েছে!`, `Updated exam dates for ${matchCount} subjects!`));
+          alert(t(`${matchCount}টি বিষয়ের পরীক্ষার তারিখ রুটিন থেকে আপডেট করা হয়েছে!`, `Updated exam dates for ${matchCount} subjects from routine!`));
         } else {
           alert(t("রুটিন থেকে কোনো বিষয়ের মিল পাওয়া যায়নি।", "No matching subjects found in the routine image."));
         }
       } else {
-        throw new Error("Invalid result format");
+        alert(t("রুটিন থেকে কোনো তারিখ পাওয়া যায়নি। ছবি পরিষ্কার করে আবার তোলো।", "No dates found in routine. Please take a clearer photo."));
       }
     } catch (error) {
       console.error("Failed to process routine:", error);
@@ -173,7 +176,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
   const handleBulkRoutineAdd = () => {
     if (!bulkRoutine.trim()) return;
 
-    // Expected format: "Physics 1: 2025-05-20" or "Chemistry 2, 2025-06-10"
     const lines = bulkRoutine.split('\n');
     let updatedCount = 0;
 
@@ -182,15 +184,22 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         const foundLine = lines.find(line => {
           const l = line.toLowerCase();
           const sName = sub.name.toLowerCase();
-          return l.includes(sName) && l.includes(sub.paper.toString());
+          const paperMatch = l.includes(sub.paper.toString()) || 
+                            (sub.paper === 1 && (l.includes('1st') || l.includes('১ম'))) ||
+                            (sub.paper === 2 && (l.includes('2nd') || l.includes('২য়')));
+          return l.includes(sName) && paperMatch;
         });
 
         if (foundLine) {
-          // Extract date (very simple regex for YYYY-MM-DD)
-          const dateMatch = foundLine.match(/\d{4}-\d{2}-\d{2}/);
+          const dateMatch = foundLine.match(/\d{4}-\d{2}-\d{2}/) || foundLine.match(/\d{2}-\d{2}-\d{4}/);
           if (dateMatch) {
             updatedCount++;
-            return { ...sub, examDate: dateMatch[0] };
+            let dateStr = dateMatch[0];
+            if (dateStr.includes('-') && dateStr.split('-')[0].length === 2) {
+               const parts = dateStr.split('-');
+               dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            return { ...sub, examDate: dateStr };
           }
         }
         return sub;
@@ -198,9 +207,13 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       return { ...prev, subjects: updatedSubjects };
     });
 
-    alert(t(`${updatedCount}টি বিষয়ের তারিখ আপডেট করা হয়েছে।`, `Updated dates for ${updatedCount} subjects.`));
-    setBulkRoutine('');
-    setShowManualRoutine(false);
+    if (updatedCount > 0) {
+      alert(t(`${updatedCount}টি বিষয়ের তারিখ ম্যানুয়ালি আপডেট করা হয়েছে।`, `Manually updated dates for ${updatedCount} subjects.`));
+      setBulkRoutine('');
+      setShowManualRoutine(false);
+    } else {
+      alert(t("কোনো সঠিক ফরম্যাট পাওয়া যায়নি। (উদাহরণ: Physics 1 2025-05-20)", "No correct format found. (Example: Physics 1 2025-05-20)"));
+    }
   };
 
   const deleteSubject = (id: string) => {
@@ -252,14 +265,14 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
           <div className="flex gap-2 w-full sm:w-auto">
             <button 
               onClick={() => { setShowManualAdd(!showManualAdd); setShowManualRoutine(false); }}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-900/20 active:scale-95 transition-all"
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${showManualAdd ? 'bg-emerald-500 text-white' : 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'}`}
             >
               <Plus size={16} />
-              {t('ম্যানুয়াল অ্যাড', 'Add Manual')}
+              {t('ম্যানুয়াল অ্যাড', 'Manual Add')}
             </button>
             <button 
               onClick={() => { setShowManualRoutine(!showManualRoutine); setShowManualAdd(false); }}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${showManualRoutine ? 'bg-indigo-600 text-white' : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 border border-indigo-100 dark:border-indigo-800'}`}
             >
               <Calendar size={16} />
               {t('ম্যানুয়াল রুটিন', 'Manual Routine')}
@@ -326,19 +339,24 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
           <div className="flex items-center justify-between mb-6 md:mb-8">
             <h3 className="font-black text-lg md:text-xl flex items-center gap-3">
               <Calendar className="text-indigo-500" />
-              {t('ম্যানুয়াল রুটিন অ্যাড', 'Manual Routine Entry')}
+              {t('রুটিন ম্যানুয়াল এন্ট্রি', 'Manual Routine Entry')}
             </h3>
             <button onClick={() => setShowManualRoutine(false)} className="text-slate-400 hover:text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('বন্ধ', 'Close')}</button>
           </div>
           
           <div className="space-y-4 mb-8">
-            <p className="text-xs font-medium text-slate-500 leading-relaxed">
-              {t('নিচে প্রতিটি লাইনে একটি করে বিষয় ও তারিখ লিখুন। উদাহরণ: Physics 1: 2025-05-20', 'Enter one subject and date per line. Example: Physics 1: 2025-05-20')}
-            </p>
+            <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
+               <p className="text-xs font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-widest mb-2">{t('কিভাবে লিখবে?', 'Format Example')}</p>
+               <p className="text-[10px] text-indigo-600/70 dark:text-indigo-400/60 leading-relaxed font-medium">
+                {t('প্রতি লাইনে একটি বিষয়, পত্র এবং তারিখ (YYYY-MM-DD) লিখো।', 'Enter subject, paper, and date (YYYY-MM-DD) per line.')} <br/>
+                <code className="bg-white/50 dark:bg-black/20 px-1 rounded">Physics 1 2025-05-20</code><br/>
+                <code className="bg-white/50 dark:bg-black/20 px-1 rounded">Bangla 2 2025-05-24</code>
+               </p>
+            </div>
             <textarea 
               value={bulkRoutine}
               onChange={e => setBulkRoutine(e.target.value)}
-              placeholder="Physics 1: 2025-05-20&#10;Chemistry 2: 2025-06-15"
+              placeholder="Physics 1 2025-05-20&#10;Chemistry 2 2025-06-15"
               className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 rounded-2xl font-bold min-h-[150px] outline-none"
             />
           </div>
@@ -347,7 +365,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             onClick={handleBulkRoutineAdd}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-600/10 uppercase tracking-widest text-xs transition-all"
           >
-            {t('রুটিন আপডেট করো', 'Update Routine')}
+            {t('রুটিন সেভ করো', 'Save Routine')}
           </button>
         </div>
       )}

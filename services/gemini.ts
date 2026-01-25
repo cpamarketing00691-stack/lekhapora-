@@ -70,11 +70,10 @@ export class GeminiService {
               },
             },
             {
-              text: `Analyze this image of an HSC syllabus for the ${userProfile.group} group in Bangladesh (NCTB). 
-              1. Extract all subjects and their chapters.
-              2. Use standardized NCTB subject names (e.g., "Physics", "Chemistry", "ICT").
-              3. Identify if it's 1st Paper or 2nd Paper.
-              4. Return the data in the specified JSON format. Ensure the response is VALID JSON only.`
+              text: `This is an image of an HSC NCTB syllabus for a ${userProfile.group} group student in Bangladesh. 
+              Please extract every subject name, which paper it is (1 or 2), and a list of all chapters for that subject.
+              Standardize subject names to English (e.g., Physics, Chemistry, Bangla, ICT).
+              Return the data as a clean JSON object.`
             },
           ],
         },
@@ -88,11 +87,11 @@ export class GeminiService {
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    name: { type: Type.STRING },
-                    paper: { type: Type.NUMBER },
+                    name: { type: Type.STRING, description: "Standard English name of subject" },
+                    paper: { type: Type.NUMBER, description: "1 for 1st paper, 2 for 2nd" },
                     chapters: {
                       type: Type.ARRAY,
-                      items: { type: Type.STRING }
+                      items: { type: Type.STRING, description: "Full chapter title" }
                     }
                   },
                   required: ["name", "paper", "chapters"]
@@ -107,7 +106,7 @@ export class GeminiService {
       const cleaned = this.cleanJsonResponse(response.text || "{}");
       return JSON.parse(cleaned);
     } catch (error: any) {
-      console.error("Gemini Vision Error:", error);
+      console.error("Gemini Syllabus Analysis Error:", error);
       throw error;
     }
   }
@@ -127,11 +126,10 @@ export class GeminiService {
               },
             },
             {
-              text: `Analyze this image of a Bangladesh HSC Exam Routine (NCTB). 
-              1. Extract exam dates specifically for the subjects relevant to a ${userProfile.group} group student.
-              2. Match subject names to standard forms (e.g., "Physics", "Bangla").
-              3. Correctly identify the Paper (1 or 2).
-              4. Return the data in strict JSON format with ISO dates (YYYY-MM-DD). Ensure the response is VALID JSON only.`
+              text: `This is an HSC Exam Routine from a Bangladesh Education Board. 
+              Find all exams related to the ${userProfile.group} group and compulsory subjects (Bangla, English, ICT).
+              Extract the Subject Name, Paper (1 or 2), and the Date of the exam.
+              Format the date as YYYY-MM-DD. Return strictly as JSON.`
             },
           ],
         },
@@ -147,7 +145,7 @@ export class GeminiService {
                   properties: {
                     subjectName: { type: Type.STRING },
                     paper: { type: Type.NUMBER },
-                    date: { type: Type.STRING }
+                    date: { type: Type.STRING, description: "Date in YYYY-MM-DD format" }
                   },
                   required: ["subjectName", "paper", "date"]
                 }

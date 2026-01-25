@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
 import { geminiService } from '../services/gemini';
-import { Send, Bot, Sparkles, Loader2, User } from 'lucide-react';
+import { Send, Bot, Sparkles, Loader2, User, AlertCircle } from 'lucide-react';
 
 interface AISidebarProps {
   userState: UserState;
@@ -14,6 +14,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,14 +28,17 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
     
     const userText = input;
     setInput('');
+    setError(null);
     setMessages(prev => [...prev, { role: 'user', text: userText }]);
     setIsLoading(true);
 
     try {
       const response = await geminiService.chat(userState.profile, userText, messages);
       setMessages(prev => [...prev, { role: 'ai', text: response || "বুঝতে পারলাম না, আবার বলবে?" }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', text: "নেটওয়ার্কে সমস্যা মনে হচ্ছে!" }]);
+    } catch (err: any) {
+      console.error("Chat UI Error:", err);
+      setError(err.message || "সমস্যা হয়েছে");
+      setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত, আমি এই মুহূর্তে কাজ করতে পারছি না। একটু পরে আবার চেষ্টা করো।" }]);
     } finally {
       setIsLoading(false);
     }
@@ -83,6 +87,14 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
             </div>
             <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none shadow-sm">
               <Loader2 className="animate-spin text-emerald-500" size={14} />
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="flex justify-center">
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
+              <AlertCircle size={14} />
+              <span>{error}</span>
             </div>
           </div>
         )}

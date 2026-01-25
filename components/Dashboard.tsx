@@ -1,8 +1,8 @@
 
 import React, { useMemo } from 'react';
-import { UserState, Mood } from '../types';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Target, TrendingUp, Calendar, Zap, Smile, Activity, RefreshCcw } from 'lucide-react';
+import { UserState } from '../types';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, Calendar, Smile, Activity, RefreshCcw, BarChart3, Info } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -13,49 +13,79 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
   const stats = useMemo(() => {
-    // Score = (Study Time × 0.4) + (Target Completion × 0.3) + (Consistency × 0.2) + (Revision × 0.1)
+    // 1. Study Time (Regular) - Max target 100 hours
     const regularStudyMinutes = userState.studyHistory
       .filter(s => !s.isRevision)
       .reduce((acc, curr) => acc + curr.durationMinutes, 0);
-    
-    const revisionMinutes = userState.studyHistory
-      .filter(s => s.isRevision)
-      .reduce((acc, curr) => acc + curr.durationMinutes, 0);
-    
-    const totalStudyHours = (regularStudyMinutes + revisionMinutes) / 60;
-    
-    // Normalized factors (out of 100)
-    // Assuming a baseline of 200 hours for 100% study time factor in this mock logic
     const studyTimeFactor = Math.min(100, (regularStudyMinutes / (100 * 60)) * 100); 
 
+    // 2. Target Completion - Percentage of chapters marked done
     const totalChapters = userState.subjects.reduce((acc, curr) => acc + curr.chapters.length, 0);
     const completedChapters = userState.subjects.reduce((acc, curr) => 
       acc + curr.chapters.filter(c => c.isCompleted).length, 0);
     const completionRate = totalChapters > 0 ? (completedChapters / totalChapters) * 100 : 0;
     
+    // 3. Consistency - Based on a 30-day streak goal
     const consistencyFactor = Math.min(100, (userState.streaks / 30) * 100);
     
-    // Revision factor based on revision time (assuming 20 hours of revision as baseline for 100%)
+    // 4. Revision - Max target 20 hours
+    const revisionMinutes = userState.studyHistory
+      .filter(s => s.isRevision)
+      .reduce((acc, curr) => acc + curr.durationMinutes, 0);
     const revisionFactor = Math.min(100, (revisionMinutes / (20 * 60)) * 100);
 
+    // Strict Formula: (Study Time × 0.4) + (Target Completion × 0.3) + (Consistency × 0.2) + (Revision × 0.1)
     const finalScore = (studyTimeFactor * 0.4) + (completionRate * 0.3) + (consistencyFactor * 0.2) + (revisionFactor * 0.1);
 
     return {
-      totalHours: totalStudyHours.toFixed(1),
+      totalHours: ((regularStudyMinutes + revisionMinutes) / 60).toFixed(1),
       studyHours: (regularStudyMinutes / 60).toFixed(1),
       revisionHours: (revisionMinutes / 60).toFixed(1),
       completion: completionRate.toFixed(0),
-      score: finalScore.toFixed(1),
-      readiness: finalScore > 75 ? t('চমৎকার', 'Excellent') : finalScore > 50 ? t('স্থির', 'Steady') : t('শুরু করছি', 'Starting')
+      score: Math.round(finalScore),
+      readinessLabel: finalScore > 80 ? t('চমৎকার প্রস্তুতি', 'Excellent Readiness') : 
+                      finalScore > 50 ? t('মাঝারি প্রস্তুতি', 'Steady Progress') : 
+                      t('প্রস্তুতি শুরু হচ্ছে', 'Just Starting'),
+      factors: {
+        study: Math.round(studyTimeFactor),
+        completion: Math.round(completionRate),
+        consistency: Math.round(consistencyFactor),
+        revision: Math.round(revisionFactor)
+      }
     };
   }, [userState, userState.language]);
 
+  const weeklyData = useMemo(() => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    return last7Days.map(date => {
+      const daySessions = userState.studyHistory.filter(s => {
+        const sDate = new Date(s.startTime).toISOString().split('T')[0];
+        return sDate === date;
+      });
+
+      const study = daySessions.filter(s => !s.isRevision).reduce((acc, s) => acc + s.durationMinutes, 0) / 60;
+      const revision = daySessions.filter(s => s.isRevision).reduce((acc, s) => acc + s.durationMinutes, 0) / 60;
+      const dayName = new Date(date).toLocaleDateString(userState.language === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'short' });
+
+      return {
+        name: dayName,
+        study: parseFloat(study.toFixed(1)),
+        revision: parseFloat(revision.toFixed(1)),
+      };
+    });
+  }, [userState.studyHistory, userState.language]);
+
   const moodColor = {
-    'Great': 'text-emerald-500 bg-emerald-50',
-    'Focused': 'text-blue-500 bg-blue-50',
-    'Tired': 'text-orange-500 bg-orange-50',
-    'Stressed': 'text-red-500 bg-red-50',
-    'Burnt Out': 'text-purple-500 bg-purple-50'
+    'Great': 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20',
+    'Focused': 'text-blue-500 bg-blue-50 dark:bg-blue-900/20',
+    'Tired': 'text-orange-500 bg-orange-50 dark:bg-orange-900/20',
+    'Stressed': 'text-red-500 bg-red-50 dark:bg-red-900/20',
+    'Burnt Out': 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'
   }[userState.currentMood || 'Great'];
 
   return (
@@ -65,108 +95,140 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
           <h1 className="text-2xl font-bold">
             {userState.profile?.religion === 'Islam' ? t('আসসালামু আলাইকুম', 'Assalamu Alaikum') : t('হ্যালো', 'Hello')}, {userState.profile?.fullName}!
           </h1>
-          <p className="text-slate-500">{t('তোমার আজকের readiness score', 'Your readiness score today')}: {stats.score}</p>
+          <p className="text-slate-500">{t('আজকের প্রস্তুতি রিপোর্ট', 'Today\'s Readiness Report')}</p>
         </div>
-        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border border-slate-100 ${moodColor}`}>
+        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border border-slate-100 dark:border-slate-800 ${moodColor}`}>
           <Activity size={18} />
           <span className="text-sm font-semibold">{t('মেজাজ', 'Mood')}: {userState.currentMood}</span>
         </div>
       </header>
 
-      {/* Progress Bars */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
-        <h3 className="font-bold mb-4 text-slate-400 text-xs uppercase tracking-widest">{t('HSC প্রস্তুতি বিশ্লেষণ', 'HSC Readiness Breakdown')}</h3>
-        <div className="space-y-4">
-          <div>
-            <div className="flex justify-between text-sm mb-1 font-medium">
-              <span>{t('সার্বিক স্কোর', 'Overall Score')}</span>
-              <span>{stats.score}%</span>
-            </div>
-            <div className="h-3 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-1000" 
-                style={{ width: `${stats.score}%` }} 
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <div className="flex justify-between text-xs mb-1 text-slate-500">
-                <span>{t('সিলেবাস সম্পন্ন', 'Syllabus Completion')}</span>
-                <span>{stats.completion}%</span>
-              </div>
-              <div className="h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${stats.completion}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1 text-slate-500">
-                <span>{t('ধারাবাহিকতা', 'Consistency')}</span>
-                <span>{userState.streaks} {t('দিন', 'days')}</span>
-              </div>
-              <div className="h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full">
-                <div className="h-full bg-orange-500 rounded-full" style={{ width: `${Math.min(100, (userState.streaks/30)*100)}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {/* Main Score and Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Readiness Cards */}
-        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-           <div className="bg-emerald-500 text-white p-6 rounded-3xl shadow-lg shadow-emerald-200 dark:shadow-none">
-             <TrendingUp size={32} className="mb-4 opacity-50" />
-             <p className="text-xs uppercase font-bold opacity-80">{t('প্রস্তুতি', 'Readiness')}</p>
-             <h2 className="text-3xl font-black">{stats.readiness}</h2>
-           </div>
-           <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
-             <RefreshCcw size={32} className="mb-4 text-purple-500" />
-             <p className="text-xs uppercase font-bold text-slate-400">{t('রিভিশন সময়', 'Revision Time')}</p>
-             <h2 className="text-3xl font-black">{stats.revisionHours} <span className="text-sm font-normal text-slate-400">{t('ঘণ্টা', 'Hours')}</span></h2>
-           </div>
-           <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700 col-span-2">
-             <Calendar size={32} className="mb-4 text-blue-500" />
-             <p className="text-xs uppercase font-bold text-slate-400">{t('মোট পড়াশোনা', 'Total Study')}</p>
-             <h2 className="text-3xl font-black">{stats.totalHours} <span className="text-sm font-normal text-slate-400">{t('ঘণ্টা', 'Hours')}</span></h2>
-           </div>
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{t('সার্বিক প্রস্তুতি স্কোর', 'Overall Readiness Score')}</h3>
+              <h2 className="text-5xl font-black text-slate-900 dark:text-white">{stats.score}<span className="text-2xl text-slate-300">/100</span></h2>
+            </div>
+            <div className="text-right">
+              <span className="inline-block px-4 py-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase mb-2">
+                {stats.readinessLabel}
+              </span>
+              <p className="text-xs text-slate-400 font-medium">{t('NCTB সিলেবাস অনুযায়ী', 'Based on NCTB Syllabus')}</p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+              <div>
+                <div className="flex justify-between text-xs font-bold mb-2">
+                  <span className="text-slate-500">{t('পড়াশোনার সময় (৪০%)', 'Study Time (40%)')}</span>
+                  <span>{stats.factors.study}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${stats.factors.study}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-bold mb-2">
+                  <span className="text-slate-500">{t('সিলেবাস সম্পন্ন (৩০%)', 'Syllabus (30%)')}</span>
+                  <span>{stats.factors.completion}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full">
+                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${stats.factors.completion}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-bold mb-2">
+                  <span className="text-slate-500">{t('ধারাবাহিকতা (২০%)', 'Consistency (20%)')}</span>
+                  <span>{stats.factors.consistency}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full">
+                  <div className="h-full bg-orange-500 rounded-full" style={{ width: `${stats.factors.consistency}%` }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-xs font-bold mb-2">
+                  <span className="text-slate-500">{t('রিভিশন (১০%)', 'Revision (10%)')}</span>
+                  <span>{stats.factors.revision}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full">
+                  <div className="h-full bg-purple-500 rounded-full" style={{ width: `${stats.factors.revision}%` }} />
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-2 pt-4 border-t border-slate-50 dark:border-slate-800">
+               <Info size={14} className="text-slate-300 mt-0.5" />
+               <p className="text-[10px] text-slate-400 italic">
+                 {t('এই স্কোরটি তোমার পড়া, রিভিশন এবং সিলেবাস শেষ করার গতির উপর ভিত্তি করে একটি গাণিতিক হিসাব।', 'This score is a mathematical calculation based on your study, revision, and syllabus progress.')}
+               </p>
+            </div>
+          </div>
         </div>
 
-        {/* AI Buddy Context */}
-        <div className="bg-slate-900 text-white p-6 rounded-3xl relative overflow-hidden">
-           <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center">
-                  <Smile size={18} />
-                </div>
-                <h4 className="font-bold text-sm">{userState.profile?.aiName}</h4>
-              </div>
-              <p className="text-slate-300 text-sm italic">
-                {userState.currentMood === 'Burnt Out' 
-                  ? t('"একটু চা খেয়ে বিরতি নাও, শরীর আগে পড়া পরে!"', '"Take a break with some tea, health comes before studies!"') 
-                  : t('"চলো আজ রিভিশন দিয়ে আমাদের স্কোর আরও বাড়িয়ে ফেলি!"', '"Let\'s boost our score by doing some revision today!"')}
-              </p>
-           </div>
-           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+        <div className="space-y-6">
+          <div className="bg-emerald-500 text-white p-8 rounded-[2.5rem] shadow-xl shadow-emerald-500/10 flex flex-col justify-between min-h-[160px]">
+            <TrendingUp size={32} className="opacity-40" />
+            <div>
+              <p className="text-[10px] uppercase font-black opacity-80 mb-1">{t('মোট পড়া', 'Total Study')}</p>
+              <h2 className="text-4xl font-black">{stats.totalHours} <span className="text-lg font-bold opacity-60">Hrs</span></h2>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col justify-between min-h-[160px]">
+            <RefreshCcw size={32} className="text-purple-500 opacity-40" />
+            <div>
+              <p className="text-[10px] uppercase font-black text-slate-400 mb-1">{t('রিভিশন সময়', 'Revision Time')}</p>
+              <h2 className="text-4xl font-black text-purple-600">{stats.revisionHours} <span className="text-lg font-bold text-slate-300">Hrs</span></h2>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Ghost/Predicted Bar logic - visual only based on REAL trends */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-        <h4 className="text-sm font-bold text-slate-400 flex items-center gap-2 mb-4">
-          <Activity size={16} /> {t('সম্ভাব্য উন্নতি (আগামী ৭ দিন)', 'Predicted Progress (Next 7 Days)')}
-        </h4>
-        <div className="h-40">
+      {/* Weekly History Chart */}
+      <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h4 className="text-sm font-bold text-slate-400 flex items-center gap-2 uppercase tracking-widest">
+              <BarChart3 size={16} /> {t('সাপ্তাহিক কর্মতৎপরতা', 'Weekly Activity')}
+            </h4>
+            <p className="text-xs text-slate-300 mt-1">{t('গত ৭ দিনের পড়াশোনার তথ্য', 'Your study data from the last 7 days')}</p>
+          </div>
+          <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest">
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> {t('পড়া', 'Study')}</div>
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div> {t('রিভিশন', 'Revision')}</div>
+          </div>
+        </div>
+        <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={[{day: 'Sun', current: parseFloat(stats.score), pred: parseFloat(stats.score)+2}]}>
-              <XAxis dataKey="day" hide />
-              <Tooltip />
-              <Bar dataKey="current" stackId="a" fill="#10b981" radius={[10, 10, 0, 0]} />
-              <Bar dataKey="pred" stackId="a" fill="#10b981" fillOpacity={0.2} radius={[10, 10, 0, 0]} />
+            <BarChart data={weeklyData}>
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} dy={10} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }} unit="h" />
+              <Tooltip 
+                cursor={{ fill: 'rgba(16, 185, 129, 0.03)' }}
+                contentStyle={{ borderRadius: '1.25rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '1rem' }}
+              />
+              <Bar dataKey="study" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} barSize={32} />
+              <Bar dataKey="revision" stackId="a" fill="#a855f7" radius={[6, 6, 0, 0]} barSize={32} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="text-[10px] text-slate-400 text-center italic mt-2">{t('সম্ভাব্য বারটি শুধুমাত্র বর্তমান পড়ার প্যাটার্ন থেকে তৈরি।', 'Predicted bar is generated strictly from existing study patterns.')}</p>
+      </div>
+
+      <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] flex items-center gap-6 relative overflow-hidden">
+        <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+          <Smile size={32} />
+        </div>
+        <div className="relative z-10">
+          <h4 className="font-bold mb-1 text-emerald-400">{userState.profile?.aiName} {t('থেকে পরামর্শ', 'Advisor')}</h4>
+          <p className="text-sm text-slate-300 italic">
+             {stats.score < 40 
+               ? t('"পড়াশোনার সময় একটু বাড়িয়ে দিলে আমাদের স্কোর খুব দ্রুত বাড়বে!"', '"Increasing our study time a bit will boost our score very quickly!"') 
+               : t('"দারুণ করছো! রিভিশন সেশনগুলো চালিয়ে যাও, এটাই আসল সাফল্যের চাবিকাঠি।"', '"Great job! Keep the revision sessions going, that\'s the key to success."')}
+          </p>
+        </div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
       </div>
     </div>
   );

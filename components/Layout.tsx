@@ -17,13 +17,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
   const t = (bn: string, en: string) => language === 'bn' ? bn : en;
 
   useEffect(() => {
+    const root = window.document.documentElement;
     if (isDark) {
-      document.body.classList.add('dark-mode');
-      document.body.classList.remove('light-mode');
+      root.classList.add('dark');
+      root.classList.remove('light');
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
       localStorage.setItem('theme', 'dark');
     } else {
-      document.body.classList.add('light-mode');
-      document.body.classList.remove('dark-mode');
+      root.classList.add('light');
+      root.classList.remove('dark');
+      document.body.classList.add('light');
+      document.body.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
   }, [isDark]);

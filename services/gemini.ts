@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 export class GeminiService {
   private getSystemInstruction(userProfile: any) {
@@ -20,14 +20,8 @@ export class GeminiService {
 
   async chat(userProfile: any, message: string, history: { role: 'ai' | 'user', text: string }[]) {
     try {
-      // Create a new instance right before use to ensure the latest API key is used
-      // following the strict initialization requirement: new GoogleGenAI({ apiKey: process.env.API_KEY })
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
       
-      /**
-       * The Gemini API expects history to start with a 'user' role message and alternate.
-       * We filter out the initial AI greeting from the history passed to the API.
-       */
       const chatHistory = history
         .filter((msg, index) => {
           if (index === 0 && msg.role === 'ai') return false;
@@ -52,6 +46,72 @@ export class GeminiService {
       return result.text;
     } catch (error: any) {
       console.error("Gemini API Error:", error);
+      throw error;
+    }
+  }
+
+  async analyzeSyllabusImage(userProfile: any, base64Image: string, mimeType: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Image,
+                mimeType: mimeType,
+              },
+            },
+            {
+              text: `Analyze this image of an HSC syllabus. 
+              1. Extract all subjects and their chapters.
+              2. Match them with official NCTB standards for the ${userProfile.group} group.
+              3. Return the data in a strict JSON format.
+              
+              JSON structure:
+              {
+                "subjects": [
+                  {
+                    "name": "Subject Name",
+                    "paper": 1,
+                    "chapters": ["Chapter 1 Name", "Chapter 2 Name"]
+                  }
+                ]
+              }`
+            },
+          ],
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              subjects: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    paper: { type: Type.NUMBER },
+                    chapters: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ["name", "paper", "chapters"]
+                }
+              }
+            },
+            required: ["subjects"]
+          }
+        }
+      });
+
+      return JSON.parse(response.text);
+    } catch (error: any) {
+      console.error("Gemini Vision Error:", error);
       throw error;
     }
   }

@@ -20,23 +20,16 @@ export class GeminiService {
 
   async chat(userProfile: any, message: string, history: { role: 'ai' | 'user', text: string }[]) {
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) {
-        throw new Error("API Key is missing. Please ensure it is configured correctly.");
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
+      // Create a new instance right before use to ensure the latest API key is used
+      // following the strict initialization requirement: new GoogleGenAI({ apiKey: process.env.API_KEY })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
       
       /**
-       * CRITICAL FIX: The Gemini API expects history to:
-       * 1. Start with a 'user' role message.
-       * 2. Alternate between 'user' and 'model'.
-       * Since our UI starts with an AI greeting, we must filter out the initial AI message 
-       * if it's the first item in history to satisfy the API constraints.
+       * The Gemini API expects history to start with a 'user' role message and alternate.
+       * We filter out the initial AI greeting from the history passed to the API.
        */
       const chatHistory = history
         .filter((msg, index) => {
-          // Skip the very first message if it's from the AI (model)
           if (index === 0 && msg.role === 'ai') return false;
           return true;
         })
@@ -58,21 +51,14 @@ export class GeminiService {
       const result = await chat.sendMessage({ message });
       return result.text;
     } catch (error: any) {
-      console.error("Gemini API Error Detail:", {
-        message: error.message,
-        stack: error.stack,
-        status: error.status
-      });
+      console.error("Gemini API Error:", error);
       throw error;
     }
   }
 
   async generateRoutine(userProfile: any, studyHistory: any[], constraints: string) {
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey) throw new Error("API Key missing");
-
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
       
       const prompt = `Please generate a realistic study routine based on these constraints: ${constraints}. 
       Consider the user's group (${userProfile.group}), religion (${userProfile.religion}), and existing study patterns. 
@@ -88,7 +74,7 @@ export class GeminiService {
       });
 
       return response.text;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini Routine Error:", error);
       throw error;
     }

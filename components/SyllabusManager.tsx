@@ -2,7 +2,11 @@
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter } from '../types';
 import { geminiService } from '../services/gemini';
-import { Camera, Plus, Trash2, Calendar, CheckCircle2, Loader2, Upload, AlertTriangle, FileText } from 'lucide-react';
+import { 
+  Camera, Plus, Trash2, Calendar, CheckCircle2, 
+  Loader2, AlertTriangle, FileText, CheckCircle, 
+  Circle, MoreVertical, LayoutGrid, List
+} from 'lucide-react';
 
 interface SyllabusManagerProps {
   userState: UserState;
@@ -73,7 +77,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         if (result && result.exams) {
           onUpdateState(prev => {
             const updatedSubjects = prev.subjects.map(sub => {
-              // Try to find a matching exam in the extracted routine
               const match = result.exams.find((ex: any) => 
                 ex.subjectName.toLowerCase().includes(sub.name.toLowerCase()) && 
                 ex.paper === sub.paper
@@ -135,205 +138,247 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     }
   };
 
+  const toggleAllChapters = (subjectId: string, completed: boolean) => {
+    onUpdateState(prev => ({
+      ...prev,
+      subjects: prev.subjects.map(s => s.id === subjectId ? {
+        ...s,
+        chapters: s.chapters.map(c => ({ ...c, isCompleted: completed }))
+      } : s)
+    }));
+  };
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-24 md:pb-20">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-black">{t('সিলেবাস ম্যানেজমেন্ট', 'Syllabus Manager')}</h2>
-          <p className="text-slate-500 font-medium text-sm">{t('তোমার NCTB সিলেবাস কাস্টমাইজ করো।', 'Customize your NCTB syllabus patterns.')}</p>
+          <h2 className="text-3xl md:text-4xl font-black tracking-tight">{t('সিলেবাস গাইড', 'Syllabus Guide')}</h2>
+          <p className="text-slate-500 font-medium text-xs md:text-sm mt-1">{t('তোমার NCTB সিলেবাস এবং পরীক্ষার তারিখ ম্যানেজ করো।', 'Manage your NCTB syllabus and exam timeline.')}</p>
         </div>
         
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 md:gap-3">
           <button 
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
-            className="flex items-center gap-2 px-5 py-3 bg-emerald-500 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            className="group flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 border-2 border-emerald-100 dark:border-emerald-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:bg-emerald-50 transition-all disabled:opacity-50"
           >
-            {isProcessing ? <Loader2 className="animate-spin" size={20} /> : <Camera size={20} />}
-            {t('সিলেবাস স্ক্যান', 'Scan Syllabus')}
+            {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <Camera size={16} />}
+            {t('স্ক্যান', 'Scan')}
           </button>
           
           <button 
             onClick={() => routineFileInputRef.current?.click()}
             disabled={isRoutineProcessing}
-            className="flex items-center gap-2 px-5 py-3 bg-blue-500 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            className="group flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-2 border-blue-100 dark:border-blue-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm hover:bg-blue-50 transition-all disabled:opacity-50"
           >
-            {isRoutineProcessing ? <Loader2 className="animate-spin" size={20} /> : <FileText size={20} />}
-            {t('রুটিন আপলোড', 'Upload Routine')}
+            {isRoutineProcessing ? <Loader2 className="animate-spin" size={16} /> : <FileText size={16} />}
+            {t('রুটিন', 'Routine')}
           </button>
-          
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            accept="image/*" 
-            onChange={handleImageUpload} 
-          />
-          
-          <input 
-            type="file" 
-            ref={routineFileInputRef} 
-            className="hidden" 
-            accept="image/*" 
-            onChange={handleRoutineUpload} 
-          />
           
           <button 
             onClick={() => setShowManualAdd(!showManualAdd)}
-            className="flex items-center gap-2 px-5 py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-lg shadow-slate-900/20 hover:scale-105 active:scale-95 transition-all"
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-slate-900/20 active:scale-95 transition-all"
           >
-            <Plus size={20} />
-            {t('ম্যানুয়াল অ্যাড', 'Add Manually')}
+            <Plus size={16} />
+            {t('অ্যাড', 'Add')}
           </button>
         </div>
       </div>
 
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+      <input type="file" ref={routineFileInputRef} className="hidden" accept="image/*" onChange={handleRoutineUpload} />
+
       {showManualAdd && (
-        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border-2 border-dashed border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95">
-          <h3 className="font-black text-xl mb-6 flex items-center gap-3">
-            <Plus className="text-emerald-500" />
-            {t('নতুন বিষয় যোগ করো', 'Add New Subject')}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] border-2 border-dashed border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95 duration-300">
+          <div className="flex items-center justify-between mb-6 md:mb-8">
+            <h3 className="font-black text-lg md:text-xl flex items-center gap-3">
+              <Plus className="text-emerald-500" />
+              {t('নতুন বিষয়', 'New Subject')}
+            </h3>
+            <button onClick={() => setShowManualAdd(false)} className="text-slate-400 hover:text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('বন্ধ', 'Close')}</button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 mb-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('বিষয়ের নাম', 'Subject Name')}</label>
+              <label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">{t('বিষয়ের নাম', 'Subject Name')}</label>
               <input 
                 type="text" 
                 value={manualSubject.name}
                 onChange={e => setManualSubject({...manualSubject, name: e.target.value})}
                 placeholder="e.g. Physics"
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-0 rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold"
+                className="w-full px-5 py-3 md:px-6 md:py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl font-bold outline-none"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('পত্র', 'Paper')}</label>
+              <label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">{t('পত্র', 'Paper')}</label>
               <select 
                 value={manualSubject.paper}
                 onChange={e => setManualSubject({...manualSubject, paper: parseInt(e.target.value)})}
-                className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-0 rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold"
+                className="w-full px-5 py-3 md:px-6 md:py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl font-bold outline-none appearance-none"
               >
                 <option value={1}>1st Paper</option>
                 <option value={2}>2nd Paper</option>
               </select>
             </div>
           </div>
-          <div className="space-y-2 mb-8">
-            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{t('চ্যাপ্টার লিস্ট (প্রতি লাইনে একটি)', 'Chapters (one per line)')}</label>
+          <div className="space-y-2 mb-8 md:mb-10">
+            <label className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">{t('চ্যাপ্টার লিস্ট', 'Chapter Titles')}</label>
             <textarea 
               value={manualSubject.chapters}
               onChange={e => setManualSubject({...manualSubject, chapters: e.target.value})}
-              placeholder="Chapter 1&#10;Chapter 2&#10;Chapter 3"
-              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-0 rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold min-h-[120px]"
+              placeholder="Chapter 1&#10;Chapter 2"
+              className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl font-bold min-h-[120px] outline-none"
             />
           </div>
-          <div className="flex gap-4">
-            <button 
-              onClick={handleManualAdd}
-              className="flex-1 bg-emerald-500 text-white font-black py-4 rounded-2xl shadow-xl shadow-emerald-500/20"
-            >
-              {t('সেভ করো', 'Save Subject')}
-            </button>
-            <button 
-              onClick={() => setShowManualAdd(false)}
-              className="px-8 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-2xl"
-            >
-              {t('বাতিল', 'Cancel')}
-            </button>
-          </div>
+          <button 
+            onClick={handleManualAdd}
+            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-emerald-500/10 uppercase tracking-widest text-xs transition-all"
+          >
+            {t('সেভ করো', 'Add Subject')}
+          </button>
         </div>
       )}
 
-      <div className="space-y-8">
-        {userState.subjects.map(sub => (
-          <div key={sub.id} className="group bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 relative">
-            <button 
-              onClick={() => deleteSubject(sub.id)}
-              className="absolute top-8 right-8 p-3 text-slate-300 hover:text-red-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-xl opacity-0 group-hover:opacity-100"
-            >
-              <Trash2 size={18} />
-            </button>
-
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-6">
-               <div className="space-y-2">
-                 <div className="flex items-center gap-3">
-                   <h3 className="font-black text-2xl">{sub.name}</h3>
-                   <span className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase rounded-lg">
-                    {t('পত্র', 'Paper')} {sub.paper}
-                   </span>
-                 </div>
-                 
-                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
-                      <Calendar size={14} className="text-slate-400" />
-                      <input 
-                        type="date" 
-                        value={sub.examDate || ''}
-                        onChange={(e) => {
-                          onUpdateState(prev => ({
-                            ...prev,
-                            subjects: prev.subjects.map(s => s.id === sub.id ? { ...s, examDate: e.target.value } : s)
-                          }));
-                        }}
-                        className="text-[10px] bg-transparent border-0 p-0 font-black focus:ring-0 uppercase w-28"
-                      />
-                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{t('পরীক্ষা', 'Exam')}</span>
+      <div className="grid grid-cols-1 gap-8 md:gap-10">
+        {userState.subjects.map(sub => {
+          const completedCount = sub.chapters.filter(c => c.isCompleted).length;
+          const totalCount = sub.chapters.length;
+          const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+          
+          return (
+            <div key={sub.id} className="group bg-white dark:bg-slate-900 rounded-[2.5rem] md:rounded-[3.5rem] shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden transition-all">
+              <div className="p-6 md:p-10 pb-0">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-6 md:mb-8">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 md:gap-4 mb-3">
+                      <div className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-white font-black text-lg md:text-xl shadow-lg ${progressPercent === 100 ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-slate-900 dark:bg-slate-700'}`}>
+                        {sub.name[0]}
+                      </div>
+                      <div>
+                        <h3 className="font-black text-xl md:text-2xl tracking-tight flex items-center gap-2">
+                          {sub.name}
+                          {progressPercent === 100 && <CheckCircle size={20} className="text-emerald-500" />}
+                        </h3>
+                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[9px] md:text-[10px] font-black uppercase rounded-md tracking-widest">
+                          {t('পত্র', 'P')} {sub.paper}
+                        </span>
+                      </div>
                     </div>
                     
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                      {sub.chapters.filter(c => c.isCompleted).length} / {sub.chapters.length} {t('সম্পন্ন', 'Chapters Done')}
-                    </div>
-                 </div>
-               </div>
-            </div>
+                    <div className="flex flex-wrap items-center gap-3 md:gap-4 mt-4 md:mt-6">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <Calendar size={14} className="text-blue-500" />
+                        <input 
+                          type="date" 
+                          value={sub.examDate || ''}
+                          onChange={(e) => {
+                            onUpdateState(prev => ({
+                              ...prev,
+                              subjects: prev.subjects.map(s => s.id === sub.id ? { ...s, examDate: e.target.value } : s)
+                            }));
+                          }}
+                          className="text-[10px] bg-transparent border-0 p-0 font-black focus:ring-0 uppercase w-28 cursor-pointer"
+                        />
+                      </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sub.chapters.map(ch => (
-                <label 
-                  key={ch.id} 
-                  className={`flex items-center gap-4 p-5 rounded-3xl cursor-pointer transition-all border-2 ${
-                    ch.isCompleted 
-                    ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800 shadow-sm' 
-                    : 'bg-white dark:bg-slate-800/50 border-slate-50 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
-                  }`}
-                >
-                  <div className="relative">
-                    <input 
-                      type="checkbox" 
-                      checked={ch.isCompleted} 
-                      onChange={() => {
-                        onUpdateState(prev => ({
-                          ...prev,
-                          subjects: prev.subjects.map(s => s.id === sub.id ? {
-                            ...s,
-                            chapters: s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c)
-                          } : s)
-                        }));
-                      }}
-                      className="peer w-6 h-6 rounded-lg border-2 border-slate-200 dark:border-slate-700 text-emerald-500 focus:ring-emerald-500 transition-all appearance-none checked:bg-emerald-500 checked:border-emerald-500"
-                    />
-                    <CheckCircle2 
-                      size={14} 
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" 
+                      <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl">
+                         <LayoutGrid size={14} className="text-emerald-500" />
+                         <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                           {completedCount}/{totalCount}
+                         </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => toggleAllChapters(sub.id, completedCount < totalCount)}
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${
+                        completedCount === totalCount
+                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                        : 'bg-emerald-500 text-white shadow-lg'
+                      }`}
+                    >
+                      {completedCount === totalCount ? t('মুছুন', 'Reset') : t('শেষ', 'Done')}
+                    </button>
+                    
+                    <button 
+                      onClick={() => deleteSubject(sub.id)}
+                      className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all rounded-xl opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 md:space-y-3 mb-8 md:mb-10">
+                  <div className="flex justify-between items-end">
+                    <span className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('সিলেবাস অগ্রগতি', 'Progress')}</span>
+                    <span className="text-base md:text-xl font-black text-slate-900 dark:text-white">{Math.round(progressPercent)}%</span>
+                  </div>
+                  <div className="h-3 md:h-4 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 shadow-inner">
+                    <div 
+                      className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-300 transition-all duration-1000" 
+                      style={{ width: `${progressPercent}%` }} 
                     />
                   </div>
-                  <div className="flex-1">
-                    <span className={`font-bold text-sm leading-tight block ${ch.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
-                      {ch.name}
-                    </span>
-                  </div>
-                </label>
-              ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-50/50 dark:bg-slate-950/20 p-6 md:p-10 border-t border-slate-50 dark:border-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
+                  {sub.chapters.map(ch => (
+                    <label 
+                      key={ch.id} 
+                      className={`flex items-start gap-3 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] cursor-pointer transition-all border-2 ${
+                        ch.isCompleted 
+                        ? 'bg-white dark:bg-slate-900 border-emerald-50 dark:border-emerald-900/30' 
+                        : 'bg-white/40 dark:bg-slate-800/30 border-transparent hover:border-slate-100 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="relative pt-1">
+                        <input 
+                          type="checkbox" 
+                          checked={ch.isCompleted} 
+                          onChange={() => {
+                            onUpdateState(prev => ({
+                              ...prev,
+                              subjects: prev.subjects.map(s => s.id === sub.id ? {
+                                ...s,
+                                chapters: s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c)
+                              } : s)
+                            }));
+                          }}
+                          className="peer w-5 h-5 md:w-6 md:h-6 rounded-md border-2 border-slate-200 dark:border-slate-700 text-emerald-500 focus:ring-0 appearance-none checked:bg-emerald-500 checked:border-emerald-500 transition-all"
+                        />
+                        <CheckCircle2 
+                          size={12} 
+                          className="absolute top-[10px] left-[4px] md:top-[11px] md:left-[5px] text-white opacity-0 peer-checked:opacity-100 transition-opacity" 
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className={`font-bold text-xs md:text-sm leading-tight block ${ch.isCompleted ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-200'}`}>
+                          {ch.name}
+                        </span>
+                        <span className="text-[8px] md:text-[9px] font-black uppercase text-slate-400 tracking-widest mt-0.5 block">
+                          {ch.isCompleted ? t('সম্পন্ন', 'Done') : t('বাকি', 'Todo')}
+                        </span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         
         {userState.subjects.length === 0 && (
-          <div className="text-center py-20 bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
-             <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="text-slate-400" />
+          <div className="text-center py-20 md:py-32 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
+             <AlertTriangle size={32} md:size={40} className="text-slate-200 mx-auto mb-6" />
+             <h3 className="text-xl md:text-2xl font-black text-slate-400">{t('সিলেবাস খুঁজে পাওয়া যায়নি!', 'Empty Syllabus')}</h3>
+             <div className="mt-8 flex justify-center gap-3">
+               <button onClick={() => fileInputRef.current?.click()} className="px-6 py-2.5 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20">{t('স্ক্যান', 'Scan')}</button>
+               <button onClick={() => setShowManualAdd(true)} className="px-6 py-2.5 bg-slate-900 text-white font-black rounded-xl text-[10px] uppercase tracking-widest">{t('ম্যানুয়াল', 'Manual')}</button>
              </div>
-             <h3 className="text-xl font-bold text-slate-400">{t('কোনো সিলেবাস পাওয়া যায়নি!', 'No Syllabus Found!')}</h3>
-             <p className="text-slate-300 text-sm mt-2">{t('পড়াশোনা শুরু করতে আপনার সিলেবাস আপলোড বা অ্যাড করুন।', 'Upload or add your syllabus to start tracking.')}</p>
           </div>
         )}
       </div>

@@ -4,7 +4,7 @@ import { UserProfile, Language } from '../types';
 import { Home, Timer, BookOpen, Bot, Sun, Moon, Settings } from 'lucide-react';
 
 interface LayoutProps {
-  children: React.ReactNode;
+  children: React.Node;
   userProfile: UserProfile;
   activeTab: string;
   onTabChange: (tab: any) => void;
@@ -39,7 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     { id: 'dashboard', icon: <Home size={20} />, label: t('হোম', 'Home') },
     { id: 'tracker', icon: <Timer size={20} />, label: t('ফোকাস', 'Focus') },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus') },
-    { id: 'ai', icon: <Bot size={20} />, label: t('বন্ধুর চ্যাট', 'Buddy Chat') },
+    { id: 'ai', icon: <Bot size={20} />, label: t('চ্যাট', 'Buddy') },
     { id: 'settings', icon: <Settings size={20} />, label: t('সেটিংস', 'Settings') },
   ];
 
@@ -82,14 +82,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
            </div>
            <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl text-slate-400 transition-all">
              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-             <span className="text-sm font-bold">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')} {t('মোড', 'Mode')}</span>
+             <span className="text-sm font-bold">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')}</span>
            </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 md:hidden">
+      <main className="flex-1 flex flex-col min-w-0 h-screen">
+        <header className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 md:hidden sticky top-0 z-50">
           <h1 className="font-black text-emerald-600 italic">HSC TRACKER</h1>
           <div className="flex gap-2">
             <button onClick={toggleTheme} className="p-2 text-slate-400">
@@ -98,24 +98,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="flex-1 overflow-auto p-4 md:p-8 pb-32 md:pb-8">
           <div className="max-w-6xl mx-auto">
             {children}
           </div>
         </div>
 
         {/* Mobile Nav */}
-        <nav className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 px-6 py-4 pb-8">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 px-4 py-3 pb-6 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center p-2 transition-all ${
-                activeTab === item.id ? 'text-emerald-500 scale-110' : 'text-slate-300'
+              className={`flex flex-col items-center gap-1 p-2 transition-all ${
+                activeTab === item.id ? 'text-emerald-500 scale-105' : 'text-slate-400'
               }`}
             >
-              {item.icon}
-              <span className="text-[10px] mt-1 font-bold">{item.label}</span>
+              <div className={`${activeTab === item.id ? 'bg-emerald-500/10 p-2 rounded-xl' : ''}`}>
+                {item.icon}
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>
             </button>
           ))}
         </nav>

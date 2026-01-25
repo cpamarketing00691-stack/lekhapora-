@@ -116,6 +116,68 @@ export class GeminiService {
     }
   }
 
+  async analyzeExamRoutineImage(userProfile: any, base64Image: string, mimeType: string) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: base64Image,
+                mimeType: mimeType,
+              },
+            },
+            {
+              text: `Analyze this image of a Bangladesh HSC Exam Routine. 
+              1. Extract the exam dates for each subject and paper mentioned.
+              2. Return the data in a strict JSON format.
+              
+              JSON structure:
+              {
+                "exams": [
+                  {
+                    "subjectName": "Subject Name (e.g. Physics)",
+                    "paper": 1,
+                    "date": "YYYY-MM-DD"
+                  }
+                ]
+              }`
+            },
+          ],
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              exams: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    subjectName: { type: Type.STRING },
+                    paper: { type: Type.NUMBER },
+                    date: { type: Type.STRING, description: "ISO date format YYYY-MM-DD" }
+                  },
+                  required: ["subjectName", "paper", "date"]
+                }
+              }
+            },
+            required: ["exams"]
+          }
+        }
+      });
+
+      return JSON.parse(response.text);
+    } catch (error: any) {
+      console.error("Gemini Routine Analysis Error:", error);
+      throw error;
+    }
+  }
+
   async generateRoutine(userProfile: any, studyHistory: any[], constraints: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });

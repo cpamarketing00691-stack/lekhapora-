@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter } from '../types';
 import { geminiService } from '../services/gemini';
-import { Camera, Plus, Trash2, Calendar, CheckCircle2, Loader2, Upload, AlertTriangle } from 'lucide-react';
+import { Camera, Plus, Trash2, Calendar, CheckCircle2, Loader2, Upload, AlertTriangle, FileText } from 'lucide-react';
 
 interface SyllabusManagerProps {
   userState: UserState;
@@ -11,8 +11,10 @@ interface SyllabusManagerProps {
 
 const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateState }) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRoutineProcessing, setIsRoutineProcessing] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const routineFileInputRef = useRef<HTMLInputElement>(null);
   
   const [manualSubject, setManualSubject] = useState({ name: '', paper: 1, chapters: '' });
 
@@ -50,10 +52,49 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       reader.readAsDataURL(file);
     } catch (error) {
       console.error("Failed to process image:", error);
-      alert(t("সিলবাস এক্সট্রাক্ট করতে সমস্যা হয়েছে। আবার চেষ্টা করো।", "Failed to extract syllabus. Please try again."));
+      alert(t("সিলেবাস এক্সট্রাক্ট করতে সমস্যা হয়েছে। আবার চেষ্টা করো।", "Failed to extract syllabus. Please try again."));
     } finally {
       setIsProcessing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRoutineUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsRoutineProcessing(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+        const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
+        
+        if (result && result.exams) {
+          onUpdateState(prev => {
+            const updatedSubjects = prev.subjects.map(sub => {
+              // Try to find a matching exam in the extracted routine
+              const match = result.exams.find((ex: any) => 
+                ex.subjectName.toLowerCase().includes(sub.name.toLowerCase()) && 
+                ex.paper === sub.paper
+              );
+              if (match) {
+                return { ...sub, examDate: match.date };
+              }
+              return sub;
+            });
+            return { ...prev, subjects: updatedSubjects };
+          });
+          alert(t("পরীক্ষার রুটিন আপডেট করা হয়েছে!", "Exam routine updated successfully!"));
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Failed to process routine:", error);
+      alert(t("রুটিন প্রসেস করতে সমস্যা হয়েছে।", "Failed to process routine."));
+    } finally {
+      setIsRoutineProcessing(false);
+      if (routineFileInputRef.current) routineFileInputRef.current.value = '';
     }
   };
 
@@ -102,21 +143,39 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
           <p className="text-slate-500 font-medium text-sm">{t('তোমার NCTB সিলেবাস কাস্টমাইজ করো।', 'Customize your NCTB syllabus patterns.')}</p>
         </div>
         
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button 
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessing}
             className="flex items-center gap-2 px-5 py-3 bg-emerald-500 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
           >
             {isProcessing ? <Loader2 className="animate-spin" size={20} /> : <Camera size={20} />}
-            {t('ছবি তুলুন / আপলোড', 'Scan Syllabus')}
+            {t('সিলেবাস স্ক্যান', 'Scan Syllabus')}
           </button>
+          
+          <button 
+            onClick={() => routineFileInputRef.current?.click()}
+            disabled={isRoutineProcessing}
+            className="flex items-center gap-2 px-5 py-3 bg-blue-500 text-white rounded-2xl font-bold shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isRoutineProcessing ? <Loader2 className="animate-spin" size={20} /> : <FileText size={20} />}
+            {t('রুটিন আপলোড', 'Upload Routine')}
+          </button>
+          
           <input 
             type="file" 
             ref={fileInputRef} 
             className="hidden" 
             accept="image/*" 
             onChange={handleImageUpload} 
+          />
+          
+          <input 
+            type="file" 
+            ref={routineFileInputRef} 
+            className="hidden" 
+            accept="image/*" 
+            onChange={handleRoutineUpload} 
           />
           
           <button 

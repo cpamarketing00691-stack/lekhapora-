@@ -1,41 +1,28 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { createClient } from '@supabase/supabase-js';
 
 /**
- * Server-side API handler for secure Gemini AI interactions.
+ * Server-side API handler for secure Gemini AI interactions with history persistence.
  * Endpoint: /api/chat
- * 
- * This route is designed to run in a Vercel serverless environment, 
- * ensuring the API key remains protected on the server.
  */
 export default async function handler(req: any, res: any) {
-  // Ensure only POST requests are processed for security
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 
-  const { message } = req.body;
+  const { message, userId } = req.body;
 
-  // Validate the incoming request body
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'A valid message string is required.' });
   }
 
   try {
-    /**
-     * Initialize the Google GenAI client.
-     * 
-     * IMPORTANT: Per system-level security requirements, the API key is 
-     * sourced exclusively from the `process.env.API_KEY` environment variable.
-     */
+    // 1. Initialize AI Client
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
-    /**
-     * Execute the content generation request.
-     * We use 'gemini-3-flash-preview' for its balance of performance 
-     * and response speed in general Q&A and text tasks.
-     */
+    // 2. Generate AI Content
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: message,
@@ -46,25 +33,42 @@ export default async function handler(req: any, res: any) {
       },
     });
 
-    /**
-     * Extract the generated text. 
-     * `response.text` is a getter property provided by the SDK.
-     */
     const reply = response.text;
 
     if (!reply) {
       throw new Error('AI model returned an empty response.');
     }
 
-    // Return the response in the JSON format specified by the user requirements.
+    // 3. Save to Supabase securely using Service Role Key
+    // This allows bypassing RLS for administrative logging without exposing keys to the frontend.
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL as string,
+      process.env.SUPABASE_SERVICE_ROLE_KEY as string
+    );
+
+    // Persist the conversation. We use a background-style promise to not block the response,
+    // though in a serverless function we must await to ensure completion.
+    const { error: dbError } = await supabaseAdmin
+      .from('chat_history')
+      .insert([
+        { 
+          user_id: userId || null, // Optional user association
+          message: message, 
+          reply: reply,
+          created_at: new Date().toISOString()
+        }
+      ]);
+
+    if (dbError) {
+      console.error('Supabase Persistence Error:', dbError.message);
+      // We still return the reply to the user even if saving to history fails
+    }
+
     return res.status(200).json({ reply });
   } catch (error: any) {
-    // Server-side logging for error monitoring
     console.error('Backend Gemini API Error:', error.message);
-    
-    // Return a generic, safe error message to the frontend
     return res.status(500).json({ 
-      error: 'An error occurred on the server while communicating with the AI model.' 
+      error: 'An error occurred on the server.' 
     });
   }
 }

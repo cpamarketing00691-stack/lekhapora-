@@ -567,7 +567,8 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         
         {userState.subjects.length === 0 && (
           <div className="text-center py-20 md:py-32 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
-             <AlertTriangle size={32} md:size={40} className="text-slate-200 mx-auto mb-6" />
+             {/* Fix: Removed non-existent md:size prop and used className for responsive sizing */}
+             <AlertTriangle size={32} className="text-slate-200 mx-auto mb-6 w-8 h-8 md:w-10 md:h-10" />
              <h3 className="text-xl md:text-2xl font-black text-slate-400">{t('সিলেবাস খুঁজে পাওয়া যায়নি!', 'Empty Syllabus')}</h3>
              <div className="mt-8 flex justify-center gap-3">
                <button onClick={() => fileInputRef.current?.click()} className="px-6 py-2.5 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20">{t('স্ক্যান', 'Scan')}</button>

@@ -4,7 +4,8 @@ import { UserProfile, Language } from '../types';
 import { Home, Timer, BookOpen, Bot, Sun, Moon, Settings } from 'lucide-react';
 
 interface LayoutProps {
-  children: React.Node;
+  // Fix: Changed React.Node to React.ReactNode as 'Node' is not a member of React namespace
+  children: React.ReactNode;
   userProfile: UserProfile;
   activeTab: string;
   onTabChange: (tab: any) => void;
@@ -28,7 +29,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
       root.classList.add('light');
       root.classList.remove('dark');
       document.body.classList.add('light');
-      document.body.classList.remove('dark');
+      document.body.classList.add('light');
       localStorage.setItem('theme', 'light');
     }
   }, [isDark]);
@@ -115,7 +116,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
               }`}
             >
               <div className={`${activeTab === item.id ? 'bg-brand-primary/10 px-3 py-1.5 rounded-xl' : 'px-3 py-1.5'}`}>
-                {React.cloneElement(item.icon as React.ReactElement, { size: 18 })}
+                {/* Fix: Added type casting to React.ReactElement<{size: number}> to satisfy TypeScript when cloning Lucide icons with a new size */}
+                {React.cloneElement(item.icon as React.ReactElement<{size: number}>, { size: 18 })}
               </div>
               <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest leading-none">{item.label}</span>
             </button>

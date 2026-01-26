@@ -166,7 +166,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     onUpdateState(prev => ({
       ...prev,
-      subjects: [...prev.subjects, newSubject]
+      subjects: [...(prev.subjects || []), newSubject]
     }));
 
     setManualSubject({ name: '', paper: 1, chapters: '' });
@@ -387,7 +387,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       )}
 
       <div className="grid grid-cols-1 gap-8 md:gap-10">
-        {userState.subjects.map(sub => {
+        {Array.isArray(userState.subjects) && userState.subjects.map(sub => {
           const searchTerm = chapterSearch[sub.id]?.toLowerCase() || '';
           const filteredChapters = sub.chapters.filter(ch => ch.name.toLowerCase().includes(searchTerm));
           
@@ -441,7 +441,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Chapter Search Bar for the Card */}
                     <div className="relative mr-2 hidden sm:block">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
                       <input 
@@ -526,7 +525,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                         </div>
                       </div>
 
-                      {/* Difficulty Picker */}
                       <div className="mt-auto flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
                          <div className="flex gap-1.5">
                             {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((level) => (
@@ -565,9 +563,9 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
           );
         })}
         
-        {userState.subjects.length === 0 && (
+        {(!Array.isArray(userState.subjects) || userState.subjects.length === 0) && (
           <div className="text-center py-20 md:py-32 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
-             <AlertTriangle size={32} md:size={40} className="text-slate-200 mx-auto mb-6" />
+             <AlertTriangle size={32} className="text-slate-200 mx-auto mb-6 w-8 h-8 md:w-10 md:h-10" />
              <h3 className="text-xl md:text-2xl font-black text-slate-400">{t('সিলেবাস খুঁজে পাওয়া যায়নি!', 'Empty Syllabus')}</h3>
              <div className="mt-8 flex justify-center gap-3">
                <button onClick={() => fileInputRef.current?.click()} className="px-6 py-2.5 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20">{t('স্ক্যান', 'Scan')}</button>

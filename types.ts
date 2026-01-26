@@ -54,9 +54,22 @@ export interface StudySession {
   startTime: number;
   endTime?: number;
   durationMinutes: number;
+  breakMinutes: number;
+  numBreaks: number;
   focusLevel: number; // 1-10
   mood: Mood;
   isRevision: boolean;
+}
+
+export interface ActiveTimerState {
+  subjectId: string;
+  isFocusActive: boolean;
+  isRevision: boolean;
+  accumulatedFocusSeconds: number;
+  accumulatedBreakSeconds: number;
+  numBreaks: number;
+  lastTimestamp: number;
+  sessionStartTime: number;
 }
 
 export interface UserState {
@@ -68,4 +81,5 @@ export interface UserState {
   badges: string[];
   currentMood: Mood;
   language: Language;
+  activeTimer: ActiveTimerState | null;
 }

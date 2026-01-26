@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { UserState, StudySession, Mood } from '../types';
-import { Play, Pause, Square, Book, Zap, RefreshCcw, PlusCircle, History, Clock, Calendar as CalIcon, CheckCircle2, Smile, Zap as FocusIcon, Coffee, Frown, Flame } from 'lucide-react';
+import React, { useState } from 'react';
+import { UserState, StudySession, Mood, ActiveTimerState } from '../types';
+import { Play, Pause, Square, Zap, RefreshCcw, History, Clock, Calendar as CalIcon, CheckCircle2, Smile, Zap as FocusIcon, Coffee, Frown, Flame } from 'lucide-react';
 
 interface TrackerProps {
   userState: UserState;
@@ -9,14 +9,13 @@ interface TrackerProps {
 }
 
 const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
-  const [activeSubjectId, setActiveSubjectId] = useState<string>('');
-  const [isRunning, setIsRunning] = useState(false);
-  const [seconds, setSeconds] = useState(0);
+  const [activeSubjectId, setActiveSubjectId] = useState<string>(userState.activeTimer?.subjectId || '');
+  const [isRevision, setIsRevision] = useState(userState.activeTimer?.isRevision || false);
+  const [showManual, setShowManual] = useState(false);
+  
+  // Transient settings (not saved until end)
   const [focusLevel, setFocusLevel] = useState(7);
   const [currentMood, setCurrentMood] = useState<Mood>('Focused');
-  const [isRevision, setIsRevision] = useState(false);
-  const [showManual, setShowManual] = useState(false);
-  const timerRef = useRef<number | null>(null);
 
   const [manualData, setManualData] = useState({
     subjectId: '',
@@ -28,17 +27,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  useEffect(() => {
-    if (isRunning) {
-      timerRef.current = window.setInterval(() => {
-        setSeconds(s => s + 1);
-      }, 1000);
-    } else {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    return () => { if (timerRef.current) window.clearInterval(timerRef.current); };
-  }, [isRunning]);
+  const timer = userState.activeTimer;
 
   const formatTime = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
@@ -47,34 +36,86 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleStop = () => {
-    if (!isRunning && seconds < 60) {
-      if (seconds > 0) alert(t('সেশন ১ মিনিটের কম হওয়ায় সেভ করা হবে না।', 'Session too short (less than 1 min) to be saved.'));
-      setIsRunning(false);
-      setSeconds(0);
+  const handleStartResume = () => {
+    if (!activeSubjectId) return;
+
+    onUpdateState(prev => {
+      const now = Date.now();
+      // If no timer exists, create a new session
+      if (!prev.activeTimer) {
+        return {
+          ...prev,
+          activeTimer: {
+            subjectId: activeSubjectId,
+            isFocusActive: true,
+            isRevision,
+            accumulatedFocusSeconds: 0,
+            accumulatedBreakSeconds: 0,
+            numBreaks: 0,
+            lastTimestamp: now,
+            sessionStartTime: now
+          }
+        };
+      }
+      // If timer exists but is on break, resume focus
+      return {
+        ...prev,
+        activeTimer: {
+          ...prev.activeTimer,
+          isFocusActive: true,
+          lastTimestamp: now
+        }
+      };
+    });
+  };
+
+  const handlePause = () => {
+    onUpdateState(prev => {
+      if (!prev.activeTimer) return prev;
+      return {
+        ...prev,
+        activeTimer: {
+          ...prev.activeTimer,
+          isFocusActive: false,
+          numBreaks: prev.activeTimer.numBreaks + 1,
+          lastTimestamp: Date.now()
+        }
+      };
+    });
+  };
+
+  const handleStopEnd = () => {
+    if (!timer) return;
+    
+    // Minimum 1 min focus to save
+    if (timer.accumulatedFocusSeconds < 60) {
+      if (timer.accumulatedFocusSeconds > 0) {
+        alert(t('সেশন ১ মিনিটের কম হওয়ায় সেভ করা হবে না।', 'Session too short (less than 1 min) to be saved.'));
+      }
+      onUpdateState(prev => ({ ...prev, activeTimer: null }));
       return;
     }
     
     const newSession: StudySession = {
       id: `timer-${Date.now()}`,
-      subjectId: activeSubjectId,
-      startTime: Date.now() - (seconds * 1000),
+      subjectId: timer.subjectId,
+      startTime: timer.sessionStartTime,
       endTime: Date.now(),
-      durationMinutes: Math.max(1, Math.floor(seconds / 60)),
+      durationMinutes: Math.max(1, Math.floor(timer.accumulatedFocusSeconds / 60)),
+      breakMinutes: Math.floor(timer.accumulatedBreakSeconds / 60),
+      numBreaks: timer.numBreaks,
       focusLevel,
       mood: currentMood,
-      isRevision
+      isRevision: timer.isRevision
     };
 
     onUpdateState(prev => ({
       ...prev,
       studyHistory: [...prev.studyHistory, newSession],
-      streaks: prev.streaks + (seconds > 1800 ? 1 : 0),
-      currentMood
+      streaks: prev.streaks + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
+      currentMood,
+      activeTimer: null
     }));
-
-    setIsRunning(false);
-    setSeconds(0);
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -94,6 +135,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       startTime: startTime,
       endTime: startTime + (duration * 60000),
       durationMinutes: duration,
+      breakMinutes: 0,
+      numBreaks: 0,
       focusLevel: 8,
       mood: manualData.mood,
       isRevision: manualData.isRevision
@@ -118,6 +161,9 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     { type: 'Burnt Out', icon: <Flame size={18} />, color: 'purple', label: { bn: 'অবসন্ন', en: 'Burnt Out' } },
   ];
 
+  const isTimerGlobalActive = !!timer;
+  const isFocusingNow = timer?.isFocusActive || false;
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
       <header className="text-center space-y-2">
@@ -129,16 +175,16 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       <div className="flex justify-center">
         <div className="bg-white dark:bg-slate-900 p-1 md:p-1.5 rounded-full border border-slate-100 dark:border-slate-800 shadow-sm flex gap-1">
           <button 
-            onClick={() => !isRunning && setShowManual(false)}
-            disabled={isRunning}
+            onClick={() => !isTimerGlobalActive && setShowManual(false)}
+            disabled={isTimerGlobalActive}
             className={`flex items-center gap-2 px-4 py-2 md:px-6 md:py-2.5 rounded-full text-[10px] md:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${!showManual ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <Clock size={14} />
             {t('টাইমার', 'Timer')}
           </button>
           <button 
-            onClick={() => !isRunning && setShowManual(true)}
-            disabled={isRunning}
+            onClick={() => !isTimerGlobalActive && setShowManual(true)}
+            disabled={isTimerGlobalActive}
             className={`flex items-center gap-2 px-4 py-2 md:px-6 md:py-2.5 rounded-full text-[10px] md:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${showManual ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <History size={14} />
@@ -154,13 +200,13 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 md:mb-4 text-center">{t('মোড নির্বাচন', 'Select Mode')}</label>
               <div className="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl shadow-inner max-w-sm mx-auto">
                 <button 
-                  onClick={() => !isRunning && setIsRevision(false)}
+                  onClick={() => !isTimerGlobalActive && setIsRevision(false)}
                   className={`flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-400'}`}
                 >
                   {t('পড়াশোনা', 'Study')}
                 </button>
                 <button 
-                  onClick={() => !isRunning && setIsRevision(true)}
+                  onClick={() => !isTimerGlobalActive && setIsRevision(true)}
                   className={`flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${isRevision ? 'bg-white dark:bg-slate-700 text-purple-600 shadow-sm' : 'text-slate-400'}`}
                 >
                   <RefreshCcw size={12} />
@@ -172,7 +218,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             <div className="w-full max-w-sm mx-auto">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 md:mb-4 text-center">{t('বিষয় নির্বাচন', 'Subject')}</label>
               <select 
-                disabled={isRunning}
+                disabled={isTimerGlobalActive}
                 value={activeSubjectId}
                 onChange={(e) => setActiveSubjectId(e.target.value)}
                 className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-5 py-3.5 focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm font-bold transition-all disabled:opacity-50 appearance-none text-center"
@@ -186,10 +232,18 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
 
           <div className="text-center py-6 md:py-10">
-            <div className={`text-6xl xs:text-7xl sm:text-[8rem] md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${isRevision ? 'text-purple-600' : 'text-slate-900 dark:text-white'}`}>
-              {formatTime(seconds).split(':').slice(1).join(':')}
-              <div className="text-[10px] md:text-sm font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-300 mt-4">{formatTime(seconds).split(':')[0]} HOURS ELAPSED</div>
+            <div className={`text-6xl xs:text-7xl sm:text-[8rem] md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${timer?.isRevision ? 'text-purple-600' : 'text-slate-900 dark:text-white'}`}>
+              {formatTime(timer?.accumulatedFocusSeconds || 0).split(':').slice(1).join(':')}
+              <div className="text-[10px] md:text-sm font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-300 mt-4">
+                {formatTime(timer?.accumulatedFocusSeconds || 0).split(':')[0]} HOURS ELAPSED
+              </div>
             </div>
+            {isTimerGlobalActive && !isFocusingNow && (
+              <div className="mt-4 animate-pulse flex items-center justify-center gap-2 text-blue-500 font-black text-xs uppercase tracking-widest">
+                <Coffee size={14} />
+                {t('ব্রেকে আছো: ', 'ON BREAK: ')} {formatTime(timer?.accumulatedBreakSeconds || 0)}
+              </div>
+            )}
           </div>
 
           {/* Real-time Mood Picker for active session */}
@@ -214,17 +268,17 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
 
           <div className="flex items-center justify-center gap-6 md:gap-10 mt-6 md:mt-4">
-            {!isRunning ? (
+            {!isFocusingNow ? (
               <button
-                onClick={() => activeSubjectId && setIsRunning(true)}
+                onClick={handleStartResume}
                 disabled={!activeSubjectId}
-                className={`w-24 h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${isRevision ? 'bg-purple-500 shadow-purple-500/40' : 'bg-emerald-500 shadow-emerald-500/40'}`}
+                className={`w-24 h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${timer?.isRevision || isRevision ? 'bg-purple-500 shadow-purple-500/40' : 'bg-emerald-500 shadow-emerald-500/40'}`}
               >
                 <Play size={40} md:size={48} className="ml-1.5 md:ml-2 fill-current" />
               </button>
             ) : (
               <button
-                onClick={() => setIsRunning(false)}
+                onClick={handlePause}
                 className="w-24 h-24 md:w-28 md:h-28 bg-white dark:bg-slate-800 text-slate-600 flex items-center justify-center rounded-full border-4 border-slate-100 dark:border-slate-700 hover:scale-105 active:scale-95 shadow-xl transition-all"
               >
                 <Pause size={40} md:size={48} className="fill-current" />
@@ -232,15 +286,16 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             )}
 
             <button
-              onClick={handleStop}
-              className="w-16 h-16 md:w-20 md:h-20 bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center rounded-full border-4 border-red-100 dark:border-red-900/10 hover:scale-105 active:scale-95 transition-all shadow-lg"
+              onClick={handleStopEnd}
+              disabled={!isTimerGlobalActive}
+              className="w-16 h-16 md:w-20 md:h-20 bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center rounded-full border-4 border-red-100 dark:border-red-900/10 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30"
             >
               <Square size={24} md:size={32} className="fill-current" />
             </button>
           </div>
         </div>
       ) : (
-        /* Manual History Form */
+        /* Manual History Form - Same as before but with dur validation as requested previously */
         <div className="bg-white dark:bg-slate-900 rounded-[2rem] md:rounded-[3rem] p-6 md:p-10 shadow-xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-300">
            <form onSubmit={handleManualSubmit} className="space-y-6 md:space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
@@ -310,7 +365,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                  </div>
               </div>
 
-              {/* Manual Mood Selector */}
               <div className="space-y-3">
                  <label className="block text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">{t('সেশনের মেজাজ', 'Session Mood')}</label>
                  <div className="flex flex-wrap gap-2">
@@ -343,7 +397,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
         </div>
       )}
       
-      {/* Dynamic Pro Tip */}
       <div className="bg-emerald-500/5 dark:bg-emerald-900/10 p-6 md:p-8 rounded-[2rem] md:rounded-[3rem] flex items-start gap-4 md:gap-6 border border-emerald-500/10 shadow-sm group">
          <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20 transition-transform group-hover:rotate-6">
             <Zap size={20} md:size={28} className="fill-current" />
@@ -351,7 +404,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
          <div className="flex-1">
             <h5 className="font-black text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1 md:mb-2">{t(`${userState.profile?.aiName} এর পরামর্শ`, `${userState.profile?.aiName}'s Pro Tip`)}</h5>
             <p className="text-xs md:text-sm text-emerald-800 dark:text-emerald-200 font-medium italic leading-relaxed">
-              {isRevision 
+              {timer?.isRevision || isRevision 
                 ? t('"রিভিশন দেওয়ার সময় কঠিন চ্যাপ্টারগুলোর জন্য ফ্লো-চার্ট ব্যবহার করো, স্মৃতিতে দীর্ঘস্থায়ী হবে!"', '"Use flowcharts for complex chapters while revising; it makes them stick in your long-term memory!"')
                 : t('"পড়াশোনার সময় ফোনটা এয়ারপ্লেন মোডে রাখো, ফোকাস লেভেল দ্বিগুণ হয়ে যাবে!"', '"Put your phone on airplane mode while studying—your focus level will double instantly!"')}
             </p>

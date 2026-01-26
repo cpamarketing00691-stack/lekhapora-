@@ -9,13 +9,51 @@
     <script>
         tailwind.config = {
           darkMode: 'class',
+          theme: {
+            extend: {
+              colors: {
+                brand: {
+                  bg: 'rgb(var(--brand-bg) / <alpha-value>)',
+                  surface: 'rgb(var(--brand-surface) / <alpha-value>)',
+                  primary: 'rgb(var(--brand-primary) / <alpha-value>)',
+                  secondary: 'rgb(var(--brand-secondary) / <alpha-value>)',
+                  'text-p': 'rgb(var(--brand-text-p) / <alpha-value>)',
+                  'text-s': 'rgb(var(--brand-text-s) / <alpha-value>)',
+                }
+              }
+            }
+          }
         }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .dark { background-color: #0f172a; color: #f8fafc; }
-        .light { background-color: #f8fafc; color: #0f172a; }
+        
+        /* 🎓 LIGHT MODE — “Soft Focus Day” */
+        :root {
+          --brand-bg: 246 248 245;          /* #F6F8F5 */
+          --brand-primary: 91 125 190;      /* #5B7DBE - Dusty Blue */
+          --brand-secondary: 127 174 158;    /* #7FAE9E - Muted Sage */
+          --brand-surface: 233 237 240;      /* #E9EDF0 - Light Fog Grey */
+          --brand-text-p: 47 52 55;         /* #2F3437 - Soft Charcoal */
+          --brand-text-s: 107 114 128;      /* #6B7280 - Cool Grey */
+        }
+
+        /* 🌙 DARK MODE — “Deep Night Focus” */
+        .dark {
+          --brand-bg: 14 22 36;             /* #0E1624 - Ink Blue */
+          --brand-primary: 95 179 162;      /* #5FB3A2 - Muted Teal */
+          --brand-secondary: 139 156 242;    /* #8B9CF2 - Soft Periwinkle */
+          --brand-surface: 27 38 54;         /* #1B2636 - Blue Slate */
+          --brand-text-p: 227 232 239;      /* #E3E8EF - Soft Off-White */
+          --brand-text-s: 138 148 166;      /* #8A94A6 - Muted Steel */
+        }
+
+        body.light { background-color: rgb(var(--brand-bg)); color: rgb(var(--brand-text-p)); }
+        body.dark { background-color: rgb(var(--brand-bg)); color: rgb(var(--brand-text-p)); }
+        
+        /* Smooth transitions for theme switching */
+        .transition-colors { transition-property: background-color, border-color, color, fill, stroke; transition-duration: 300ms; }
     </style>
 <script type="importmap">
 {
@@ -32,9 +70,8 @@
 }
 </script>
 </head>
-<body class="light transition-colors duration-300">
+<body class="light transition-colors">
     <div id="root"></div>
-    <!-- Script tag to initialize the application -->
     <script type="module" src="index.tsx"></script>
 </body>
 </html>

@@ -44,11 +44,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
   ];
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors selection:bg-emerald-100">
+    <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20">
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-8">
+      <aside className="hidden md:flex flex-col w-64 bg-brand-surface border-r border-brand-text-s/10 p-8 transition-colors">
         <div className="mb-10">
-          <h1 className="text-2xl font-black bg-gradient-to-br from-emerald-600 to-teal-400 bg-clip-text text-transparent italic">
+          <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic">
             HSC TRACKER
           </h1>
         </div>
@@ -60,8 +60,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
               onClick={() => onTabChange(item.id)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
                 activeTab === item.id 
-                  ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20 font-bold' 
-                  : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600'
+                  ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/20 font-bold' 
+                  : 'hover:bg-brand-bg/50 text-brand-text-s hover:text-brand-text-p'
               }`}
             >
               {item.icon}
@@ -71,16 +71,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         </nav>
 
         <div className="mt-auto pt-8 space-y-4">
-           <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700">
-             <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white font-black text-lg">
+           <div className="flex items-center gap-3 p-4 bg-brand-bg/50 rounded-3xl border border-brand-text-s/10">
+             <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-black text-lg">
                {userProfile.fullName[0]}
              </div>
              <div className="min-w-0">
                <p className="text-sm font-bold truncate">{userProfile.fullName}</p>
-               <p className="text-[10px] uppercase font-black text-slate-400">{userProfile.group}</p>
+               <p className="text-[10px] uppercase font-black text-brand-text-s">{userProfile.group}</p>
              </div>
            </div>
-           <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl text-slate-400 transition-all">
+           <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-brand-bg/50 rounded-2xl text-brand-text-s transition-all">
              {isDark ? <Sun size={20} /> : <Moon size={20} />}
              <span className="text-sm font-bold">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')}</span>
            </button>
@@ -88,11 +88,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen">
-        <header className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 md:hidden sticky top-0 z-50">
-          <h1 className="font-black text-emerald-600 italic">HSC TRACKER</h1>
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <header className="flex items-center justify-between px-6 py-4 bg-brand-surface border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
+          <h1 className="font-black text-brand-primary italic">HSC TRACKER</h1>
           <div className="flex gap-2">
-            <button onClick={toggleTheme} className="p-2 text-slate-400">
+            <button onClick={toggleTheme} className="p-2 text-brand-text-s">
               {isDark ? <Sun size={20} /> : <Moon size={20} />}
             </button>
           </div>
@@ -105,16 +105,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         </div>
 
         {/* Mobile Nav */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 px-4 py-3 pb-6 shadow-[0_-10px_30px_rgb(0,0,0,0.05)]">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-brand-surface/80 backdrop-blur-xl border-t border-brand-text-s/10 px-4 py-3 pb-6 shadow-[0_-10px_30px_rgb(0,0,0,0.05)] transition-colors">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
               className={`flex flex-col items-center gap-1 p-2 transition-all ${
-                activeTab === item.id ? 'text-emerald-500 scale-105' : 'text-slate-400'
+                activeTab === item.id ? 'text-brand-primary scale-105' : 'text-brand-text-s'
               }`}
             >
-              <div className={`${activeTab === item.id ? 'bg-emerald-500/10 p-2 rounded-xl' : ''}`}>
+              <div className={`${activeTab === item.id ? 'bg-brand-primary/10 p-2 rounded-xl' : ''}`}>
                 {item.icon}
               </div>
               <span className="text-[9px] font-black uppercase tracking-widest">{item.label}</span>

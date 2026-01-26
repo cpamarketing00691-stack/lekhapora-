@@ -10,44 +10,180 @@ import Auth from './components/Auth';
 import Settings from './components/Settings';
 import SyllabusManager from './components/SyllabusManager';
 import { Layout } from './components/Layout';
+import { supabase } from './lib/supabase';
+import { Loader2 } from 'lucide-react';
+
+const DEFAULT_STATE: UserState = {
+  isAuthenticated: false,
+  profile: null,
+  studyHistory: [],
+  subjects: [],
+  dailyTasks: [],
+  streaks: 0,
+  badges: [],
+  currentMood: 'Great',
+  language: 'bn',
+  activeTimer: null
+};
 
 const App: React.FC = () => {
-  // Global single source of truth: initialized from localStorage and shared via props
   const [userState, setUserState] = useState<UserState>(() => {
     const saved = localStorage.getItem('hsc_study_tracker_state');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_STATE,
+          ...parsed,
+          studyHistory: parsed.studyHistory || [],
+          subjects: parsed.subjects || [],
+          dailyTasks: parsed.dailyTasks || [],
+          badges: parsed.badges || []
+        };
       } catch (e) {
         console.error("Failed to parse local storage", e);
       }
     }
-    return {
-      isAuthenticated: false,
-      profile: null,
-      studyHistory: [],
-      subjects: [],
-      dailyTasks: [],
-      streaks: 0,
-      badges: [],
-      currentMood: 'Great',
-      language: 'bn',
-      activeTimer: null
-    };
+    return DEFAULT_STATE;
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number | null>(null);
 
-  // Global persistence effect - syncs the entire userState whenever it changes
+  // 1. Auth Listener
+  useEffect(() => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUserState(prev => ({ ...prev, isAuthenticated: true }));
+        await fetchUserData(session.user.id);
+      }
+      setIsInitialLoading(false);
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        setUserState(prev => ({ ...prev, isAuthenticated: true }));
+        await fetchUserData(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setUserState(DEFAULT_STATE);
+        localStorage.removeItem('hsc_study_tracker_state');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 2. Fetch Data from Supabase
+  const fetchUserData = async (userId: string) => {
+    setIsSyncing(true);
+    try {
+      // First, get study state from user_data
+      const { data: userData, error: userDataError } = await supabase
+        .from('user_data')
+        .select('state')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      // Second, get profile info from users table (as requested)
+      const { data: profileData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (userDataError) throw userDataError;
+
+      setUserState(prev => {
+        const remoteState = userData?.state || {};
+        
+        const newState = {
+          ...prev,
+          ...remoteState,
+          isAuthenticated: true,
+          dailyTasks: remoteState.dailyTasks || prev.dailyTasks || [],
+          studyHistory: remoteState.studyHistory || prev.studyHistory || [],
+          subjects: remoteState.subjects || prev.subjects || []
+        };
+        
+        // If we have profile in 'users' table, use it to populate the UI profile if it's missing or update name
+        if (profileData) {
+           if (!newState.profile) {
+             newState.profile = {
+               fullName: profileData.full_name,
+               college: '',
+               group: Group.SCIENCE,
+               board: 'Dhaka',
+               medium: Medium.BANGLA,
+               targetYear: '2025',
+               religion: Religion.ISLAM,
+               aiName: `${profileData.full_name.split(' ')[0]} AI`
+             };
+           } else {
+             newState.profile.fullName = profileData.full_name;
+           }
+        }
+
+        return newState;
+      });
+
+      // If remote is empty, check local for migration
+      if (!userData?.state) {
+        const local = localStorage.getItem('hsc_study_tracker_state');
+        if (local) {
+          const parsed = JSON.parse(local);
+          saveUserData(userId, parsed);
+        }
+      }
+    } catch (err) {
+      console.error("Sync fetch error:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 3. Save Data to Supabase
+  const saveUserData = async (userId: string, state: any) => {
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase
+        .from('user_data')
+        .upsert({ 
+          user_id: userId, 
+          state: state,
+          updated_at: new Date().toISOString() 
+        });
+      if (error) throw error;
+    } catch (err) {
+      console.error("Sync save error:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // 4. Persistence Effect
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
+    
+    // Remote sync
+    const syncRemote = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        saveUserData(user.id, userState);
+      }
+    };
+
+    if (userState.isAuthenticated) {
+      const timeoutId = setTimeout(syncRemote, 1500); // Debounced save
+      return () => clearTimeout(timeoutId);
+    }
   }, [userState]);
 
-  /**
-   * GLOBAL TIMER LOGIC
-   * Uses timestamps for delta calculation to prevent drift and ensure focus/break time is accurate.
-   */
+  // Global Timer Logic
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
@@ -56,11 +192,9 @@ const App: React.FC = () => {
             if (!prev.activeTimer) return prev;
             
             const now = Date.now();
-            // Calculate real elapsed time in seconds
             const delta = Math.floor((now - prev.activeTimer.lastTimestamp) / 1000);
             if (delta < 1) return prev;
 
-            // Increment appropriate counters based on current focus state
             const updatedTimer = { 
               ...prev.activeTimer, 
               lastTimestamp: prev.activeTimer.lastTimestamp + (delta * 1000) 
@@ -91,11 +225,6 @@ const App: React.FC = () => {
     };
   }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);
 
-  /**
-   * AUTO-PAUSE LOGIC
-   * Pauses active focus sessions when navigating away from the Tracker tab.
-   * This ensures break time is automatically tracked.
-   */
   useEffect(() => {
     if (activeTab !== 'tracker' && userState.activeTimer?.isFocusActive) {
       setUserState(prev => {
@@ -113,38 +242,21 @@ const App: React.FC = () => {
     }
   }, [activeTab]);
 
-  const handleAuth = (success: boolean) => {
-    setUserState(prev => ({ ...prev, isAuthenticated: success }));
-  };
-
-  const handleLogout = () => {
-    setUserState({
-      isAuthenticated: false,
-      profile: null,
-      studyHistory: [],
-      subjects: [],
-      dailyTasks: [],
-      streaks: 0,
-      badges: [],
-      currentMood: 'Great',
-      language: 'bn',
-      activeTimer: null
-    });
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUserState(DEFAULT_STATE);
     localStorage.removeItem('hsc_study_tracker_state');
   };
 
   const handleProfileComplete = (onboardingData: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profile } = onboardingData;
-
-    // Map selected subject names to full Subject objects with localized paper 1/2 logic
     const finalSubjects: Subject[] = [];
 
     selectedSubjectNames.forEach((name, subIdx) => {
-      // Compulsory subjects like Bangla, English usually have 2 papers in NCTB
       const needsTwoPapers = name === 'Bangla' || name === 'English' || 
                             name === 'Physics' || name === 'Chemistry' || 
                             name === 'Biology' || name === 'Higher Math' ||
-                            name === 'Accounting' || name === 'Economics'; // etc.
+                            name === 'Accounting' || name === 'Economics';
       
       const papersToCreate = (name === 'ICT') ? [1] : (needsTwoPapers ? [1, 2] : [1]);
 
@@ -172,8 +284,16 @@ const App: React.FC = () => {
     }));
   };
 
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen bg-brand-bg flex items-center justify-center">
+        <Loader2 size={40} className="animate-spin text-brand-primary" />
+      </div>
+    );
+  }
+
   if (!userState.isAuthenticated) {
-    return <Auth onAuthSuccess={() => handleAuth(true)} />;
+    return <Auth onAuthSuccess={() => {}} />;
   }
 
   if (!userState.profile) {
@@ -187,7 +307,16 @@ const App: React.FC = () => {
       onTabChange={setActiveTab}
       language={userState.language}
     >
-      <div className="h-full">
+      <div className="h-full relative">
+          {isSyncing && (
+            <div className="absolute top-0 right-0 z-50 p-2">
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-brand-primary/10 text-brand-primary rounded-full border border-brand-primary/20 backdrop-blur-sm shadow-sm animate-pulse">
+                <Loader2 size={10} className="animate-spin" />
+                <span className="text-[8px] font-black uppercase tracking-widest">Cloud Syncing</span>
+              </div>
+            </div>
+          )}
+          
           {activeTab === 'dashboard' && (
             <Dashboard 
               userState={userState} 

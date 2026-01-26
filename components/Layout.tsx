@@ -4,7 +4,8 @@ import { UserProfile, Language } from '../types';
 import { Home, Timer, BookOpen, Bot, Sun, Moon, Settings } from 'lucide-react';
 
 interface LayoutProps {
-  children: React.Node;
+  // Fix: React.Node doesn't exist, changed to React.ReactNode
+  children: React.ReactNode;
   userProfile: UserProfile;
   activeTab: string;
   onTabChange: (tab: any) => void;
@@ -115,7 +116,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
               }`}
             >
               <div className={`${activeTab === item.id ? 'bg-brand-primary/10 px-3 py-1.5 rounded-xl' : 'px-3 py-1.5'}`}>
-                {React.cloneElement(item.icon as React.ReactElement, { size: 18 })}
+                {/* Fix: Added any cast to avoid TS error on 'size' prop when cloning */}
+                {React.cloneElement(item.icon as React.ReactElement<any>, { size: 18 })}
               </div>
               <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest leading-none">{item.label}</span>
             </button>

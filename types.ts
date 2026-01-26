@@ -24,12 +24,14 @@ export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 
 export interface UserProfile {
   fullName: string;
+  college: string; // Added college info
   group: Group;
   board: string;
   medium: Medium;
   targetYear: string;
   religion: Religion;
   aiName: string;
+  targetExamDate?: string; // Main HSC Start Date
 }
 
 export interface Chapter {
@@ -53,8 +55,8 @@ export interface StudySession {
   subjectId: string;
   startTime: number;
   endTime?: number;
-  durationSeconds: number; // Changed from minutes to seconds for HH:MM:SS
-  breakSeconds: number;    // Changed from minutes to seconds for HH:MM:SS
+  durationSeconds: number;
+  breakSeconds: number;
   numBreaks: number;
   focusLevel: number; // 1-10
   mood: Mood;

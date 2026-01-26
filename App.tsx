@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession } from './types';
-import { COMPULSORY_SUBJECTS, GROUP_SUBJECTS, CHAPTER_LISTS } from './constants';
+import { CHAPTER_LISTS } from './constants';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import Tracker from './components/Tracker';
@@ -131,33 +131,41 @@ const App: React.FC = () => {
     localStorage.removeItem('hsc_study_tracker_state');
   };
 
-  const handleProfileComplete = (profile: UserProfile) => {
-    const compulsory = COMPULSORY_SUBJECTS.map((s, idx) => ({
-      id: `comp-${idx}`,
-      name: s.name!,
-      paper: s.paper as 1|2,
-      chapters: (CHAPTER_LISTS[s.name!] || ['Introduction', 'Core Concepts']).map((ch, cidx) => ({
-        id: `ch-${idx}-${cidx}`,
-        name: ch,
-        isCompleted: false
-      }))
-    }));
+  const handleProfileComplete = (onboardingData: UserProfile & { selectedSubjectNames: string[] }) => {
+    const { selectedSubjectNames, ...profile } = onboardingData;
 
-    const specific = GROUP_SUBJECTS[profile.group].map((s, idx) => ({
-      id: `group-${idx}`,
-      name: s.name!,
-      paper: s.paper as 1|2,
-      chapters: (CHAPTER_LISTS[s.name!] || ['Basic Theory', 'Advanced Problems']).map((ch, cidx) => ({
-        id: `group-ch-${idx}-${cidx}`,
-        name: ch,
-        isCompleted: false
-      }))
-    }));
+    // Map selected subject names to full Subject objects with localized paper 1/2 logic
+    const finalSubjects: Subject[] = [];
+
+    selectedSubjectNames.forEach((name, subIdx) => {
+      // Compulsory subjects like Bangla, English usually have 2 papers in NCTB
+      const needsTwoPapers = name === 'Bangla' || name === 'English' || 
+                            name === 'Physics' || name === 'Chemistry' || 
+                            name === 'Biology' || name === 'Higher Math' ||
+                            name === 'Accounting' || name === 'Economics'; // etc.
+      
+      const papersToCreate = (name === 'ICT') ? [1] : (needsTwoPapers ? [1, 2] : [1]);
+
+      papersToCreate.forEach(paperNum => {
+        const chapters = (CHAPTER_LISTS[name] || ['সূচনা', 'মূল ধারণা', 'অ্যাডভান্সড প্রবলেম']).map((ch, chIdx) => ({
+          id: `ch-${subIdx}-${paperNum}-${chIdx}`,
+          name: ch,
+          isCompleted: false
+        }));
+
+        finalSubjects.push({
+          id: `sub-${subIdx}-${paperNum}-${Date.now()}`,
+          name: name,
+          paper: paperNum as 1 | 2,
+          chapters: chapters
+        });
+      });
+    });
 
     setUserState(prev => ({
       ...prev,
       profile,
-      subjects: [...compulsory, ...specific]
+      subjects: finalSubjects
     }));
   };
 

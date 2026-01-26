@@ -1,8 +1,8 @@
 
-import React, { useMemo } from 'react';
-import { UserState } from '../types';
+import React, { useMemo, useState } from 'react';
+import { UserState, Subject } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -10,12 +10,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
+  const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  /**
-   * UTILITY: Format Duration (HH:MM:SS)
-   * Mandatory requirement for high-precision time tracking.
-   */
   const formatDuration = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
@@ -25,10 +22,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
       .join(':');
   };
 
-  /**
-   * UTILITY: 12-Hour Format (e.g. 10:45 PM)
-   * Ensures consistency across all timestamp displays.
-   */
   const formatTime12h = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString(userState.language === 'bn' ? 'bn-BD' : 'en-US', {
       hour: '2-digit',
@@ -45,39 +38,63 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
     return `${year}-${month}-${day}`;
   };
 
+  const getCountdown = (dateStr: string) => {
+    const target = new Date(dateStr).setHours(0,0,0,0);
+    const now = new Date().setHours(0,0,0,0);
+    const diff = target - now;
+    if (diff < 0) return t('শেষ', 'Over');
+    if (diff === 0) return t('আজ', 'Today');
+    
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (days > 7) {
+      const w = Math.floor(days / 7);
+      const d = days % 7;
+      return d > 0 ? `${w}w ${d}d` : `${w}w`;
+    }
+    return `${days}d`;
+  };
+
   const stats = useMemo(() => {
     const today = getLocalDateString(Date.now());
     const allSessions = userState.studyHistory || [];
     
-    const regularFocusSeconds = allSessions
+    // Apply filter if selected
+    const filteredSessions = subjectFilter 
+      ? allSessions.filter(s => s.subjectId === subjectFilter)
+      : allSessions;
+
+    const regularFocusSeconds = filteredSessions
       .filter(s => !s.isRevision)
       .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0);
     
-    const revisionFocusSeconds = allSessions
+    const revisionFocusSeconds = filteredSessions
       .filter(s => s.isRevision)
       .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0);
 
-    const todayFocusSeconds = allSessions
+    const todayFocusSeconds = filteredSessions
       .filter(s => getLocalDateString(s.startTime) === today)
       .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0);
 
-    const totalBreakSeconds = allSessions
+    const totalBreakSeconds = filteredSessions
       .reduce((acc, curr) => acc + (curr.breakSeconds || 0), 0);
     
-    const totalBreaks = allSessions
+    const totalBreaks = filteredSessions
       .reduce((acc, curr) => acc + (curr.numBreaks || 0), 0);
 
-    const dailyGoalSeconds = 4 * 3600; // 4 Hour daily target
+    const dailyGoalSeconds = 4 * 3600; 
     const studyTimeFactor = Math.min(100, Math.round((todayFocusSeconds / dailyGoalSeconds) * 100)); 
 
-    const totalChapters = userState.subjects.reduce((acc, curr) => acc + (curr.chapters?.length || 0), 0);
-    const completedChapters = userState.subjects.reduce((acc, curr) => 
+    const relevantSubjects = subjectFilter 
+      ? userState.subjects.filter(s => s.id === subjectFilter)
+      : userState.subjects;
+
+    const totalChapters = relevantSubjects.reduce((acc, curr) => acc + (curr.chapters?.length || 0), 0);
+    const completedChapters = relevantSubjects.reduce((acc, curr) => 
       acc + (curr.chapters?.filter(c => c.isCompleted).length || 0), 0);
     const completionRate = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
     const consistencyFactor = Math.min(100, Math.round(((userState.streaks || 0) / 30) * 100));
-
-    const revisionGoalSeconds = 10 * 3600; // 10-hour total target for revision factor
+    const revisionGoalSeconds = 10 * 3600; 
     const revisionFactor = Math.min(100, Math.round((revisionFocusSeconds / revisionGoalSeconds) * 100));
 
     const finalScore = Math.round(
@@ -104,7 +121,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
         revision: revisionFactor
       }
     };
-  }, [userState.studyHistory, userState.subjects, userState.streaks, userState.language]);
+  }, [userState.studyHistory, userState.subjects, userState.streaks, userState.language, subjectFilter]);
+
+  const upcomingExams = useMemo(() => {
+    return userState.subjects
+      .filter(s => !!s.examDate)
+      .sort((a, b) => new Date(a.examDate!).getTime() - new Date(b.examDate!).getTime())
+      .slice(0, 4);
+  }, [userState.subjects]);
 
   const weeklyData = useMemo(() => {
     const last7DaysStrings = Array.from({ length: 7 }, (_, i) => {
@@ -114,7 +138,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
     });
 
     return last7DaysStrings.map(dateStr => {
-      const daySessions = (userState.studyHistory || []).filter(s => getLocalDateString(s.startTime) === dateStr);
+      const daySessions = (userState.studyHistory || [])
+        .filter(s => getLocalDateString(s.startTime) === dateStr)
+        .filter(s => !subjectFilter || s.subjectId === subjectFilter);
+
       const studyHrs = daySessions.filter(s => !s.isRevision).reduce((acc, s) => acc + (s.durationSeconds || 0), 0) / 3600;
       const revisionHrs = daySessions.filter(s => s.isRevision).reduce((acc, s) => acc + (s.durationSeconds || 0), 0) / 3600;
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -126,13 +153,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
         fullDate: dateStr
       };
     });
-  }, [userState.studyHistory, userState.language]);
+  }, [userState.studyHistory, userState.language, subjectFilter]);
 
   const recentSessions = useMemo(() => {
     return [...(userState.studyHistory || [])]
+      .filter(s => !subjectFilter || s.subjectId === subjectFilter)
       .sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
-      .slice(0, 5);
-  }, [userState.studyHistory]);
+      .slice(0, 8);
+  }, [userState.studyHistory, subjectFilter]);
 
   const getSubjectName = (id: string) => {
     const sub = userState.subjects.find(s => s.id === id);
@@ -152,11 +180,66 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
           </h1>
           <p className="text-brand-text-s font-medium text-[10px] sm:text-xs md:text-sm mt-1">{t('তোমার HSC প্রস্তুতির বর্তমান চিত্র।', 'Your current HSC readiness overview.')}</p>
         </div>
-        <div className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-xl sm:rounded-2xl flex items-center gap-2 md:gap-3 border border-brand-text-s/10 shadow-sm bg-brand-surface self-start md:self-center`}>
-          <Activity size={16} className="text-brand-primary animate-pulse" />
-          <span className="text-[9px] sm:text-[10px] md:text-xs font-black uppercase tracking-widest text-brand-text-p leading-none">{t('মেজাজ', 'Mood')}: {userState.currentMood}</span>
+        <div className="flex gap-2">
+           <div className={`px-3 py-1.5 sm:px-4 sm:py-2 md:px-5 md:py-2.5 rounded-xl sm:rounded-2xl flex items-center gap-2 md:gap-3 border border-brand-text-s/10 shadow-sm bg-brand-surface self-start md:self-center`}>
+            <Activity size={16} className="text-brand-primary animate-pulse" />
+            <span className="text-[9px] sm:text-[10px] md:text-xs font-black uppercase tracking-widest text-brand-text-p leading-none">{t('মেজাজ', 'Mood')}: {userState.currentMood}</span>
+          </div>
         </div>
       </header>
+
+      {/* Countdown Widgets Section */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto pb-2">
+        {userState.profile?.targetExamDate && (
+          <div className="bg-brand-primary text-white p-4 rounded-3xl shadow-lg border border-white/10 flex flex-col justify-between min-w-[150px] shrink-0">
+             <div className="flex justify-between items-start">
+               <Calendar size={18} className="opacity-60" />
+               <span className="text-[9px] font-black uppercase tracking-widest">{t('এইচএসসি লক্ষ্য', 'HSC GOAL')}</span>
+             </div>
+             <div className="mt-4">
+                <h4 className="text-3xl font-black tracking-tighter tabular-nums leading-none">{getCountdown(userState.profile.targetExamDate)}</h4>
+                <p className="text-[8px] font-bold opacity-60 uppercase mt-1">{t('বাকি আছে', 'REMAINING')}</p>
+             </div>
+          </div>
+        )}
+        {upcomingExams.map(exam => (
+          <button 
+            key={exam.id}
+            onClick={() => setSubjectFilter(subjectFilter === exam.id ? null : exam.id)}
+            className={`p-4 rounded-3xl shadow-sm border transition-all flex flex-col justify-between min-w-[150px] shrink-0 ${subjectFilter === exam.id ? 'bg-brand-secondary text-white border-brand-secondary shadow-brand-secondary/30' : 'bg-brand-surface text-brand-text-p border-brand-text-s/10 hover:border-brand-primary/50'}`}
+          >
+             <div className="flex justify-between items-start">
+               <Clock size={18} className={subjectFilter === exam.id ? 'opacity-100' : 'opacity-40'} />
+               <span className="text-[9px] font-black uppercase tracking-widest text-right">{exam.name} P{exam.paper}</span>
+             </div>
+             <div className="mt-4 text-left">
+                <h4 className="text-2xl font-black tracking-tighter tabular-nums leading-none">{getCountdown(exam.examDate!)}</h4>
+                <p className="text-[8px] font-bold opacity-60 uppercase mt-1">{t('বাকি আছে', 'LEFT')}</p>
+             </div>
+          </button>
+        ))}
+      </section>
+
+      {/* Analysis Filtering Context */}
+      {subjectFilter && (
+        <div className="bg-brand-secondary/10 border border-brand-secondary/20 p-4 rounded-[1.5rem] flex items-center justify-between">
+           <div className="flex items-center gap-3">
+             <div className="p-2 bg-brand-secondary text-white rounded-lg">
+               <Filter size={14} />
+             </div>
+             <div>
+               <p className="text-xs font-black text-brand-secondary uppercase tracking-widest leading-none mb-1">{t('ফিল্টার সক্রিয়', 'Filter Active')}</p>
+               <h3 className="text-sm font-bold text-brand-text-p">{getSubjectName(subjectFilter)}</h3>
+             </div>
+           </div>
+           <button 
+            onClick={() => setSubjectFilter(null)}
+            className="p-2 hover:bg-brand-secondary/20 rounded-full text-brand-secondary transition-all"
+           >
+             <X size={20} />
+           </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
         <div className="lg:col-span-2 bg-brand-surface p-5 sm:p-6 md:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[3rem] shadow-sm border border-brand-text-s/10 relative overflow-hidden">
@@ -239,9 +322,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
         </div>
 
         <div className="bg-brand-surface p-5 sm:p-6 md:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[3rem] border border-brand-text-s/10 shadow-sm flex flex-col">
-          <div className="flex items-center gap-3 mb-4 sm:mb-6">
-            <History size={16} className="text-brand-secondary" />
-            <h4 className="text-xs sm:text-sm font-black text-brand-text-p uppercase tracking-widest">{t('সাম্প্রতিক হিস্ট্রি', 'History')}</h4>
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3">
+              <History size={16} className="text-brand-secondary" />
+              <h4 className="text-xs sm:text-sm font-black text-brand-text-p uppercase tracking-widest">{t('সেশন হিস্ট্রি', 'Session History')}</h4>
+            </div>
           </div>
           <div className="flex-1 space-y-3 sm:space-y-4 overflow-y-auto pr-1 max-h-[300px] sm:max-h-[400px] scrollbar-hide">
             {recentSessions.length > 0 ? recentSessions.map((session) => (
@@ -277,7 +362,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
                 </div>
               </div>
             )) : (
-              <p className="text-center text-[9px] sm:text-[10px] font-bold text-brand-text-s py-6 sm:py-8">{t('এখনো কোনো সেশন নেই!', 'No history yet!')}</p>
+              <p className="text-center text-[9px] sm:text-[10px] font-bold text-brand-text-s py-6 sm:py-8">{t('এই বিষয়ের কোনো হিস্ট্রি নেই', 'No history for this subject')}</p>
             )}
           </div>
         </div>

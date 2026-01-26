@@ -12,9 +12,17 @@ import SyllabusManager from './components/SyllabusManager';
 import { Layout } from './components/Layout';
 
 const App: React.FC = () => {
+  // Global single source of truth: initialized from localStorage and shared via props
   const [userState, setUserState] = useState<UserState>(() => {
     const saved = localStorage.getItem('hsc_study_tracker_state');
-    return saved ? JSON.parse(saved) : {
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse local storage", e);
+      }
+    }
+    return {
       isAuthenticated: false,
       profile: null,
       studyHistory: [],
@@ -30,15 +38,14 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
   const timerIntervalRef = useRef<number | null>(null);
 
-  // Persistence effect
+  // Global persistence effect - syncs the entire userState whenever it changes
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
   }, [userState]);
 
   /**
    * GLOBAL TIMER LOGIC
-   * This effect runs continuously if there is an active timer session.
-   * It uses timestamps to calculate delta time, ensuring accuracy even if intervals lag.
+   * Uses timestamps for delta calculation to prevent drift and ensure focus/break time is accurate.
    */
   useEffect(() => {
     if (userState.activeTimer) {
@@ -48,13 +55,16 @@ const App: React.FC = () => {
             if (!prev.activeTimer) return prev;
             
             const now = Date.now();
+            // Calculate real elapsed time in seconds
             const delta = Math.floor((now - prev.activeTimer.lastTimestamp) / 1000);
             if (delta < 1) return prev;
 
-            const updatedTimer = { ...prev.activeTimer, lastTimestamp: now };
+            // Increment appropriate counters based on current focus state
+            const updatedTimer = { 
+              ...prev.activeTimer, 
+              lastTimestamp: prev.activeTimer.lastTimestamp + (delta * 1000) 
+            };
 
-            // If focus is active, increment focus seconds.
-            // Otherwise, increment break seconds (Auto-Break logic).
             if (prev.activeTimer.isFocusActive) {
               updatedTimer.accumulatedFocusSeconds += delta;
             } else {
@@ -73,15 +83,17 @@ const App: React.FC = () => {
     }
 
     return () => {
-      if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
+      if (timerIntervalRef.current) {
+        window.clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
     };
   }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);
 
   /**
    * AUTO-PAUSE LOGIC
-   * Whenever the user navigates away from the tracker, focus is paused.
-   * Pausing focus automatically triggers break time accumulation in the main interval.
+   * Pauses active focus sessions when navigating away from the Tracker tab.
+   * This ensures break time is automatically tracked.
    */
   useEffect(() => {
     if (activeTab !== 'tracker' && userState.activeTimer?.isFocusActive) {

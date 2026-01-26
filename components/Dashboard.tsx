@@ -12,13 +12,28 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
+  // Helper to get YYYY-MM-DD in local time
+  const getLocalDateString = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const stats = useMemo(() => {
+    const today = getLocalDateString(Date.now());
+
     const regularStudyMinutes = userState.studyHistory
       .filter(s => !s.isRevision)
       .reduce((acc, curr) => acc + curr.durationMinutes, 0);
     
     const revisionMinutes = userState.studyHistory
       .filter(s => s.isRevision)
+      .reduce((acc, curr) => acc + curr.durationMinutes, 0);
+
+    const todayStudyMinutes = userState.studyHistory
+      .filter(s => getLocalDateString(s.startTime) === today)
       .reduce((acc, curr) => acc + curr.durationMinutes, 0);
 
     const totalBreakMinutes = userState.studyHistory
@@ -39,6 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
 
     return {
       totalHours: ((regularStudyMinutes + revisionMinutes) / 60).toFixed(1),
+      todayHours: (todayStudyMinutes / 60).toFixed(1),
       studyHours: (regularStudyMinutes / 60).toFixed(1),
       revisionHours: (revisionMinutes / 60).toFixed(1),
       breakHours: (totalBreakMinutes / 60).toFixed(1),
@@ -55,23 +71,24 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
         revision: Math.round(revisionFactor)
       }
     };
-  }, [userState, userState.language]);
+  }, [userState.studyHistory, userState.subjects, userState.streaks, userState.language]);
 
   const weeklyData = useMemo(() => {
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().split('T')[0];
+      return getLocalDateString(d.getTime());
     });
 
     return last7Days.map(date => {
       const daySessions = userState.studyHistory.filter(s => {
-        const sDate = new Date(s.startTime).toISOString().split('T')[0];
-        return sDate === date;
+        return getLocalDateString(s.startTime) === date;
       });
 
       const study = daySessions.filter(s => !s.isRevision).reduce((acc, s) => acc + s.durationMinutes, 0) / 60;
       const revision = daySessions.filter(s => s.isRevision).reduce((acc, s) => acc + s.durationMinutes, 0) / 60;
+      
+      // Get readable day name
       const dayName = new Date(date).toLocaleDateString(userState.language === 'bn' ? 'bn-BD' : 'en-US', { weekday: 'short' });
 
       return {
@@ -102,7 +119,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
     'Burnt Out': 'text-purple-500 bg-purple-500/10'
   }[userState.currentMood || 'Great'];
 
-  // Dynamic colors for Recharts based on brand variables
   const isDark = document.documentElement.classList.contains('dark');
   const primaryColor = isDark ? '#5FB3A2' : '#5B7DBE';
   const secondaryColor = isDark ? '#8B9CF2' : '#7FAE9E';
@@ -175,8 +191,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
             <TrendingUp size={48} className="absolute -right-4 -top-4 md:-right-6 md:-top-6 opacity-10 group-hover:scale-125 transition-transform duration-700" />
             <div className="relative z-10">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2 md:mb-3">{t('মোট পড়াশোনা', 'Total Focus')}</p>
-              <h2 className="text-4xl md:text-5xl font-black tracking-tighter">{stats.totalHours}</h2>
-              <p className="text-[10px] font-bold opacity-60 mt-1 md:mt-2 uppercase tracking-widest">{t('ঘণ্টা সমাপ্ত', 'Hours Logged')}</p>
+              <h2 className="text-4xl md:text-5xl font-black tracking-tighter">{stats.totalHours}h</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">{t('আজকের:', 'Today:')} {stats.todayHours}h</span>
+              </div>
             </div>
           </div>
           
@@ -184,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
             <Coffee size={48} className="absolute -right-4 -top-4 md:-right-6 md:-top-6 text-brand-secondary opacity-5 group-hover:rotate-12 transition-transform duration-1000" />
             <div className="relative z-10">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s mb-2 md:mb-3">{t('মোট ব্রেক', 'Total Break')}</p>
-              <h2 className="text-4xl md:text-5xl font-black text-brand-secondary tracking-tighter">{stats.breakHours}</h2>
+              <h2 className="text-4xl md:text-5xl font-black text-brand-secondary tracking-tighter">{stats.breakHours}h</h2>
               <p className="text-[10px] font-bold text-brand-text-s/30 mt-1 md:mt-2 uppercase tracking-widest">{stats.totalBreaks} {t('টি ব্রেক', 'Breaks Taken')}</p>
             </div>
           </div>
@@ -207,7 +225,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState }) => {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: isDark ? '#8A94A6' : '#6B7280' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: isDark ? '#8A94A6' : '#6B7280' }} unit="h" />
                 <Tooltip 
-                   contentStyle={{ backgroundColor: isDark ? '#1B2636' : '#E9EDF0', border: 'none', borderRadius: '12px' }}
+                   contentStyle={{ backgroundColor: isDark ? '#1B2636' : '#E9EDF0', border: 'none', borderRadius: '12px', color: isDark ? '#fff' : '#000' }}
                    itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                 />
                 <Bar dataKey="study" stackId="a" fill={primaryColor} barSize={32} />

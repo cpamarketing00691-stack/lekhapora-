@@ -85,9 +85,11 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const handleStopEnd = () => {
     if (!timer) return;
     
-    if (timer.accumulatedFocusSeconds < 60) {
+    // Save only if session is significant (e.g., > 10 seconds for testing, but typically 60)
+    const significantThreshold = 10; 
+    if (timer.accumulatedFocusSeconds < significantThreshold) {
       if (timer.accumulatedFocusSeconds > 0) {
-        alert(t('সেশন ১ মিনিটের কম হওয়ায় সেভ করা হবে না।', 'Session too short (less than 1 min) to be saved.'));
+        alert(t('সেশনটি খুব ছোট হওয়ার কারণে সেভ করা হয়নি।', 'Session too short to be saved.'));
       }
       onUpdateState(prev => ({ ...prev, activeTimer: null }));
       return;
@@ -229,7 +231,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
 
           <div className="text-center py-6 md:py-10">
-            <div className={`text-6xl xs:text-7xl sm:text-[8rem] md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${timer?.isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
+            <div className={`text-6xl xs:text-7xl sm:text-[8rem] md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
               {formatTime(timer?.accumulatedFocusSeconds || 0).split(':').slice(1).join(':')}
               <div className="text-[10px] md:text-sm font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-brand-text-s/30 mt-4">
                 {formatTime(timer?.accumulatedFocusSeconds || 0).split(':')[0]} HOURS ELAPSED

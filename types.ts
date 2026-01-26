@@ -20,6 +20,7 @@ export enum Religion {
 
 export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
 export type Language = 'bn' | 'en';
+export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 
 export interface UserProfile {
   fullName: string;
@@ -36,6 +37,7 @@ export interface Chapter {
   name: string;
   isCompleted: boolean;
   testScore?: number; // 0-30 MCQ score
+  difficulty?: Difficulty;
 }
 
 export interface Subject {

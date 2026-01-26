@@ -1,11 +1,11 @@
 
-import React, { useState, useRef } from 'react';
-import { UserState, Subject, Chapter } from '../types';
+import React, { useState, useRef, useMemo } from 'react';
+import { UserState, Subject, Chapter, Difficulty } from '../types';
 import { geminiService } from '../services/gemini';
 import { 
   Camera, Plus, Trash2, Calendar, CheckCircle2, 
   Loader2, AlertTriangle, FileText, CheckCircle, 
-  Circle, LayoutGrid, Clock
+  Circle, LayoutGrid, Clock, Search, Tag, ArrowRight
 } from 'lucide-react';
 
 interface SyllabusManagerProps {
@@ -18,6 +18,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
   const [isRoutineProcessing, setIsRoutineProcessing] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [showManualRoutine, setShowManualRoutine] = useState(false);
+  const [chapterSearch, setChapterSearch] = useState<Record<string, string>>({}); // subjectId -> searchTerm
   const fileInputRef = useRef<HTMLInputElement>(null);
   const routineFileInputRef = useRef<HTMLInputElement>(null);
   
@@ -114,7 +115,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             const match = result.exams.find((ex: any) => {
               const exName = ex.subjectName.toLowerCase();
               const subName = sub.name.toLowerCase();
-              // More flexible matching for NCTB routines
               const nameMatch = exName.includes(subName) || subName.includes(exName);
               return nameMatch && parseInt(ex.paper) === sub.paper;
             });
@@ -233,6 +233,22 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         chapters: s.chapters.map(c => ({ ...c, isCompleted: completed }))
       } : s)
     }));
+  };
+
+  const updateDifficulty = (subjectId: string, chapterId: string, diff: Difficulty) => {
+    onUpdateState(prev => ({
+      ...prev,
+      subjects: prev.subjects.map(s => s.id === subjectId ? {
+        ...s,
+        chapters: s.chapters.map(c => c.id === chapterId ? { ...c, difficulty: diff } : c)
+      } : s)
+    }));
+  };
+
+  const difficultyMeta: Record<Difficulty, { color: string, label: { bn: string, en: string } }> = {
+    'Easy': { color: 'emerald', label: { bn: 'সহজ', en: 'Easy' } },
+    'Medium': { color: 'amber', label: { bn: 'মাঝারি', en: 'Medium' } },
+    'Hard': { color: 'rose', label: { bn: 'কঠিন', en: 'Hard' } }
   };
 
   return (
@@ -372,6 +388,9 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
       <div className="grid grid-cols-1 gap-8 md:gap-10">
         {userState.subjects.map(sub => {
+          const searchTerm = chapterSearch[sub.id]?.toLowerCase() || '';
+          const filteredChapters = sub.chapters.filter(ch => ch.name.toLowerCase().includes(searchTerm));
+          
           const completedCount = sub.chapters.filter(c => c.isCompleted).length;
           const totalCount = sub.chapters.length;
           const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
@@ -422,6 +441,18 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* Chapter Search Bar for the Card */}
+                    <div className="relative mr-2 hidden sm:block">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+                      <input 
+                        type="text" 
+                        placeholder={t("চ্যাপ্টার খুঁজুন...", "Find chapter...")}
+                        value={chapterSearch[sub.id] || ''}
+                        onChange={(e) => setChapterSearch({...chapterSearch, [sub.id]: e.target.value})}
+                        className="pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-0 rounded-xl text-[10px] font-bold w-40 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                      />
+                    </div>
+
                     <button 
                       onClick={() => toggleAllChapters(sub.id, completedCount < totalCount)}
                       className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest transition-all ${
@@ -457,46 +488,77 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
               </div>
 
               <div className="bg-slate-50/50 dark:bg-slate-950/20 p-6 md:p-10 border-t border-slate-50 dark:border-slate-800">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
-                  {sub.chapters.map(ch => (
-                    <label 
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                  {filteredChapters.map(ch => (
+                    <div 
                       key={ch.id} 
-                      className={`flex items-start gap-3 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] cursor-pointer transition-all border-2 ${
+                      className={`group/item flex flex-col p-4 md:p-6 rounded-[2rem] transition-all border-2 bg-white dark:bg-slate-900 ${
                         ch.isCompleted 
-                        ? 'bg-white dark:bg-slate-900 border-emerald-50 dark:border-emerald-900/30' 
-                        : 'bg-white/40 dark:bg-slate-800/30 border-transparent hover:border-slate-100 dark:hover:border-slate-700'
+                        ? 'border-emerald-50 dark:border-emerald-900/30' 
+                        : 'border-transparent hover:border-slate-100 dark:hover:border-slate-700 shadow-sm'
                       }`}
                     >
-                      <div className="relative pt-1">
-                        <input 
-                          type="checkbox" 
-                          checked={ch.isCompleted} 
-                          onChange={() => {
-                            onUpdateState(prev => ({
-                              ...prev,
-                              subjects: prev.subjects.map(s => s.id === sub.id ? {
-                                ...s,
-                                chapters: s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c)
-                              } : s)
-                            }));
-                          }}
-                          className="peer w-5 h-5 md:w-6 md:h-6 rounded-md border-2 border-slate-200 dark:border-slate-700 text-emerald-500 focus:ring-0 appearance-none checked:bg-emerald-500 checked:border-emerald-500 transition-all"
-                        />
-                        <CheckCircle2 
-                          size={12} 
-                          className="absolute top-[10px] left-[4px] md:top-[11px] md:left-[5px] text-white opacity-0 peer-checked:opacity-100 transition-opacity" 
-                        />
+                      <div className="flex items-start gap-3 mb-4">
+                        <div className="relative pt-1 shrink-0">
+                          <input 
+                            type="checkbox" 
+                            checked={ch.isCompleted} 
+                            onChange={() => {
+                              onUpdateState(prev => ({
+                                ...prev,
+                                subjects: prev.subjects.map(s => s.id === sub.id ? {
+                                  ...s,
+                                  chapters: s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c)
+                                } : s)
+                              }));
+                            }}
+                            className="peer w-5 h-5 md:w-6 md:h-6 rounded-md border-2 border-slate-200 dark:border-slate-700 text-emerald-500 focus:ring-0 appearance-none checked:bg-emerald-500 checked:border-emerald-500 transition-all cursor-pointer"
+                          />
+                          <CheckCircle2 
+                            size={12} 
+                            className="absolute top-[10px] left-[4px] md:top-[11px] md:left-[5px] text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" 
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className={`font-bold text-xs md:text-sm leading-tight block ${ch.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-slate-600 dark:text-slate-200'}`}>
+                            {ch.name}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <span className={`font-bold text-xs md:text-sm leading-tight block ${ch.isCompleted ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-200'}`}>
-                          {ch.name}
-                        </span>
-                        <span className="text-[8px] md:text-[9px] font-black uppercase text-slate-400 tracking-widest mt-0.5 block">
-                          {ch.isCompleted ? t('সম্পন্ন', 'Done') : t('বাকি', 'Todo')}
-                        </span>
+
+                      {/* Difficulty Picker */}
+                      <div className="mt-auto flex items-center justify-between border-t border-slate-50 dark:border-slate-800 pt-3">
+                         <div className="flex gap-1.5">
+                            {(['Easy', 'Medium', 'Hard'] as Difficulty[]).map((level) => (
+                              <button
+                                key={level}
+                                onClick={() => updateDifficulty(sub.id, ch.id, level)}
+                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                  ch.difficulty === level 
+                                    ? `bg-${difficultyMeta[level].color}-500 text-white shadow-md scale-110` 
+                                    : 'bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-slate-500'
+                                }`}
+                                title={t(difficultyMeta[level].label.bn, difficultyMeta[level].label.en)}
+                              >
+                                <Tag size={10} />
+                              </button>
+                            ))}
+                         </div>
+                         {ch.difficulty && (
+                           <span className={`text-[8px] font-black uppercase tracking-widest text-${difficultyMeta[ch.difficulty].color}-500`}>
+                             {t(difficultyMeta[ch.difficulty].label.bn, difficultyMeta[ch.difficulty].label.en)}
+                           </span>
+                         )}
                       </div>
-                    </label>
+                    </div>
                   ))}
+                  
+                  {filteredChapters.length === 0 && (
+                    <div className="col-span-full py-10 text-center space-y-3">
+                      <Search className="mx-auto text-slate-200" size={32} />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t("কোনো চ্যাপ্টার পাওয়া যায়নি", "No matching chapters found")}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

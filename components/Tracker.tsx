@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { UserState, StudySession, Mood } from '../types';
-import { Play, Pause, Square, Book, Zap, RefreshCcw, PlusCircle, History, Clock, Calendar as CalIcon, CheckCircle2 } from 'lucide-react';
+import { Play, Pause, Square, Book, Zap, RefreshCcw, PlusCircle, History, Clock, Calendar as CalIcon, CheckCircle2, Smile, Zap as FocusIcon, Coffee, Frown, Flame } from 'lucide-react';
 
 interface TrackerProps {
   userState: UserState;
@@ -22,7 +22,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     subjectId: '',
     date: new Date().toISOString().split('T')[0],
     durationMinutes: '',
-    isRevision: false
+    isRevision: false,
+    mood: 'Focused' as Mood
   });
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
@@ -79,7 +80,10 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const duration = parseInt(manualData.durationMinutes);
-    if (!manualData.subjectId || isNaN(duration) || duration <= 0) return;
+    if (!manualData.subjectId || isNaN(duration) || duration <= 0) {
+      alert(t('অনুগ্রহ করে সঠিক সময়কাল (মিনিট) লিখুন।', 'Please enter a valid duration in minutes.'));
+      return;
+    }
 
     const sessionDate = new Date(manualData.date);
     const startTime = sessionDate.getTime();
@@ -91,19 +95,28 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       endTime: startTime + (duration * 60000),
       durationMinutes: duration,
       focusLevel: 8,
-      mood: 'Focused',
+      mood: manualData.mood,
       isRevision: manualData.isRevision
     };
 
     onUpdateState(prev => ({
       ...prev,
       studyHistory: [...prev.studyHistory, newSession],
-      streaks: prev.streaks + (duration >= 30 ? 1 : 0)
+      streaks: prev.streaks + (duration >= 30 ? 1 : 0),
+      currentMood: manualData.mood
     }));
 
-    setManualData({ ...manualData, subjectId: '', durationMinutes: '' });
+    setManualData({ ...manualData, subjectId: '', durationMinutes: '', mood: 'Focused' });
     setShowManual(false);
   };
+
+  const moodOptions: { type: Mood, icon: any, color: string, label: { bn: string, en: string } }[] = [
+    { type: 'Great', icon: <Smile size={18} />, color: 'emerald', label: { bn: 'দারুণ', en: 'Great' } },
+    { type: 'Focused', icon: <FocusIcon size={18} />, color: 'blue', label: { bn: 'মনযোগী', en: 'Focused' } },
+    { type: 'Tired', icon: <Coffee size={18} />, color: 'orange', label: { bn: 'ক্লান্ত', en: 'Tired' } },
+    { type: 'Stressed', icon: <Frown size={18} />, color: 'red', label: { bn: 'চিন্তিত', en: 'Stressed' } },
+    { type: 'Burnt Out', icon: <Flame size={18} />, color: 'purple', label: { bn: 'অবসন্ন', en: 'Burnt Out' } },
+  ];
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-20 md:pb-0">
@@ -177,6 +190,27 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               {formatTime(seconds).split(':').slice(1).join(':')}
               <div className="text-[10px] md:text-sm font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-300 mt-4">{formatTime(seconds).split(':')[0]} HOURS ELAPSED</div>
             </div>
+          </div>
+
+          {/* Real-time Mood Picker for active session */}
+          <div className="mb-8 max-w-sm mx-auto">
+             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 text-center">{t('বর্তমান মেজাজ', 'Current Mood')}</label>
+             <div className="flex flex-wrap justify-center gap-2">
+                {moodOptions.map((m) => (
+                  <button
+                    key={m.type}
+                    onClick={() => setCurrentMood(m.type)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${
+                      currentMood === m.type 
+                        ? `bg-${m.color}-500 text-white shadow-lg scale-105` 
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {m.icon}
+                    {userState.language === 'bn' ? m.label.bn : m.label.en}
+                  </button>
+                ))}
+             </div>
           </div>
 
           <div className="flex items-center justify-center gap-6 md:gap-10 mt-6 md:mt-4">
@@ -273,6 +307,28 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                         {t('রিভিশন', 'Revision')}
                       </button>
                     </div>
+                 </div>
+              </div>
+
+              {/* Manual Mood Selector */}
+              <div className="space-y-3">
+                 <label className="block text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] ml-1">{t('সেশনের মেজাজ', 'Session Mood')}</label>
+                 <div className="flex flex-wrap gap-2">
+                    {moodOptions.map((m) => (
+                      <button
+                        key={m.type}
+                        type="button"
+                        onClick={() => setManualData({...manualData, mood: m.type})}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all border-2 ${
+                          manualData.mood === m.type 
+                            ? `border-${m.color}-500 bg-${m.color}-50 dark:bg-${m.color}-900/20 text-${m.color}-600` 
+                            : 'border-transparent bg-slate-50 dark:bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {m.icon}
+                        {userState.language === 'bn' ? m.label.bn : m.label.en}
+                      </button>
+                    ))}
                  </div>
               </div>
 

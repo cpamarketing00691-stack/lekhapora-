@@ -53,8 +53,8 @@ export interface StudySession {
   subjectId: string;
   startTime: number;
   endTime?: number;
-  durationMinutes: number;
-  breakMinutes: number;
+  durationSeconds: number; // Changed from minutes to seconds for HH:MM:SS
+  breakSeconds: number;    // Changed from minutes to seconds for HH:MM:SS
   numBreaks: number;
   focusLevel: number; // 1-10
   mood: Mood;

@@ -11,48 +11,43 @@ import Settings from './components/Settings';
 import SyllabusManager from './components/SyllabusManager';
 import { Layout } from './components/Layout';
 
-const DEFAULT_STATE: UserState = {
-  isAuthenticated: false,
-  profile: null,
-  studyHistory: [],
-  subjects: [],
-  dailyTasks: [],
-  streaks: 0,
-  badges: [],
-  currentMood: 'Great',
-  language: 'bn',
-  activeTimer: null
-};
-
 const App: React.FC = () => {
+  // Global single source of truth: initialized from localStorage and shared via props
   const [userState, setUserState] = useState<UserState>(() => {
     const saved = localStorage.getItem('hsc_study_tracker_state');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        // Robust merge to ensure arrays exist
-        return {
-          ...DEFAULT_STATE,
-          ...parsed,
-          studyHistory: parsed.studyHistory || [],
-          subjects: parsed.subjects || [],
-          dailyTasks: parsed.dailyTasks || [],
-          badges: parsed.badges || []
-        };
+        return JSON.parse(saved);
       } catch (e) {
         console.error("Failed to parse local storage", e);
       }
     }
-    return DEFAULT_STATE;
+    return {
+      isAuthenticated: false,
+      profile: null,
+      studyHistory: [],
+      subjects: [],
+      dailyTasks: [],
+      streaks: 0,
+      badges: [],
+      currentMood: 'Great',
+      language: 'bn',
+      activeTimer: null
+    };
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
   const timerIntervalRef = useRef<number | null>(null);
 
+  // Global persistence effect - syncs the entire userState whenever it changes
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
   }, [userState]);
 
+  /**
+   * GLOBAL TIMER LOGIC
+   * Uses timestamps for delta calculation to prevent drift and ensure focus/break time is accurate.
+   */
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
@@ -61,9 +56,11 @@ const App: React.FC = () => {
             if (!prev.activeTimer) return prev;
             
             const now = Date.now();
+            // Calculate real elapsed time in seconds
             const delta = Math.floor((now - prev.activeTimer.lastTimestamp) / 1000);
             if (delta < 1) return prev;
 
+            // Increment appropriate counters based on current focus state
             const updatedTimer = { 
               ...prev.activeTimer, 
               lastTimestamp: prev.activeTimer.lastTimestamp + (delta * 1000) 
@@ -94,6 +91,11 @@ const App: React.FC = () => {
     };
   }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);
 
+  /**
+   * AUTO-PAUSE LOGIC
+   * Pauses active focus sessions when navigating away from the Tracker tab.
+   * This ensures break time is automatically tracked.
+   */
   useEffect(() => {
     if (activeTab !== 'tracker' && userState.activeTimer?.isFocusActive) {
       setUserState(prev => {
@@ -116,19 +118,33 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    setUserState(DEFAULT_STATE);
+    setUserState({
+      isAuthenticated: false,
+      profile: null,
+      studyHistory: [],
+      subjects: [],
+      dailyTasks: [],
+      streaks: 0,
+      badges: [],
+      currentMood: 'Great',
+      language: 'bn',
+      activeTimer: null
+    });
     localStorage.removeItem('hsc_study_tracker_state');
   };
 
   const handleProfileComplete = (onboardingData: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profile } = onboardingData;
+
+    // Map selected subject names to full Subject objects with localized paper 1/2 logic
     const finalSubjects: Subject[] = [];
 
     selectedSubjectNames.forEach((name, subIdx) => {
+      // Compulsory subjects like Bangla, English usually have 2 papers in NCTB
       const needsTwoPapers = name === 'Bangla' || name === 'English' || 
                             name === 'Physics' || name === 'Chemistry' || 
                             name === 'Biology' || name === 'Higher Math' ||
-                            name === 'Accounting' || name === 'Economics';
+                            name === 'Accounting' || name === 'Economics'; // etc.
       
       const papersToCreate = (name === 'ICT') ? [1] : (needsTwoPapers ? [1, 2] : [1]);
 

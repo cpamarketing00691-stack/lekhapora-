@@ -190,6 +190,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     let finalChapterId = newTask.chapterId;
     let finalCustomChapterName = newTask.customChapterName.trim();
 
+    // Automated matching logic if custom name is used
     if (isManualChapterMode && finalCustomChapterName && newTask.subjectId) {
       const selectedSub = userState.subjects.find(s => s.id === newTask.subjectId);
       const match = selectedSub?.chapters.find(c => 
@@ -197,7 +198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       );
       if (match) {
         finalChapterId = match.id;
-        finalCustomChapterName = ''; 
+        finalCustomChapterName = ''; // It's now linked to syllabus
       }
     }
 
@@ -214,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
 
     onUpdateState(prev => ({
       ...prev,
-      dailyTasks: [...(prev.dailyTasks || []), task]
+      dailyTasks: [...prev.dailyTasks, task]
     }));
     setNewTask({ name: '', source: TaskSource.PERSONAL, subjectId: '', chapterId: '', customChapterName: '' });
     setIsTaskModalOpen(false);
@@ -224,14 +225,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const toggleTask = (id: string) => {
     onUpdateState(prev => ({
       ...prev,
-      dailyTasks: (prev.dailyTasks || []).map(t => t.id === id ? { ...t, isCompleted: !t.isCompleted } : t)
+      dailyTasks: prev.dailyTasks.map(t => t.id === id ? { ...t, isCompleted: !t.isCompleted } : t)
     }));
   };
 
   const deleteTask = (id: string) => {
     onUpdateState(prev => ({
       ...prev,
-      dailyTasks: (prev.dailyTasks || []).filter(t => t.id !== id)
+      dailyTasks: prev.dailyTasks.filter(t => t.id !== id)
     }));
   };
 
@@ -256,6 +257,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       </header>
 
+      {/* Unified Countdown Section */}
       <section className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
         {userState.profile?.targetExamDate && (
           <div className="bg-brand-primary text-white p-5 rounded-[2rem] shadow-lg border border-white/10 flex flex-col justify-between min-w-[180px] snap-center shrink-0">
@@ -298,6 +300,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         })}
       </section>
 
+      {/* Today's Focus (Homework) Section */}
       <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -315,7 +318,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.map(task => (
+          {userState.dailyTasks.length > 0 ? userState.dailyTasks.map(task => (
             <div key={task.id} className={`group flex flex-col p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary'}`}>
               <div className="flex items-start justify-between gap-2">
                  <button onClick={() => toggleTask(task.id)} className="flex items-start gap-3 min-w-0 text-left">
@@ -355,6 +358,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           )}
         </div>
 
+        {/* Improved HW Modal with Manual Chapter/Topic Selection */}
         {isTaskModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
              <div className="w-full max-w-md bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10 max-h-[90vh] overflow-y-auto">
@@ -457,6 +461,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         )}
       </section>
 
+      {/* Contextual Filters Info */}
       {(subjectFilter || examFilter) && (
         <div className="bg-brand-secondary/10 border border-brand-secondary/20 p-4 rounded-[1.5rem] flex items-center justify-between animate-in slide-in-from-top-2">
            <div className="flex items-center gap-3">

@@ -30,9 +30,10 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
+  // Auto-fill subject if a linked task is selected
   useEffect(() => {
     if (activeTaskId) {
-      const matchedTask = (userState.dailyTasks || []).find(task => task.id === activeTaskId);
+      const matchedTask = userState.dailyTasks.find(task => task.id === activeTaskId);
       if (matchedTask && matchedTask.subjectId) {
         setActiveSubjectId(matchedTask.subjectId);
       }
@@ -125,13 +126,17 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     };
 
     onUpdateState(prev => {
-      return {
+      const newState = {
         ...prev,
-        studyHistory: [...(prev.studyHistory || []), newSession],
+        studyHistory: [...prev.studyHistory, newSession],
         streaks: prev.streaks + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
         currentMood,
         activeTimer: null
       };
+
+      // If the HW task was linked to a chapter, progress is already reflected by the existence 
+      // of studyHistory, but we can also handle auto-completion logic if needed here.
+      return newState;
     });
   };
 
@@ -164,7 +169,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
     onUpdateState(prev => ({
       ...prev,
-      studyHistory: [...(prev.studyHistory || []), newSession],
+      studyHistory: [...prev.studyHistory, newSession],
       streaks: prev.streaks + (durationSec >= 1800 ? 1 : 0),
       currentMood: manualData.mood
     }));
@@ -225,7 +230,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                   className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p"
                  >
                    <option value="">{t('টাস্ক ছাড়া পড়াশোনা', 'Study without specific task')}</option>
-                   {Array.isArray(userState.dailyTasks) && userState.dailyTasks.filter(t => !t.isCompleted).map(task => (
+                   {userState.dailyTasks.filter(t => !t.isCompleted).map(task => (
                      <option key={task.id} value={task.id}>{task.name} ({task.source})</option>
                    ))}
                  </select>
@@ -310,7 +315,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                  <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Task (Optional)')}</label>
                  <select value={manualData.taskId} onChange={(e) => setManualData({...manualData, taskId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
                     <option value="">{t('নির্বাচন করো', 'Select Task')}</option>
-                    {Array.isArray(userState.dailyTasks) && userState.dailyTasks.map(task => (
+                    {userState.dailyTasks.map(task => (
                       <option key={task.id} value={task.id}>{task.name}</option>
                     ))}
                  </select>

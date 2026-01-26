@@ -23,7 +23,7 @@ export enum TaskSource {
   COACHING = 'Coaching',
   BATCH = 'Batch',
   TUTOR = 'Home Tutor',
-  SELF = 'Self Study'
+  PERSONAL = 'Personal'
 }
 
 export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
@@ -41,8 +41,9 @@ export interface Task {
   name: string;
   source: TaskSource;
   isCompleted: boolean;
-  subjectId?: string; // Linked subject (if matched)
-  chapterId?: string; // Linked chapter (if matched)
+  subjectId?: string; // Linked subject
+  chapterId?: string; // Linked chapter ID (if matched in syllabus)
+  customChapterName?: string; // Manual chapter name entered by user
   createdAt: number;
 }
 
@@ -108,7 +109,7 @@ export interface UserState {
   profile: UserProfile | null;
   studyHistory: StudySession[];
   subjects: Subject[];
-  dailyTasks: Task[]; // Today's Focus tasks
+  dailyTasks: Task[]; // Homework / Today's Focus tasks
   streaks: number;
   badges: string[];
   currentMood: Mood;

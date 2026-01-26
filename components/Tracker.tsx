@@ -30,7 +30,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  // Auto-fill subject if a matched task is selected
+  // Auto-fill subject if a linked task is selected
   useEffect(() => {
     if (activeTaskId) {
       const matchedTask = userState.dailyTasks.find(task => task.id === activeTaskId);
@@ -125,13 +125,19 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       isRevision: timer.isRevision
     };
 
-    onUpdateState(prev => ({
-      ...prev,
-      studyHistory: [...prev.studyHistory, newSession],
-      streaks: prev.streaks + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
-      currentMood,
-      activeTimer: null
-    }));
+    onUpdateState(prev => {
+      const newState = {
+        ...prev,
+        studyHistory: [...prev.studyHistory, newSession],
+        streaks: prev.streaks + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
+        currentMood,
+        activeTimer: null
+      };
+
+      // If the HW task was linked to a chapter, progress is already reflected by the existence 
+      // of studyHistory, but we can also handle auto-completion logic if needed here.
+      return newState;
+    });
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -216,7 +222,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
             <div className="w-full max-w-lg space-y-4">
               <div className="space-y-1.5">
-                 <label className="block text-[9px] sm:text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] text-center leading-none">{t('ফোকাস টাস্ক (আজকের লক্ষ্য)', 'Focus Task (Today\'s Focus)')}</label>
+                 <label className="block text-[9px] sm:text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] text-center leading-none">{t('ফোকাস টাস্ক (হোমওয়ার্ক)', 'Focus Task (Homework)')}</label>
                  <select 
                   disabled={isTimerGlobalActive} 
                   value={activeTaskId} 

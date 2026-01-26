@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, CollegeExam, Task, TaskSource } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3 } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -13,7 +13,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [newTask, setNewTask] = useState({ name: '', source: TaskSource.SELF });
+  const [isManualChapterMode, setIsManualChapterMode] = useState(false);
+  const [newTask, setNewTask] = useState({ 
+    name: '', 
+    source: TaskSource.PERSONAL,
+    subjectId: '',
+    chapterId: '',
+    customChapterName: ''
+  });
   
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
@@ -24,14 +31,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     return [h, m, s]
       .map(v => v.toString().padStart(2, '0'))
       .join(':');
-  };
-
-  const formatTime12h = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString(userState.language === 'bn' ? 'bn-BD' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
   };
 
   const getLocalDateString = (timestamp: number) => {
@@ -188,28 +187,29 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const addTask = () => {
     if (!newTask.name.trim()) return;
 
-    // Syllabus Matching Logic
-    let matchedSubjectId: string | undefined;
-    let matchedChapterId: string | undefined;
+    let finalChapterId = newTask.chapterId;
+    let finalCustomChapterName = newTask.customChapterName.trim();
 
-    userState.subjects.forEach(sub => {
-      const foundChapter = sub.chapters.find(ch => 
-        ch.name.toLowerCase() === newTask.name.trim().toLowerCase() ||
-        newTask.name.trim().toLowerCase().includes(ch.name.toLowerCase())
+    // Automated matching logic if custom name is used
+    if (isManualChapterMode && finalCustomChapterName && newTask.subjectId) {
+      const selectedSub = userState.subjects.find(s => s.id === newTask.subjectId);
+      const match = selectedSub?.chapters.find(c => 
+        c.name.toLowerCase() === finalCustomChapterName.toLowerCase()
       );
-      if (foundChapter) {
-        matchedSubjectId = sub.id;
-        matchedChapterId = foundChapter.id;
+      if (match) {
+        finalChapterId = match.id;
+        finalCustomChapterName = ''; // It's now linked to syllabus
       }
-    });
+    }
 
     const task: Task = {
       id: `task-${Date.now()}`,
       name: newTask.name.trim(),
       source: newTask.source,
       isCompleted: false,
-      subjectId: matchedSubjectId,
-      chapterId: matchedChapterId,
+      subjectId: newTask.subjectId || undefined,
+      chapterId: finalChapterId || undefined,
+      customChapterName: finalCustomChapterName || undefined,
       createdAt: Date.now()
     };
 
@@ -217,8 +217,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       ...prev,
       dailyTasks: [...prev.dailyTasks, task]
     }));
-    setNewTask({ name: '', source: TaskSource.SELF });
+    setNewTask({ name: '', source: TaskSource.PERSONAL, subjectId: '', chapterId: '', customChapterName: '' });
     setIsTaskModalOpen(false);
+    setIsManualChapterMode(false);
   };
 
   const toggleTask = (id: string) => {
@@ -238,6 +239,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const isDark = document.documentElement.classList.contains('dark');
   const primaryColor = isDark ? '#5FB3A2' : '#5B7DBE';
   const secondaryColor = isDark ? '#8B9CF2' : '#7FAE9E';
+
+  const selectedSubject = userState.subjects.find(s => s.id === newTask.subjectId);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-10">
@@ -297,20 +300,20 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         })}
       </section>
 
-      {/* Today's Focus Section */}
-      <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative">
+      {/* Today's Focus (Homework) Section */}
+      <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
              <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
                <ListTodo size={20} />
              </div>
-             <h3 className="text-lg font-black text-brand-text-p">{t('আজকের লক্ষ্য', 'Today\'s Focus')}</h3>
+             <h3 className="text-lg font-black text-brand-text-p">{t('আজকের লক্ষ্য / হোমওয়ার্ক', 'Today\'s Focus / Homework')}</h3>
           </div>
           <button 
             onClick={() => setIsTaskModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-brand-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all"
           >
-            <Plus size={14} /> {t('নতুন টাস্ক', 'Add Task')}
+            <Plus size={14} /> {t('নতুন হোমওয়ার্ক', 'Add HW')}
           </button>
         </div>
 
@@ -324,13 +327,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                     </div>
                     <div className="min-w-0">
                       <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
+                      
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
                         <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-text-s bg-brand-surface px-1.5 py-0.5 rounded">
                           <Tag size={8} /> {task.source}
                         </span>
                         {task.subjectId && (
                            <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded border border-brand-primary/20">
-                             <Sparkles size={8} /> {t('সিলেবাস লিঙ্কড', 'Syllabus Match')}
+                             <BookCheck size={8} /> {getSubjectName(task.subjectId)}
+                           </span>
+                        )}
+                        {(task.chapterId || task.customChapterName) && (
+                           <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${task.chapterId ? 'text-brand-secondary bg-brand-secondary/10 border-brand-secondary/20' : 'text-orange-500 bg-orange-50 dark:bg-orange-950/20 border-orange-200'}`}>
+                             <Sparkles size={8} /> {task.chapterId ? t('সিলেবাস লিঙ্কড', 'Linked') : t('ম্যানুয়াল টপিক', 'Manual Topic')}
                            </span>
                         )}
                       </div>
@@ -344,49 +353,107 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           )) : (
             <div className="col-span-full py-10 text-center space-y-3 bg-brand-bg/30 rounded-3xl border border-dashed border-brand-text-s/10">
                <Info className="mx-auto text-brand-text-s opacity-30" size={32} />
-               <p className="text-xs font-bold text-brand-text-s uppercase tracking-widest">{t('আজকের জন্য কোনো টাস্ক নেই', 'No focus tasks set for today')}</p>
+               <p className="text-xs font-bold text-brand-text-s uppercase tracking-widest">{t('আজকের কোনো হোমওয়ার্ক নেই', 'No homework set for today')}</p>
             </div>
           )}
         </div>
 
-        {/* Task Modal */}
+        {/* Improved HW Modal with Manual Chapter/Topic Selection */}
         {isTaskModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-             <div className="w-full max-w-sm bg-brand-surface p-6 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
+             <div className="w-full max-w-md bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between mb-6">
-                  <h4 className="font-black text-brand-text-p uppercase tracking-widest">{t('নতুন টাস্ক যোগ করো', 'New Focus Task')}</h4>
+                  <h4 className="font-black text-brand-text-p uppercase tracking-widest">{t('নতুন হোমওয়ার্ক যোগ করো', 'New Homework Task')}</h4>
                   <button onClick={() => setIsTaskModalOpen(false)} className="text-brand-text-s hover:text-brand-text-p"><X size={20} /></button>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-5">
                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('টাস্কের নাম (চ্যাপ্টারের সাথে মেলালে অটো লিঙ্ক হবে)', 'Task Name (Matches Syllabus)')}</label>
+                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('টাস্কের নাম', 'Task Name / Title')}</label>
                       <input 
                         type="text" 
                         value={newTask.name}
                         onChange={e => setNewTask({...newTask, name: e.target.value})}
-                        placeholder={t("যেমন: Dynamics", "e.g. Dynamics")}
+                        placeholder={t("যেমন: ম্যাথ ২য় অধ্যায় অ্যাসাইনমেন্ট", "e.g. Physics Chapter 2 Problem Set")}
                         className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary"
                       />
                    </div>
+
+                   <div className="grid grid-cols-1 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় (ঐচ্ছিক)', 'Subject (Optional)')}</label>
+                        <select 
+                          value={newTask.subjectId} 
+                          onChange={e => {
+                            setNewTask({...newTask, subjectId: e.target.value, chapterId: '', customChapterName: ''});
+                            setIsManualChapterMode(false);
+                          }}
+                          className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
+                        >
+                          <option value="">{t('নির্বাচন করো', 'Select')}</option>
+                          {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between ml-1 mb-1">
+                          <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">{t('চ্যাপ্টার / টপিক', 'Chapter / Topic')}</label>
+                          <button 
+                            disabled={!newTask.subjectId}
+                            onClick={() => setIsManualChapterMode(!isManualChapterMode)}
+                            className="text-[9px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1 hover:underline disabled:opacity-30"
+                          >
+                            {isManualChapterMode ? <ListTodo size={10} /> : <Edit3 size={10} />}
+                            {isManualChapterMode ? t('সিলেবাস থেকে নাও', 'Pick from Syllabus') : t('ম্যানুয়াল এন্ট্রি', 'Manual Entry')}
+                          </button>
+                        </div>
+                        
+                        {!isManualChapterMode ? (
+                          <select 
+                            disabled={!newTask.subjectId}
+                            value={newTask.chapterId} 
+                            onChange={e => setNewTask({...newTask, chapterId: e.target.value, customChapterName: ''})}
+                            className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs disabled:opacity-30"
+                          >
+                            <option value="">{t('নির্বাচন করো', 'Select from list')}</option>
+                            {selectedSubject?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        ) : (
+                          <input 
+                            type="text" 
+                            value={newTask.customChapterName}
+                            onChange={e => setNewTask({...newTask, customChapterName: e.target.value, chapterId: ''})}
+                            placeholder={t("টপিক বা চ্যাপ্টারের নাম লেখো", "Enter custom chapter/topic")}
+                            className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
+                          />
+                        )}
+                        {isManualChapterMode && (
+                          <p className="text-[8px] font-bold text-orange-500 uppercase tracking-widest ml-1 mt-1">
+                            {t('* যদি সিলেবাসের সাথে মিলে যায় তবে অটো লিঙ্ক হবে।', '* Auto-linked if matched with syllabus.')}
+                          </p>
+                        )}
+                      </div>
+                   </div>
+
                    <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('উৎস (Source)', 'Source')}</label>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {Object.values(TaskSource).map(source => (
                           <button 
                             key={source}
                             onClick={() => setNewTask({...newTask, source})}
-                            className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg border-2 transition-all ${newTask.source === source ? 'bg-brand-primary/10 border-brand-primary text-brand-primary' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-surface'}`}
+                            className={`px-3 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg border-2 transition-all ${newTask.source === source ? 'bg-brand-primary/10 border-brand-primary text-brand-primary' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-surface'}`}
                           >
                             {source}
                           </button>
                         ))}
                       </div>
                    </div>
+
                    <button 
                     onClick={addTask}
-                    className="w-full py-4 mt-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px]"
+                    className="w-full py-4 mt-2 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px]"
                    >
-                     {t('অ্যাড টাস্ক', 'Add Focus Task')}
+                     {t('অ্যাড হোমওয়ার্ক', 'Add Homework')}
                    </button>
                 </div>
              </div>
@@ -509,19 +576,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                     <h5 className="font-black text-[10px] sm:text-[11px] text-brand-text-p mb-0.5 truncate">
                       {getSubjectName(session.subjectId)}
                     </h5>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                        <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-text-s flex items-center gap-1 leading-none">
                          {session.isRevision ? t('রিভিশন', 'Revision') : t('পড়াশোনা', 'Study')}
                        </p>
-                       {session.examId && (
-                         <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-primary flex items-center gap-1 leading-none border-l border-brand-text-s/20 pl-2">
-                           {getExamName(session.examId)}
-                         </p>
+                       {session.taskId && (
+                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-primary flex items-center gap-1 leading-none border-l border-brand-text-s/20 pl-2">
+                            {userState.dailyTasks.find(t => t.id === session.taskId)?.name}
+                          </p>
                        )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-full">
-                    {formatTime12h(session.startTime)} <ArrowRight size={8} /> {session.endTime ? formatTime12h(session.endTime) : '--'}
+                    {new Date(session.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} <ArrowRight size={8} /> {session.endTime ? new Date(session.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--'}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-1">

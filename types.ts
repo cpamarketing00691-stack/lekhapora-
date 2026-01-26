@@ -42,8 +42,7 @@ export interface Task {
   source: TaskSource;
   isCompleted: boolean;
   subjectId?: string; // Linked subject
-  chapterId?: string; // Linked chapter ID (if matched in syllabus)
-  customChapterName?: string; // Manual chapter name entered by user
+  chapterId?: string; // Linked chapter
   createdAt: number;
 }
 

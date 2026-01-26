@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, CollegeExam, Task, TaskSource } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3 } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -13,13 +13,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isManualChapterMode, setIsManualChapterMode] = useState(false);
   const [newTask, setNewTask] = useState({ 
     name: '', 
     source: TaskSource.PERSONAL,
     subjectId: '',
-    chapterId: '',
-    customChapterName: ''
+    chapterId: ''
   });
   
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
@@ -31,6 +29,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     return [h, m, s]
       .map(v => v.toString().padStart(2, '0'))
       .join(':');
+  };
+
+  const formatTime12h = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString(userState.language === 'bn' ? 'bn-BD' : 'en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   const getLocalDateString = (timestamp: number) => {
@@ -187,29 +193,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const addTask = () => {
     if (!newTask.name.trim()) return;
 
-    let finalChapterId = newTask.chapterId;
-    let finalCustomChapterName = newTask.customChapterName.trim();
-
-    // Automated matching logic if custom name is used
-    if (isManualChapterMode && finalCustomChapterName && newTask.subjectId) {
-      const selectedSub = userState.subjects.find(s => s.id === newTask.subjectId);
-      const match = selectedSub?.chapters.find(c => 
-        c.name.toLowerCase() === finalCustomChapterName.toLowerCase()
-      );
-      if (match) {
-        finalChapterId = match.id;
-        finalCustomChapterName = ''; // It's now linked to syllabus
-      }
-    }
-
     const task: Task = {
       id: `task-${Date.now()}`,
       name: newTask.name.trim(),
       source: newTask.source,
       isCompleted: false,
       subjectId: newTask.subjectId || undefined,
-      chapterId: finalChapterId || undefined,
-      customChapterName: finalCustomChapterName || undefined,
+      chapterId: newTask.chapterId || undefined,
       createdAt: Date.now()
     };
 
@@ -217,9 +207,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       ...prev,
       dailyTasks: [...prev.dailyTasks, task]
     }));
-    setNewTask({ name: '', source: TaskSource.PERSONAL, subjectId: '', chapterId: '', customChapterName: '' });
+    setNewTask({ name: '', source: TaskSource.PERSONAL, subjectId: '', chapterId: '' });
     setIsTaskModalOpen(false);
-    setIsManualChapterMode(false);
   };
 
   const toggleTask = (id: string) => {
@@ -337,9 +326,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                              <BookCheck size={8} /> {getSubjectName(task.subjectId)}
                            </span>
                         )}
-                        {(task.chapterId || task.customChapterName) && (
-                           <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${task.chapterId ? 'text-brand-secondary bg-brand-secondary/10 border-brand-secondary/20' : 'text-orange-500 bg-orange-50 dark:bg-orange-950/20 border-orange-200'}`}>
-                             <Sparkles size={8} /> {task.chapterId ? t('সিলেবাস লিঙ্কড', 'Linked') : t('ম্যানুয়াল টপিক', 'Manual Topic')}
+                        {task.chapterId && (
+                           <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-secondary bg-brand-secondary/10 px-1.5 py-0.5 rounded border border-brand-secondary/20">
+                             <Sparkles size={8} /> {t('সিলেবাস লিঙ্কড', 'Linked')}
                            </span>
                         )}
                       </div>
@@ -358,7 +347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           )}
         </div>
 
-        {/* Improved HW Modal with Manual Chapter/Topic Selection */}
+        {/* Improved HW Modal */}
         {isTaskModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
              <div className="w-full max-w-md bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10 max-h-[90vh] overflow-y-auto">
@@ -378,15 +367,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       />
                    </div>
 
-                   <div className="grid grid-cols-1 gap-4">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় (ঐচ্ছিক)', 'Subject (Optional)')}</label>
                         <select 
                           value={newTask.subjectId} 
-                          onChange={e => {
-                            setNewTask({...newTask, subjectId: e.target.value, chapterId: '', customChapterName: ''});
-                            setIsManualChapterMode(false);
-                          }}
+                          onChange={e => setNewTask({...newTask, subjectId: e.target.value, chapterId: ''})}
                           className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
                         >
                           <option value="">{t('নির্বাচন করো', 'Select')}</option>
@@ -395,42 +381,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       </div>
 
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between ml-1 mb-1">
-                          <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">{t('চ্যাপ্টার / টপিক', 'Chapter / Topic')}</label>
-                          <button 
-                            disabled={!newTask.subjectId}
-                            onClick={() => setIsManualChapterMode(!isManualChapterMode)}
-                            className="text-[9px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1 hover:underline disabled:opacity-30"
-                          >
-                            {isManualChapterMode ? <ListTodo size={10} /> : <Edit3 size={10} />}
-                            {isManualChapterMode ? t('সিলেবাস থেকে নাও', 'Pick from Syllabus') : t('ম্যানুয়াল এন্ট্রি', 'Manual Entry')}
-                          </button>
-                        </div>
-                        
-                        {!isManualChapterMode ? (
-                          <select 
-                            disabled={!newTask.subjectId}
-                            value={newTask.chapterId} 
-                            onChange={e => setNewTask({...newTask, chapterId: e.target.value, customChapterName: ''})}
-                            className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs disabled:opacity-30"
-                          >
-                            <option value="">{t('নির্বাচন করো', 'Select from list')}</option>
-                            {selectedSubject?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <input 
-                            type="text" 
-                            value={newTask.customChapterName}
-                            onChange={e => setNewTask({...newTask, customChapterName: e.target.value, chapterId: ''})}
-                            placeholder={t("টপিক বা চ্যাপ্টারের নাম লেখো", "Enter custom chapter/topic")}
-                            className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
-                          />
-                        )}
-                        {isManualChapterMode && (
-                          <p className="text-[8px] font-bold text-orange-500 uppercase tracking-widest ml-1 mt-1">
-                            {t('* যদি সিলেবাসের সাথে মিলে যায় তবে অটো লিঙ্ক হবে।', '* Auto-linked if matched with syllabus.')}
-                          </p>
-                        )}
+                        <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('চ্যাপ্টার (ঐচ্ছিক)', 'Chapter (Optional)')}</label>
+                        <select 
+                          disabled={!newTask.subjectId}
+                          value={newTask.chapterId} 
+                          onChange={e => setNewTask({...newTask, chapterId: e.target.value})}
+                          className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs disabled:opacity-30"
+                        >
+                          <option value="">{t('নির্বাচন করো', 'Select')}</option>
+                          {selectedSubject?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
                       </div>
                    </div>
 
@@ -576,19 +536,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                     <h5 className="font-black text-[10px] sm:text-[11px] text-brand-text-p mb-0.5 truncate">
                       {getSubjectName(session.subjectId)}
                     </h5>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
                        <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-text-s flex items-center gap-1 leading-none">
                          {session.isRevision ? t('রিভিশন', 'Revision') : t('পড়াশোনা', 'Study')}
                        </p>
-                       {session.taskId && (
-                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-primary flex items-center gap-1 leading-none border-l border-brand-text-s/20 pl-2">
-                            {userState.dailyTasks.find(t => t.id === session.taskId)?.name}
-                          </p>
+                       {session.examId && (
+                         <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-primary flex items-center gap-1 leading-none border-l border-brand-text-s/20 pl-2">
+                           {getExamName(session.examId)}
+                         </p>
                        )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-full">
-                    {new Date(session.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} <ArrowRight size={8} /> {session.endTime ? new Date(session.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--'}
+                    {formatTime12h(session.startTime)} <ArrowRight size={8} /> {session.endTime ? formatTime12h(session.endTime) : '--'}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-1">

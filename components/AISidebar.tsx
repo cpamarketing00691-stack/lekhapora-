@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
 import { geminiService } from '../services/gemini';
-import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Key, Lightbulb } from 'lucide-react';
+import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Lightbulb } from 'lucide-react';
 
 interface AISidebarProps {
   userState: UserState;
@@ -15,7 +15,6 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [needsKey, setNeedsKey] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,48 +23,24 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
     }
   }, [messages, isLoading]);
 
-  // Check if API key is available in the environment
-  useEffect(() => {
-    const checkKey = async () => {
-      if (typeof window !== 'undefined' && (window as any).aistudio) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-          setNeedsKey(true);
-        }
-      }
-    };
-    checkKey();
-  }, []);
-
-  const handleOpenKeySelector = async () => {
-    if (typeof window !== 'undefined' && (window as any).aistudio) {
-      await (window as any).aistudio.openSelectKey();
-      setNeedsKey(false);
-    }
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (customText?: string) => {
+    const textToSend = customText || input;
+    if (!textToSend.trim() || isLoading) return;
     
-    const userText = input;
-    setInput('');
+    if (!customText) setInput('');
     setError(null);
-    setMessages(prev => [...prev, { role: 'user', text: userText }]);
+    
+    const userMessage = { role: 'user' as const, text: textToSend };
+    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
     try {
-      const response = await geminiService.chat(userState.profile, userText, messages);
+      // The GeminiService handles the fetch to /api/chat securely
+      const response = await geminiService.chat(userState.profile, textToSend, messages);
       setMessages(prev => [...prev, { role: 'ai', text: response || "বুঝতে পারলাম না, আবার বলবে?" }]);
     } catch (err: any) {
       console.error("Chat UI Error:", err);
-      // Check for common error patterns
-      const msg = err.message || "";
-      if (msg.includes("Requested entity was not found") || msg.includes("API_KEY")) {
-        setNeedsKey(true);
-        setError("API Key Selection Required");
-      } else {
-        setError(msg || "সমস্যা হয়েছে");
-      }
+      setError(err.message || "সার্ভারে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করো।");
       setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত, আমি এই মুহূর্তে কাজ করতে পারছি না। একটু পরে আবার চেষ্টা করো।" }]);
     } finally {
       setIsLoading(false);
@@ -73,91 +48,59 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   };
 
   const handleGetAdvice = async () => {
-    if (isLoading || needsKey) return;
-    
-    setError(null);
-    setMessages(prev => [...prev, { role: 'user', text: "আমাকে পড়ার জন্য কিছু টিপস বা স্ট্র্যাটেজি দাও তো আমার বর্তমান প্রগ্রেস অনুযায়ী।" }]);
-    setIsLoading(true);
-
-    try {
-      const response = await geminiService.getStudyTips(userState.profile, userState.subjects, userState.studyHistory);
-      setMessages(prev => [...prev, { role: 'ai', text: response || "আমি টিপস দিতে পারছি না এই মুহূর্তে।" }]);
-    } catch (err: any) {
-      console.error("Advice Error:", err);
-      setError("টিপস জেনারেট করতে সমস্যা হয়েছে");
-      setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত, আমার পরামর্শ দেওয়ার ক্ষমতা এই মুহূর্তে কিছুটা সীমিত।" }]);
-    } finally {
-      setIsLoading(false);
-    }
+    if (isLoading) return;
+    handleSend("আমাকে পড়ার জন্য কিছু টিপস বা স্ট্র্যাটেজি দাও তো আমার বর্তমান প্রগ্রেস অনুযায়ী।");
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-[2rem] overflow-hidden border border-slate-100 dark:border-slate-800">
-      <div className="p-5 bg-emerald-500 text-white flex items-center justify-between">
+    <div className="flex flex-col h-full bg-white dark:bg-brand-surface rounded-[2rem] overflow-hidden border border-brand-text-s/10 shadow-sm">
+      <div className="p-5 bg-brand-primary text-white flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
             <Bot size={22} />
           </div>
           <div>
-            <h3 className="font-bold leading-tight">{userState.profile?.aiName}</h3>
-            <p className="text-[10px] opacity-80 uppercase tracking-widest font-bold">Online Buddy</p>
+            <h3 className="font-black text-sm tracking-tight">{userState.profile?.aiName}</h3>
+            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Study Buddy Active</p>
           </div>
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900/50">
-        {needsKey && (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 p-6 rounded-3xl text-center space-y-4">
-            <div className="w-12 h-12 bg-amber-100 dark:bg-amber-800 rounded-full flex items-center justify-center mx-auto text-amber-600">
-              <Key size={24} />
-            </div>
-            <div>
-              <h4 className="font-bold text-amber-900 dark:text-amber-100">API Key Selection Required</h4>
-              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">To use the AI buddy, you need to select a paid project API key. See <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline font-bold">billing docs</a>.</p>
-            </div>
-            <button 
-              onClick={handleOpenKeySelector}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-amber-500/20"
-            >
-              Select API Key
-            </button>
-          </div>
-        )}
-
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-brand-bg/30 dark:bg-brand-bg/10">
         {messages.map((m, idx) => (
-          <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+          <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2 animate-in fade-in slide-in-from-bottom-2`}>
             {m.role === 'ai' && (
-              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                <Bot size={12} className="text-emerald-600" />
+              <div className="w-6 h-6 rounded-full bg-brand-primary/10 flex items-center justify-center shrink-0 border border-brand-primary/20">
+                <Bot size={12} className="text-brand-primary" />
               </div>
             )}
-            <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm font-medium shadow-sm transition-all ${
+            <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-xs sm:text-sm font-medium shadow-sm border transition-all ${
               m.role === 'user' 
-                ? 'bg-slate-900 text-white rounded-br-none' 
-                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-bl-none border border-slate-100 dark:border-slate-700'
+                ? 'bg-brand-primary text-white border-brand-primary rounded-br-none' 
+                : 'bg-white dark:bg-brand-surface text-brand-text-p rounded-bl-none border-brand-text-s/10'
             }`}>
               {m.text}
             </div>
             {m.role === 'user' && (
-              <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
-                <User size={12} className="text-slate-600" />
+              <div className="w-6 h-6 rounded-full bg-brand-surface border border-brand-text-s/10 flex items-center justify-center shrink-0">
+                <User size={12} className="text-brand-text-s" />
               </div>
             )}
           </div>
         ))}
         {isLoading && (
-          <div className="flex justify-start items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-              <Bot size={12} className="text-emerald-600" />
+          <div className="flex justify-start items-center gap-2 animate-pulse">
+            <div className="w-6 h-6 rounded-full bg-brand-primary/10 flex items-center justify-center">
+              <Bot size={12} className="text-brand-primary" />
             </div>
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-2xl rounded-bl-none shadow-sm">
-              <Loader2 className="animate-spin text-emerald-500" size={14} />
+            <div className="bg-white dark:bg-brand-surface p-3 rounded-2xl rounded-bl-none shadow-sm border border-brand-text-s/10">
+              <Loader2 className="animate-spin text-brand-primary" size={14} />
             </div>
           </div>
         )}
-        {error && !needsKey && (
+        {error && (
           <div className="flex justify-center">
-            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-500 text-xs rounded-full border border-red-100">
+            <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-100 dark:border-red-800">
               <AlertCircle size={14} />
               <span>{error}</span>
             </div>
@@ -165,43 +108,40 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         )}
       </div>
 
-      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 space-y-3">
+      <div className="p-4 bg-white dark:bg-brand-surface border-t border-brand-text-s/10 space-y-3">
         {/* Quick Actions */}
-        {!needsKey && (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            <button 
-              onClick={handleGetAdvice}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-100 dark:border-emerald-800 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-emerald-100 transition-all shrink-0 disabled:opacity-50"
-            >
-              <Lightbulb size={12} />
-              ✨ Get Study Advice
-            </button>
-            <button 
-              onClick={() => { setInput("আমার জন্য একটা রুটিন বানিয়ে দাও"); handleSend(); }}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-800 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-blue-100 transition-all shrink-0 disabled:opacity-50"
-            >
-              <Sparkles size={12} />
-              📅 Make a Routine
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <button 
+            onClick={handleGetAdvice}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-secondary/10 text-brand-secondary rounded-full border border-brand-secondary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-secondary/20 transition-all shrink-0 disabled:opacity-50"
+          >
+            <Lightbulb size={12} />
+            Study Advice
+          </button>
+          <button 
+            onClick={() => handleSend("আমার জন্য একটা রুটিন বানিয়ে দাও")}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary/10 text-brand-primary rounded-full border border-brand-primary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-primary/20 transition-all shrink-0 disabled:opacity-50"
+          >
+            <Sparkles size={12} />
+            Routine Help
+          </button>
+        </div>
 
-        <div className="flex gap-2 items-center bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl border border-slate-100 dark:border-slate-700">
+        <div className="flex gap-2 items-center bg-brand-bg dark:bg-brand-bg/50 p-2 rounded-2xl border border-brand-text-s/10 focus-within:border-brand-primary transition-all">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            disabled={needsKey}
-            placeholder={needsKey ? "Please select a key above" : "কিছু জানতে চাও?"}
-            className="flex-1 bg-transparent border-0 px-3 py-2 text-sm focus:ring-0 placeholder:text-slate-400 disabled:opacity-50"
+            placeholder="কিছু জানতে চাও?"
+            className="flex-1 bg-transparent border-0 px-3 py-2 text-sm focus:ring-0 placeholder:text-brand-text-s/50"
           />
           <button 
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading || needsKey}
-            className="bg-emerald-500 text-white p-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg shadow-emerald-500/20"
+            onClick={() => handleSend()}
+            disabled={!input.trim() || isLoading}
+            className="bg-brand-primary text-white p-2.5 rounded-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shadow-lg shadow-brand-primary/20"
           >
             <Send size={18} />
           </button>

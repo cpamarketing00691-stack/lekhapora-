@@ -55,6 +55,42 @@ export class GeminiService {
     }
   }
 
+  async getStudyTips(userProfile: any, subjects: any[], studyHistory: any[]) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      
+      const progressSummary = subjects.map(s => {
+        const completed = s.chapters.filter((c: any) => c.isCompleted).length;
+        const total = s.chapters.length;
+        return `${s.name} P${s.paper}: ${completed}/${total} chapters completed`;
+      }).join(', ');
+
+      const recentFocus = studyHistory.slice(0, 5).map(s => {
+        return `${s.subjectId ? 'Subject session' : 'General session'} for ${Math.round(s.durationSeconds / 60)} mins with mood ${s.mood}`;
+      }).join('. ');
+
+      const prompt = `Based on my current HSC preparation progress: ${progressSummary || 'No subjects added yet'}. 
+      My recent study activity: ${recentFocus || 'No recent sessions'}.
+      Please suggest 3 specific, actionable study strategies or tips for me right now. 
+      Focus on where I might be lagging or how to maintain my current pace.
+      Respond in friendly, conversational Bangla/Banglish.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { 
+          systemInstruction: this.getSystemInstruction(userProfile),
+          temperature: 0.8 
+        }
+      });
+
+      return response.text;
+    } catch (error: any) {
+      console.error("Gemini Study Tips Error:", error);
+      throw error;
+    }
+  }
+
   async analyzeSyllabusImage(userProfile: any, base64Image: string, mimeType: string) {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });

@@ -33,7 +33,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   // Auto-fill subject if a linked task is selected
   useEffect(() => {
     if (activeTaskId) {
-      const matchedTask = userState.dailyTasks.find(task => task.id === activeTaskId);
+      const dailyTasks = Array.isArray(userState.dailyTasks) ? userState.dailyTasks : [];
+      const matchedTask = dailyTasks.find(task => task.id === activeTaskId);
       if (matchedTask && matchedTask.subjectId) {
         setActiveSubjectId(matchedTask.subjectId);
       }
@@ -128,14 +129,11 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     onUpdateState(prev => {
       const newState = {
         ...prev,
-        studyHistory: [...prev.studyHistory, newSession],
-        streaks: prev.streaks + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
+        studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
+        streaks: (prev.streaks || 0) + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
         currentMood,
         activeTimer: null
       };
-
-      // If the HW task was linked to a chapter, progress is already reflected by the existence 
-      // of studyHistory, but we can also handle auto-completion logic if needed here.
       return newState;
     });
   };
@@ -169,8 +167,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
     onUpdateState(prev => ({
       ...prev,
-      studyHistory: [...prev.studyHistory, newSession],
-      streaks: prev.streaks + (durationSec >= 1800 ? 1 : 0),
+      studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
+      streaks: (prev.streaks || 0) + (durationSec >= 1800 ? 1 : 0),
       currentMood: manualData.mood
     }));
 
@@ -180,6 +178,10 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const isTimerGlobalActive = !!timer;
   const isFocusingNow = timer?.isFocusActive || false;
+  
+  const subjects = Array.isArray(userState.subjects) ? userState.subjects : [];
+  const dailyTasks = Array.isArray(userState.dailyTasks) ? userState.dailyTasks : [];
+  const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0 px-2 sm:px-0">
@@ -189,11 +191,11 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       </header>
 
       <div className="flex justify-center">
-        <div className="bg-brand-surface p-1 sm:p-1.5 rounded-full border border-brand-text-s/10 shadow-sm flex gap-1 transition-colors">
+        <div className="bg-brand-surface p-1.5 rounded-full border border-brand-text-s/10 shadow-sm flex gap-1 transition-colors">
           <button 
             onClick={() => !isTimerGlobalActive && setShowManual(false)}
             disabled={isTimerGlobalActive}
-            className={`flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${!showManual ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s hover:bg-brand-bg/50'}`}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${!showManual ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s hover:bg-brand-bg/50'}`}
           >
             <Clock size={14} className="hidden sm:block" />
             {t('টাইমার', 'Timer')}
@@ -201,7 +203,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           <button 
             onClick={() => !isTimerGlobalActive && setShowManual(true)}
             disabled={isTimerGlobalActive}
-            className={`flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-2.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${showManual ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s hover:bg-brand-bg/50'}`}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${showManual ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s hover:bg-brand-bg/50'}`}
           >
             <History size={14} className="hidden sm:block" />
             {t('ম্যানুয়াল', 'Manual')}
@@ -210,19 +212,19 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       </div>
 
       {!showManual ? (
-        <div className="bg-brand-surface rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-8 md:p-10 shadow-xl border border-brand-text-s/10 transition-all">
-          <div className="mb-6 sm:mb-10 flex flex-col items-center gap-6">
+        <div className="bg-brand-surface rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 transition-all">
+          <div className="mb-10 flex flex-col items-center gap-6">
             <div className="w-full">
-              <label className="block text-[9px] sm:text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 sm:mb-4 text-center leading-none">{t('মোড নির্বাচন', 'Select Mode')}</label>
-              <div className="flex bg-brand-bg p-1 rounded-xl sm:rounded-2xl shadow-inner max-w-sm mx-auto">
-                <button onClick={() => !isTimerGlobalActive && setIsRevision(false)} className={`flex-1 px-2 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
-                <button onClick={() => !isTimerGlobalActive && setIsRevision(true)} className={`flex-1 px-2 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1 sm:gap-2 transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}><RefreshCcw size={10} />{t('রিভিশন', 'Revision')}</button>
+              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-4 text-center leading-none">{t('মোড নির্বাচন', 'Select Mode')}</label>
+              <div className="flex bg-brand-bg p-1 rounded-2xl shadow-inner max-w-sm mx-auto">
+                <button onClick={() => !isTimerGlobalActive && setIsRevision(false)} className={`flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
+                <button onClick={() => !isTimerGlobalActive && setIsRevision(true)} className={`flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}><RefreshCcw size={10} />{t('রিভিশন', 'Revision')}</button>
               </div>
             </div>
 
             <div className="w-full max-w-lg space-y-4">
               <div className="space-y-1.5">
-                 <label className="block text-[9px] sm:text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] text-center leading-none">{t('ফোকাস টাস্ক (হোমওয়ার্ক)', 'Focus Task (Homework)')}</label>
+                 <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] text-center leading-none">{t('ফোকাস টাস্ক (হোমওয়ার্ক)', 'Focus Task (Homework)')}</label>
                  <select 
                   disabled={isTimerGlobalActive} 
                   value={activeTaskId} 
@@ -230,74 +232,79 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                   className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p"
                  >
                    <option value="">{t('টাস্ক ছাড়া পড়াশোনা', 'Study without specific task')}</option>
-                   {userState.dailyTasks.filter(t => !t.isCompleted).map(task => (
+                   {/* Safe Array Handling for dailyTasks filtering and mapping */}
+                   {Array.isArray(dailyTasks) && dailyTasks.length > 0 ? dailyTasks.filter(t => !t.isCompleted).map(task => (
                      <option key={task.id} value={task.id}>{task.name} ({task.source})</option>
-                   ))}
+                   )) : null}
                  </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
                 <div>
-                  <label className="block text-[9px] sm:text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('বিষয়', 'Subject')}</label>
+                  <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('বিষয়', 'Subject')}</label>
                   <select disabled={isTimerGlobalActive} value={activeSubjectId} onChange={(e) => setActiveSubjectId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p">
                     <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-                    {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
+                    {/* Safe Array Handling for subjects mapping */}
+                    {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>) : null}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[9px] sm:text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('লক্ষ্য পরীক্ষা (ঐচ্ছিক)', 'Target Exam (Opt)')}</label>
+                  <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('লক্ষ্য পরীক্ষা (ঐচ্ছিক)', 'Target Exam (Opt)')}</label>
                   <select disabled={isTimerGlobalActive} value={activeExamId} onChange={(e) => setActiveExamId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p">
                     <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                    {(userState.profile?.collegeExams || []).map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                    {/* Safe Array Handling for collegeExams mapping */}
+                    {Array.isArray(collegeExams) && collegeExams.length > 0 ? collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>) : null}
                   </select>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="text-center py-4 sm:py-10">
-            <div className={`text-5xl sm:text-[8rem] md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
+          <div className="text-center py-10">
+            <div className={`text-[8rem] sm:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
               {formatDuration(timer?.accumulatedFocusSeconds || 0)}
             </div>
             {isTimerGlobalActive && !isFocusingNow && (
-              <div className="mt-3 sm:mt-4 animate-pulse flex items-center justify-center gap-1 sm:gap-2 text-brand-secondary font-black text-[10px] sm:text-xs uppercase tracking-widest">
-                <Coffee size={12} className="sm:size-14" />
+              <div className="mt-4 animate-pulse flex items-center justify-center gap-2 text-brand-secondary font-black text-xs uppercase tracking-widest">
+                <Coffee size={14} />
                 {t('ব্রেকে আছো: ', 'ON BREAK: ')} {formatDuration(timer?.accumulatedBreakSeconds || 0)}
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-center gap-6 sm:gap-10 mt-4 sm:mt-6">
+          <div className="flex items-center justify-center gap-10 mt-6">
             {!isFocusingNow ? (
-              <button onClick={handleStartResume} disabled={!activeSubjectId} className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${timer?.isRevision || isRevision ? 'bg-brand-secondary shadow-brand-secondary/40' : 'bg-brand-primary shadow-brand-primary/40'}`}>
-                <Play size={32} className="sm:size-40 md:size-48 ml-1.5 sm:ml-2 fill-current" />
+              <button onClick={handleStartResume} disabled={!activeSubjectId} className={`w-24 h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${timer?.isRevision || isRevision ? 'bg-brand-secondary shadow-brand-secondary/40' : 'bg-brand-primary shadow-brand-primary/40'}`}>
+                <Play size={40} className="ml-2 fill-current" />
               </button>
             ) : (
-              <button onClick={handlePause} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-2 sm:border-4 border-brand-bg hover:scale-105 active:scale-95 shadow-xl transition-all">
-                <Pause size={32} className="sm:size-40 md:size-48 fill-current" />
+              <button onClick={handlePause} className="w-24 h-24 md:w-28 md:h-28 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg hover:scale-105 active:scale-95 shadow-xl transition-all">
+                <Pause size={40} className="fill-current" />
               </button>
             )}
-            <button onClick={handleStopEnd} disabled={!isTimerGlobalActive} className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-brand-bg text-brand-text-p flex items-center justify-center rounded-full border-2 sm:border-4 border-brand-text-s/10 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30">
-              <Square size={20} className="sm:size-24 md:size-32 fill-current text-red-500" />
+            <button onClick={handleStopEnd} disabled={!isTimerGlobalActive} className="w-16 h-16 md:w-20 md:h-20 bg-brand-bg text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-text-s/10 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30">
+              <Square size={24} className="fill-current text-red-500" />
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-brand-surface rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-8 md:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95 duration-300">
-           <form onSubmit={handleManualSubmit} className="space-y-4 sm:space-y-6 md:space-y-8">
+        <div className="bg-brand-surface rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95 duration-300">
+           <form onSubmit={handleManualSubmit} className="space-y-6 md:space-y-8">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div className="space-y-1.5">
                     <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
                     <select required value={manualData.subjectId} onChange={(e) => setManualData({...manualData, subjectId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
                       <option value="">{t('নির্বাচন করো', 'Select Subject')}</option>
-                      {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
+                      {/* Safe Array Handling for manual subjects mapping */}
+                      {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>) : null}
                     </select>
                  </div>
                  <div className="space-y-1.5">
                     <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Exam (Optional)')}</label>
                     <select value={manualData.examId} onChange={(e) => setManualData({...manualData, examId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
                       <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                      {(userState.profile?.collegeExams || []).map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                      {/* Safe Array Handling for manual collegeExams mapping */}
+                      {Array.isArray(collegeExams) && collegeExams.length > 0 ? collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>) : null}
                     </select>
                  </div>
               </div>
@@ -315,12 +322,13 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                  <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Task (Optional)')}</label>
                  <select value={manualData.taskId} onChange={(e) => setManualData({...manualData, taskId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
                     <option value="">{t('নির্বাচন করো', 'Select Task')}</option>
-                    {userState.dailyTasks.map(task => (
+                    {/* Safe Array Handling for manual dailyTasks mapping */}
+                    {Array.isArray(dailyTasks) && dailyTasks.length > 0 ? dailyTasks.map(task => (
                       <option key={task.id} value={task.id}>{task.name}</option>
-                    ))}
+                    )) : null}
                  </select>
               </div>
-              <button type="submit" className="w-full bg-brand-primary hover:scale-[1.01] active:scale-95 text-white font-black py-4 sm:py-5 rounded-xl sm:rounded-[2rem] shadow-xl transition-all text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+              <button type="submit" className="w-full bg-brand-primary hover:scale-[1.01] active:scale-95 text-white font-black py-5 rounded-[2rem] shadow-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2">
                 <CheckCircle2 size={16} /> {t('সেভ করো', 'Save Log Entry')}
               </button>
            </form>

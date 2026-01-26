@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Lock, Mail, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { User, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface AuthProps {
@@ -13,83 +13,71 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const signUpUser = async () => {
-    // 1. Supabase auth sign-up
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-    });
-
-    if (signUpError) throw signUpError;
-    if (!data.user) throw new Error("Sign-up failed: User not created.");
-
-    // 2. Save additional profile info in 'users' table
-    const { error: insertError } = await supabase.from('users').insert([{
-      id: data.user.id,
-      full_name: fullName,
-      email: email,
-      created_at: new Date()
-    }]);
-
-    if (insertError) {
-      console.error('Profile insertion error:', insertError.message);
-      // We don't necessarily throw here if auth succeeded, but it's better to ensure profile is created
-      throw new Error("Profile creation failed: " + insertError.message);
+  // 2️⃣ Sign-Up Function: Using requested logic
+  async function signUpUser(email: string, password: string, fullName: string) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    
+    if (error) { 
+      alert("Sign-up failed: " + error.message); 
+      return null; 
     }
 
+    if (data.user) {
+      // Save additional user info in 'users' table
+      const { error: dbError } = await supabase.from('users').insert([{ 
+        id: data.user.id, 
+        full_name: fullName, 
+        email: email, 
+        created_at: new Date() 
+      }]);
+      
+      if (dbError) {
+        console.error("Profile creation error:", dbError.message);
+      }
+    }
+
+    alert("Sign-up successful!");
     return data.user;
-  };
+  }
 
-  const signInUser = async () => {
-    // 1. Supabase auth sign-in
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
-    });
-
-    if (signInError) throw signInError;
-    if (!data.user) throw new Error("Sign-in failed: User not found.");
-
-    // 2. Fetch user profile info from 'users' table
-    const { data: profile, error: profileError } = await supabase.from('users')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    if (profileError) {
-      console.error('Profile fetch error:', profileError.message);
+  // 3️⃣ Sign-In Function: Using requested logic
+  async function signInUser(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (error) { 
+      alert("Sign-in failed: " + error.message); 
+      return null; 
     }
 
-    return { user: data.user, profile };
-  };
+    if (data.user) {
+      // Fetch user profile info
+      const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
+      alert("Sign-in successful!");
+      return { user: data.user, profile };
+    }
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    setError(null);
 
     try {
       if (isLogin) {
-        await signInUser();
+        const result = await signInUser(email, password);
+        if (result) {
+          onAuthSuccess();
+        }
       } else {
-        await signUpUser();
+        const user = await signUpUser(email, password, fullName);
+        if (user) {
+          onAuthSuccess();
+        }
       }
-      onAuthSuccess();
     } catch (err: any) {
-      console.error('Auth Error:', err.message);
-      
-      // Specific Error Handling
-      if (err.message.includes("Invalid login credentials")) {
-        setError("ভুল ইমেইল বা পাসওয়ার্ড। দয়া করে আবার চেষ্টা করো। (Invalid email or password)");
-      } else if (err.message.includes("email rate limit exceeded") || err.status === 429) {
-        setError("অনেক বেশি চেষ্টা করা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করো। (Too many attempts, please wait)");
-      } else if (err.message.includes("User already registered")) {
-        setError("এই ইমেইল দিয়ে ইতিপূর্বেই অ্যাকাউন্ট খোলা হয়েছে। (Email already registered)");
-      } else {
-        setError(err.message || "সমস্যা হয়েছে। আবার চেষ্টা করো।");
-      }
+      console.error('Runtime Auth Error:', err);
     } finally {
       setLoading(false);
     }
@@ -102,13 +90,6 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           <h1 className="text-3xl font-black text-brand-primary italic">HSC TRACKER</h1>
           <p className="text-brand-text-s font-bold uppercase tracking-widest text-[10px] mt-2">Professional Study Management</p>
         </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 text-[11px] font-bold animate-in shake duration-300">
-            <AlertCircle size={18} className="shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {!isLogin && (
@@ -157,6 +138,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           </div>
 
           <button 
+            type="submit"
             disabled={loading}
             className="w-full bg-brand-primary hover:scale-[1.02] active:scale-95 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-brand-primary/20 mt-4 disabled:opacity-50"
           >
@@ -167,9 +149,9 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
 
         <div className="mt-8 text-center">
           <button 
+            type="button"
             onClick={() => {
               setIsLogin(!isLogin);
-              setError(null);
             }}
             className="text-[10px] font-black text-brand-primary uppercase tracking-widest hover:underline"
           >

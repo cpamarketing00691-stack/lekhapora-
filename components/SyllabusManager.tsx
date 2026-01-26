@@ -18,7 +18,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
   const [isRoutineProcessing, setIsRoutineProcessing] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [showManualRoutine, setShowManualRoutine] = useState(false);
-  const [chapterSearch, setChapterSearch] = useState<Record<string, string>>({}); // subjectId -> searchTerm
+  const [chapterSearch, setChapterSearch] = useState<Record<string, string>>({}); 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const routineFileInputRef = useRef<HTMLInputElement>(null);
   
@@ -48,9 +48,9 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       const base64 = await readFileAsBase64(file);
       const result = await geminiService.analyzeSyllabusImage(userState.profile, base64, file.type);
       
-      if (result && result.subjects && result.subjects.length > 0) {
+      if (result && Array.isArray(result.subjects) && result.subjects.length > 0) {
         onUpdateState(prev => {
-          const currentSubjects = [...prev.subjects];
+          const currentSubjects = Array.isArray(prev.subjects) ? [...prev.subjects] : [];
           
           result.subjects.forEach((scannedSub: any) => {
             const existingIdx = currentSubjects.findIndex(s => 
@@ -59,15 +59,15 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
               s.paper === scannedSub.paper
             );
 
-            const chapters: Chapter[] = scannedSub.chapters.map((chName: string, chIdx: number) => ({
+            const chapters: Chapter[] = Array.isArray(scannedSub.chapters) ? scannedSub.chapters.map((chName: string, chIdx: number) => ({
               id: `ch-${Date.now()}-${chIdx}-${Math.random()}`,
               name: chName,
               isCompleted: false
-            }));
+            })) : [];
 
             if (existingIdx > -1) {
               const existingSub = currentSubjects[existingIdx];
-              const newChapters = [...existingSub.chapters];
+              const newChapters = Array.isArray(existingSub.chapters) ? [...existingSub.chapters] : [];
               chapters.forEach(c => {
                 if (!newChapters.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())) {
                   newChapters.push(c);
@@ -108,10 +108,11 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       const base64 = await readFileAsBase64(file);
       const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
       
-      if (result && result.exams && result.exams.length > 0) {
+      if (result && Array.isArray(result.exams) && result.exams.length > 0) {
         let matchCount = 0;
         onUpdateState(prev => {
-          const updatedSubjects = prev.subjects.map(sub => {
+          const rawSubjects = Array.isArray(prev.subjects) ? prev.subjects : [];
+          const updatedSubjects = rawSubjects.map(sub => {
             const match = result.exams.find((ex: any) => {
               const exName = ex.subjectName.toLowerCase();
               const subName = sub.name.toLowerCase();
@@ -166,7 +167,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     onUpdateState(prev => ({
       ...prev,
-      subjects: [...prev.subjects, newSubject]
+      subjects: [...(Array.isArray(prev.subjects) ? prev.subjects : []), newSubject]
     }));
 
     setManualSubject({ name: '', paper: 1, chapters: '' });
@@ -180,7 +181,8 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     let updatedCount = 0;
 
     onUpdateState(prev => {
-      const updatedSubjects = prev.subjects.map(sub => {
+      const rawSubjects = Array.isArray(prev.subjects) ? prev.subjects : [];
+      const updatedSubjects = rawSubjects.map(sub => {
         const foundLine = lines.find(line => {
           const l = line.toLowerCase();
           const sName = sub.name.toLowerCase();
@@ -220,7 +222,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     if (confirm(t("তুমি কি নিশ্চিত যে তুমি এই বিষয়টি ডিলিট করতে চাও?", "Are you sure you want to delete this subject?"))) {
       onUpdateState(prev => ({
         ...prev,
-        subjects: prev.subjects.filter(s => s.id !== id)
+        subjects: Array.isArray(prev.subjects) ? prev.subjects.filter(s => s.id !== id) : []
       }));
     }
   };
@@ -228,20 +230,20 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
   const toggleAllChapters = (subjectId: string, completed: boolean) => {
     onUpdateState(prev => ({
       ...prev,
-      subjects: prev.subjects.map(s => s.id === subjectId ? {
+      subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === subjectId ? {
         ...s,
-        chapters: s.chapters.map(c => ({ ...c, isCompleted: completed }))
-      } : s)
+        chapters: Array.isArray(s.chapters) ? s.chapters.map(c => ({ ...c, isCompleted: completed })) : []
+      } : s) : []
     }));
   };
 
   const updateDifficulty = (subjectId: string, chapterId: string, diff: Difficulty) => {
     onUpdateState(prev => ({
       ...prev,
-      subjects: prev.subjects.map(s => s.id === subjectId ? {
+      subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === subjectId ? {
         ...s,
-        chapters: s.chapters.map(c => c.id === chapterId ? { ...c, difficulty: diff } : c)
-      } : s)
+        chapters: Array.isArray(s.chapters) ? s.chapters.map(c => c.id === chapterId ? { ...c, difficulty: diff } : c) : []
+      } : s) : []
     }));
   };
 
@@ -250,6 +252,8 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     'Medium': { color: 'amber', label: { bn: 'মাঝারি', en: 'Medium' } },
     'Hard': { color: 'rose', label: { bn: 'কঠিন', en: 'Hard' } }
   };
+
+  const subjects = Array.isArray(userState.subjects) ? userState.subjects : [];
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-24 md:pb-20">
@@ -387,12 +391,14 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       )}
 
       <div className="grid grid-cols-1 gap-8 md:gap-10">
-        {userState.subjects.map(sub => {
+        {/* Safe Array Handling for subjects mapping */}
+        {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => {
           const searchTerm = chapterSearch[sub.id]?.toLowerCase() || '';
-          const filteredChapters = sub.chapters.filter(ch => ch.name.toLowerCase().includes(searchTerm));
+          const chapters = Array.isArray(sub.chapters) ? sub.chapters : [];
+          const filteredChapters = chapters.filter(ch => ch.name.toLowerCase().includes(searchTerm));
           
-          const completedCount = sub.chapters.filter(c => c.isCompleted).length;
-          const totalCount = sub.chapters.length;
+          const completedCount = chapters.filter(c => c.isCompleted).length;
+          const totalCount = chapters.length;
           const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
           
           return (
@@ -424,7 +430,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                           onChange={(e) => {
                             onUpdateState(prev => ({
                               ...prev,
-                              subjects: prev.subjects.map(s => s.id === sub.id ? { ...s, examDate: e.target.value } : s)
+                              subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === sub.id ? { ...s, examDate: e.target.value } : s) : []
                             }));
                           }}
                           className="text-[10px] bg-transparent border-0 p-0 font-black focus:ring-0 uppercase w-28 cursor-pointer"
@@ -441,7 +447,6 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Chapter Search Bar for the Card */}
                     <div className="relative mr-2 hidden sm:block">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
                       <input 
@@ -489,7 +494,8 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
               <div className="bg-slate-50/50 dark:bg-slate-950/20 p-6 md:p-10 border-t border-slate-50 dark:border-slate-800">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                  {filteredChapters.map(ch => (
+                  {/* Safe Array Handling for chapters mapping */}
+                  {Array.isArray(filteredChapters) && filteredChapters.length > 0 ? filteredChapters.map(ch => (
                     <div 
                       key={ch.id} 
                       className={`group/item flex flex-col p-4 md:p-6 rounded-[2rem] transition-all border-2 bg-white dark:bg-slate-900 ${
@@ -506,10 +512,10 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                             onChange={() => {
                               onUpdateState(prev => ({
                                 ...prev,
-                                subjects: prev.subjects.map(s => s.id === sub.id ? {
+                                subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === sub.id ? {
                                   ...s,
-                                  chapters: s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c)
-                                } : s)
+                                  chapters: Array.isArray(s.chapters) ? s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c) : []
+                                } : s) : []
                               }));
                             }}
                             className="peer w-5 h-5 md:w-6 md:h-6 rounded-md border-2 border-slate-200 dark:border-slate-700 text-emerald-500 focus:ring-0 appearance-none checked:bg-emerald-500 checked:border-emerald-500 transition-all cursor-pointer"
@@ -551,9 +557,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                          )}
                       </div>
                     </div>
-                  ))}
-                  
-                  {filteredChapters.length === 0 && (
+                  )) : (
                     <div className="col-span-full py-10 text-center space-y-3">
                       <Search className="mx-auto text-slate-200" size={32} />
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t("কোনো চ্যাপ্টার পাওয়া যায়নি", "No matching chapters found")}</p>
@@ -563,11 +567,8 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
               </div>
             </div>
           );
-        })}
-        
-        {userState.subjects.length === 0 && (
+        }) : (
           <div className="text-center py-20 md:py-32 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
-             {/* Fix: Removed non-existent md:size prop */}
              <AlertTriangle size={40} className="text-slate-200 mx-auto mb-6" />
              <h3 className="text-xl md:text-2xl font-black text-slate-400">{t('সিলেবাস খুঁজে পাওয়া যায়নি!', 'Empty Syllabus')}</h3>
              <div className="mt-8 flex justify-center gap-3">

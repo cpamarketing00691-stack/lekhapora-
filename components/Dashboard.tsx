@@ -59,7 +59,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
 
   const stats = useMemo(() => {
     const today = getLocalDateString(Date.now());
-    const allSessions = userState.studyHistory || [];
+    const allSessions = Array.isArray(userState.studyHistory) ? userState.studyHistory : [];
     
     let filteredSessions = allSessions;
     if (subjectFilter) filteredSessions = filteredSessions.filter(s => s.subjectId === subjectFilter);
@@ -86,18 +86,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     const dailyGoalSeconds = 4 * 3600; 
     const studyTimeFactor = Math.min(100, Math.round((todayFocusSeconds / dailyGoalSeconds) * 100)); 
 
+    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
     const relevantSubjects = subjectFilter 
-      ? userState.subjects.filter(s => s.id === subjectFilter)
-      : userState.subjects;
+      ? rawSubjects.filter(s => s.id === subjectFilter)
+      : rawSubjects;
 
-    const totalChapters = relevantSubjects.reduce((acc, curr) => acc + (curr.chapters?.length || 0), 0);
+    const totalChapters = relevantSubjects.reduce((acc, curr) => acc + (Array.isArray(curr.chapters) ? curr.chapters.length : 0), 0);
     const completedChapters = relevantSubjects.reduce((acc, curr) => 
-      acc + (curr.chapters?.filter(c => c.isCompleted).length || 0), 0);
+      acc + (Array.isArray(curr.chapters) ? curr.chapters.filter(c => c.isCompleted).length : 0), 0);
     const completionRate = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
     const consistencyFactor = Math.min(100, Math.round(((userState.streaks || 0) / 30) * 100));
-    const revisionGoalSeconds = 10 * 3600; 
-    const revisionFactor = Math.min(100, Math.round((revisionFocusSeconds / revisionGoalSeconds) * 100));
+    const revisionFactor = Math.min(100, Math.round((revisionFocusSeconds / (10 * 3600)) * 100));
 
     const finalScore = Math.round(
       (studyTimeFactor * 0.4) + 
@@ -126,8 +126,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   }, [userState.studyHistory, userState.subjects, userState.streaks, userState.language, subjectFilter, examFilter]);
 
   const upcomingExams = useMemo(() => {
-    const collegeExams = userState.profile?.collegeExams || [];
-    const subjectExams = userState.subjects.filter(s => !!s.examDate).map(s => ({
+    const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
+    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
+    const subjectExams = rawSubjects.filter(s => !!s.examDate).map(s => ({
       id: s.id,
       name: `${s.name} P${s.paper}`,
       date: s.examDate!,
@@ -142,13 +143,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const weeklyData = useMemo(() => {
     const data = [];
     const today = new Date();
+    const history = Array.isArray(userState.studyHistory) ? userState.studyHistory : [];
     
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       const dateStr = getLocalDateString(d.getTime());
       
-      const daySessions = (userState.studyHistory || []).filter(s => getLocalDateString(s.startTime) === dateStr);
+      const daySessions = history.filter(s => getLocalDateString(s.startTime) === dateStr);
 
       const studySeconds = daySessions.filter(s => !s.isRevision).reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
       const revisionSeconds = daySessions.filter(s => s.isRevision).reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
@@ -167,7 +169,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   }, [userState.studyHistory, userState.language]);
 
   const recentSessions = useMemo(() => {
-    return [...(userState.studyHistory || [])]
+    const history = Array.isArray(userState.studyHistory) ? userState.studyHistory : [];
+    return [...history]
       .filter(s => !subjectFilter || s.subjectId === subjectFilter)
       .filter(s => !examFilter || s.examId === examFilter)
       .sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
@@ -175,12 +178,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   }, [userState.studyHistory, subjectFilter, examFilter]);
 
   const getSubjectName = (id: string) => {
-    const sub = userState.subjects.find(s => s.id === id);
+    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
+    const sub = rawSubjects.find(s => s.id === id);
     return sub ? `${sub.name} (P${sub.paper})` : t('সাধারণ পড়াশোনা', 'General Study');
   };
 
   const getExamName = (id: string) => {
-    const ex = (userState.profile?.collegeExams || []).find(e => e.id === id);
+    const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
+    const ex = collegeExams.find(e => e.id === id);
     return ex ? ex.name : '';
   };
 
@@ -190,22 +195,22 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     let finalChapterId = newTask.chapterId;
     let finalCustomChapterName = newTask.customChapterName.trim();
 
-    // Automated matching logic if custom name is used
+    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
     if (isManualChapterMode && finalCustomChapterName && newTask.subjectId) {
-      const selectedSub = userState.subjects.find(s => s.id === newTask.subjectId);
-      const match = selectedSub?.chapters.find(c => 
+      const selectedSub = rawSubjects.find(s => s.id === newTask.subjectId);
+      const match = Array.isArray(selectedSub?.chapters) ? selectedSub?.chapters.find(c => 
         c.name.toLowerCase() === finalCustomChapterName.toLowerCase()
-      );
+      ) : null;
       if (match) {
         finalChapterId = match.id;
-        finalCustomChapterName = ''; // It's now linked to syllabus
+        finalCustomChapterName = ''; 
       }
     }
 
     const task: Task = {
       id: `task-${Date.now()}`,
       name: newTask.name.trim(),
-      source: newTask.source,
+      source: TaskSource.PERSONAL,
       isCompleted: false,
       subjectId: newTask.subjectId || undefined,
       chapterId: finalChapterId || undefined,
@@ -215,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
 
     onUpdateState(prev => ({
       ...prev,
-      dailyTasks: [...prev.dailyTasks, task]
+      dailyTasks: [...(Array.isArray(prev.dailyTasks) ? prev.dailyTasks : []), task]
     }));
     setNewTask({ name: '', source: TaskSource.PERSONAL, subjectId: '', chapterId: '', customChapterName: '' });
     setIsTaskModalOpen(false);
@@ -225,14 +230,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const toggleTask = (id: string) => {
     onUpdateState(prev => ({
       ...prev,
-      dailyTasks: prev.dailyTasks.map(t => t.id === id ? { ...t, isCompleted: !t.isCompleted } : t)
+      dailyTasks: Array.isArray(prev.dailyTasks) ? prev.dailyTasks.map(t => t.id === id ? { ...t, isCompleted: !t.isCompleted } : t) : []
     }));
   };
 
   const deleteTask = (id: string) => {
     onUpdateState(prev => ({
       ...prev,
-      dailyTasks: prev.dailyTasks.filter(t => t.id !== id)
+      dailyTasks: Array.isArray(prev.dailyTasks) ? prev.dailyTasks.filter(t => t.id !== id) : []
     }));
   };
 
@@ -240,7 +245,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const primaryColor = isDark ? '#5FB3A2' : '#5B7DBE';
   const secondaryColor = isDark ? '#8B9CF2' : '#7FAE9E';
 
-  const selectedSubject = userState.subjects.find(s => s.id === newTask.subjectId);
+  const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
+  const selectedSubject = rawSubjects.find(s => s.id === newTask.subjectId);
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-700 pb-10">
@@ -257,7 +263,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       </header>
 
-      {/* Unified Countdown Section */}
       <section className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
         {userState.profile?.targetExamDate && (
           <div className="bg-brand-primary text-white p-5 rounded-[2rem] shadow-lg border border-white/10 flex flex-col justify-between min-w-[180px] snap-center shrink-0">
@@ -271,7 +276,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
              </div>
           </div>
         )}
-        {upcomingExams.map(exam => {
+        {Array.isArray(upcomingExams) && upcomingExams.length > 0 ? upcomingExams.map(exam => {
           const isActive = (exam.type === 'college' && examFilter === exam.id) || (exam.type === 'subject' && subjectFilter === exam.id);
           return (
             <button 
@@ -297,10 +302,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                </div>
             </button>
           );
-        })}
+        }) : null}
       </section>
 
-      {/* Today's Focus (Homework) Section */}
       <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -318,7 +322,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {userState.dailyTasks.length > 0 ? userState.dailyTasks.map(task => (
+          {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.map(task => (
             <div key={task.id} className={`group flex flex-col p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary'}`}>
               <div className="flex items-start justify-between gap-2">
                  <button onClick={() => toggleTask(task.id)} className="flex items-start gap-3 min-w-0 text-left">
@@ -358,7 +362,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           )}
         </div>
 
-        {/* Improved HW Modal with Manual Chapter/Topic Selection */}
         {isTaskModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
              <div className="w-full max-w-md bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10 max-h-[90vh] overflow-y-auto">
@@ -390,7 +393,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                           className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
                         >
                           <option value="">{t('নির্বাচন করো', 'Select')}</option>
-                          {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
+                          {Array.isArray(userState.subjects) && userState.subjects.length > 0 ? userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>) : null}
                         </select>
                       </div>
 
@@ -415,7 +418,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                             className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs disabled:opacity-30"
                           >
                             <option value="">{t('নির্বাচন করো', 'Select from list')}</option>
-                            {selectedSubject?.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            {Array.isArray(selectedSubject?.chapters) && selectedSubject.chapters.length > 0 ? selectedSubject.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>) : null}
                           </select>
                         ) : (
                           <input 
@@ -426,18 +429,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                             className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
                           />
                         )}
-                        {isManualChapterMode && (
-                          <p className="text-[8px] font-bold text-orange-500 uppercase tracking-widest ml-1 mt-1">
-                            {t('* যদি সিলেবাসের সাথে মিলে যায় তবে অটো লিঙ্ক হবে।', '* Auto-linked if matched with syllabus.')}
-                          </p>
-                        )}
                       </div>
                    </div>
 
                    <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('উৎস (Source)', 'Source')}</label>
                       <div className="flex flex-wrap gap-2">
-                        {Object.values(TaskSource).map(source => (
+                        {Array.isArray(Object.values(TaskSource)) && Object.values(TaskSource).length > 0 ? Object.values(TaskSource).map(source => (
                           <button 
                             key={source}
                             onClick={() => setNewTask({...newTask, source})}
@@ -445,7 +443,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                           >
                             {source}
                           </button>
-                        ))}
+                        )) : null}
                       </div>
                    </div>
 
@@ -461,7 +459,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         )}
       </section>
 
-      {/* Contextual Filters Info */}
       {(subjectFilter || examFilter) && (
         <div className="bg-brand-secondary/10 border border-brand-secondary/20 p-4 rounded-[1.5rem] flex items-center justify-between animate-in slide-in-from-top-2">
            <div className="flex items-center gap-3">
@@ -493,14 +490,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
             </div>
             <div className="sm:text-right">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-brand-primary text-white shadow-xl shadow-brand-primary/30 mb-2 transform hover:scale-105 transition-transform">
-                <Target size={14} className="sm:size-16" />
+                <Target size={14} />
                 <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest leading-none">{stats.readinessLabel}</span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 sm:gap-x-12 md:gap-x-16 gap-y-4 sm:gap-y-6 md:gap-y-8 relative z-10">
-            {[
+            {Array.isArray([
+              { label: t('আজকের পড়া', 'Today'), value: stats.factors.study, color: 'from-brand-primary to-brand-primary/60' },
+              { label: t('সিলেবাস', 'Syllabus'), value: stats.factors.completion, color: 'from-brand-secondary to-brand-secondary/60' },
+              { label: t('ধারাবাহিকতা', 'Streak'), value: stats.factors.consistency, color: 'from-orange-500 to-amber-400' },
+              { label: t('রিভিশন', 'Revision'), value: stats.factors.revision, color: 'from-purple-500 to-pink-400' }
+            ]) ? [
               { label: t('আজকের পড়া', 'Today'), value: stats.factors.study, color: 'from-brand-primary to-brand-primary/60' },
               { label: t('সিলেবাস', 'Syllabus'), value: stats.factors.completion, color: 'from-brand-secondary to-brand-secondary/60' },
               { label: t('ধারাবাহিকতা', 'Streak'), value: stats.factors.consistency, color: 'from-orange-500 to-amber-400' },
@@ -515,11 +517,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                   <div className={`h-full bg-gradient-to-r ${factor.color} rounded-full transition-all duration-1000`} style={{ width: `${factor.value}%` }} />
                 </div>
               </div>
-            ))}
+            )) : null}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4 sm:gap-6 md:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-1 gap-4 sm:gap-6 md:gap-8">
           <div className="bg-brand-primary text-white p-5 sm:p-6 md:p-8 rounded-[1.5rem] sm:rounded-[2rem] md:rounded-[3rem] shadow-2xl shadow-brand-primary/20 relative overflow-hidden group">
             <TrendingUp size={48} className="absolute -right-4 -top-4 opacity-10 group-hover:scale-125 transition-transform duration-700 hidden sm:block" />
             <div className="relative z-10">
@@ -569,7 +571,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
             </div>
           </div>
           <div className="flex-1 space-y-3 sm:space-y-4 overflow-y-auto pr-1 max-h-[400px] scrollbar-hide">
-            {recentSessions.length > 0 ? recentSessions.map((session) => (
+            {Array.isArray(recentSessions) && recentSessions.length > 0 ? recentSessions.map((session) => (
               <div key={session.id} className="group flex flex-col gap-2 p-3 sm:p-4 rounded-[1rem] sm:rounded-[1.5rem] bg-brand-bg/50 border border-brand-text-s/10 hover:border-brand-primary transition-all">
                 <div className="flex justify-between items-start gap-2">
                   <div className="min-w-0">
@@ -582,7 +584,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                        </p>
                        {session.taskId && (
                           <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-primary flex items-center gap-1 leading-none border-l border-brand-text-s/20 pl-2">
-                            {userState.dailyTasks.find(t => t.id === session.taskId)?.name}
+                            {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.find(t => t.id === session.taskId)?.name : null}
                           </p>
                        )}
                     </div>

@@ -35,10 +35,10 @@ const App: React.FC = () => {
         return {
           ...DEFAULT_STATE,
           ...parsed,
-          studyHistory: parsed.studyHistory || [],
-          subjects: parsed.subjects || [],
-          dailyTasks: parsed.dailyTasks || [],
-          badges: parsed.badges || []
+          studyHistory: Array.isArray(parsed.studyHistory) ? parsed.studyHistory : [],
+          subjects: Array.isArray(parsed.subjects) ? parsed.subjects : [],
+          dailyTasks: Array.isArray(parsed.dailyTasks) ? parsed.dailyTasks : [],
+          badges: Array.isArray(parsed.badges) ? parsed.badges : []
         };
       } catch (e) {
         console.error("Failed to parse local storage", e);
@@ -82,14 +82,12 @@ const App: React.FC = () => {
   const fetchUserData = async (userId: string) => {
     setIsSyncing(true);
     try {
-      // First, get study state from user_data
       const { data: userData, error: userDataError } = await supabase
         .from('user_data')
         .select('state')
         .eq('user_id', userId)
         .maybeSingle();
 
-      // Second, get profile info from users table (as requested)
       const { data: profileData } = await supabase
         .from('users')
         .select('*')
@@ -105,12 +103,11 @@ const App: React.FC = () => {
           ...prev,
           ...remoteState,
           isAuthenticated: true,
-          dailyTasks: remoteState.dailyTasks || prev.dailyTasks || [],
-          studyHistory: remoteState.studyHistory || prev.studyHistory || [],
-          subjects: remoteState.subjects || prev.subjects || []
+          dailyTasks: Array.isArray(remoteState.dailyTasks) ? remoteState.dailyTasks : (Array.isArray(prev.dailyTasks) ? prev.dailyTasks : []),
+          studyHistory: Array.isArray(remoteState.studyHistory) ? remoteState.studyHistory : (Array.isArray(prev.studyHistory) ? prev.studyHistory : []),
+          subjects: Array.isArray(remoteState.subjects) ? remoteState.subjects : (Array.isArray(prev.subjects) ? prev.subjects : [])
         };
         
-        // If we have profile in 'users' table, use it to populate the UI profile if it's missing or update name
         if (profileData) {
            if (!newState.profile) {
              newState.profile = {
@@ -131,7 +128,6 @@ const App: React.FC = () => {
         return newState;
       });
 
-      // If remote is empty, check local for migration
       if (!userData?.state) {
         const local = localStorage.getItem('hsc_study_tracker_state');
         if (local) {
@@ -169,7 +165,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     
-    // Remote sync
     const syncRemote = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -178,7 +173,7 @@ const App: React.FC = () => {
     };
 
     if (userState.isAuthenticated) {
-      const timeoutId = setTimeout(syncRemote, 1500); // Debounced save
+      const timeoutId = setTimeout(syncRemote, 1500); 
       return () => clearTimeout(timeoutId);
     }
   }, [userState]);
@@ -252,29 +247,31 @@ const App: React.FC = () => {
     const { selectedSubjectNames, ...profile } = onboardingData;
     const finalSubjects: Subject[] = [];
 
-    selectedSubjectNames.forEach((name, subIdx) => {
-      const needsTwoPapers = name === 'Bangla' || name === 'English' || 
-                            name === 'Physics' || name === 'Chemistry' || 
-                            name === 'Biology' || name === 'Higher Math' ||
-                            name === 'Accounting' || name === 'Economics';
-      
-      const papersToCreate = (name === 'ICT') ? [1] : (needsTwoPapers ? [1, 2] : [1]);
+    if (Array.isArray(selectedSubjectNames)) {
+      selectedSubjectNames.forEach((name, subIdx) => {
+        const needsTwoPapers = name === 'Bangla' || name === 'English' || 
+                              name === 'Physics' || name === 'Chemistry' || 
+                              name === 'Biology' || name === 'Higher Math' ||
+                              name === 'Accounting' || name === 'Economics';
+        
+        const papersToCreate = (name === 'ICT') ? [1] : (needsTwoPapers ? [1, 2] : [1]);
 
-      papersToCreate.forEach(paperNum => {
-        const chapters = (CHAPTER_LISTS[name] || ['সূচনা', 'মূল ধারণা', 'অ্যাডভান্সড প্রবলেম']).map((ch, chIdx) => ({
-          id: `ch-${subIdx}-${paperNum}-${chIdx}`,
-          name: ch,
-          isCompleted: false
-        }));
+        papersToCreate.forEach(paperNum => {
+          const chapters = (CHAPTER_LISTS[name] || ['সূচনা', 'মূল ধারণা', 'অ্যাডভান্সড প্রবলেম']).map((ch, chIdx) => ({
+            id: `ch-${subIdx}-${paperNum}-${chIdx}`,
+            name: ch,
+            isCompleted: false
+          }));
 
-        finalSubjects.push({
-          id: `sub-${subIdx}-${paperNum}-${Date.now()}`,
-          name: name,
-          paper: paperNum as 1 | 2,
-          chapters: chapters
+          finalSubjects.push({
+            id: `sub-${subIdx}-${paperNum}-${Date.now()}`,
+            name: name,
+            paper: paperNum as 1 | 2,
+            chapters: chapters
+          });
         });
       });
-    });
+    }
 
     setUserState(prev => ({
       ...prev,
@@ -293,7 +290,7 @@ const App: React.FC = () => {
   }
 
   if (!userState.isAuthenticated) {
-    return <Auth onAuthSuccess={() => {}} />;
+    return <Auth onAuthSuccess={() => setUserState(prev => ({ ...prev, isAuthenticated: true }))} />;
   }
 
   if (!userState.profile) {

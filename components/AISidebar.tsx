@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
 import { geminiService } from '../services/gemini';
-import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Key } from 'lucide-react';
+import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Key, Lightbulb } from 'lucide-react';
 
 interface AISidebarProps {
   userState: UserState;
@@ -67,6 +67,25 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         setError(msg || "সমস্যা হয়েছে");
       }
       setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত, আমি এই মুহূর্তে কাজ করতে পারছি না। একটু পরে আবার চেষ্টা করো।" }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGetAdvice = async () => {
+    if (isLoading || needsKey) return;
+    
+    setError(null);
+    setMessages(prev => [...prev, { role: 'user', text: "আমাকে পড়ার জন্য কিছু টিপস বা স্ট্র্যাটেজি দাও তো আমার বর্তমান প্রগ্রেস অনুযায়ী।" }]);
+    setIsLoading(true);
+
+    try {
+      const response = await geminiService.getStudyTips(userState.profile, userState.subjects, userState.studyHistory);
+      setMessages(prev => [...prev, { role: 'ai', text: response || "আমি টিপস দিতে পারছি না এই মুহূর্তে।" }]);
+    } catch (err: any) {
+      console.error("Advice Error:", err);
+      setError("টিপস জেনারেট করতে সমস্যা হয়েছে");
+      setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত, আমার পরামর্শ দেওয়ার ক্ষমতা এই মুহূর্তে কিছুটা সীমিত।" }]);
     } finally {
       setIsLoading(false);
     }
@@ -146,7 +165,29 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         )}
       </div>
 
-      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        {/* Quick Actions */}
+        {!needsKey && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <button 
+              onClick={handleGetAdvice}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-100 dark:border-emerald-800 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-emerald-100 transition-all shrink-0 disabled:opacity-50"
+            >
+              <Lightbulb size={12} />
+              ✨ Get Study Advice
+            </button>
+            <button 
+              onClick={() => { setInput("আমার জন্য একটা রুটিন বানিয়ে দাও"); handleSend(); }}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-800 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-blue-100 transition-all shrink-0 disabled:opacity-50"
+            >
+              <Sparkles size={12} />
+              📅 Make a Routine
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2 items-center bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl border border-slate-100 dark:border-slate-700">
           <input
             type="text"

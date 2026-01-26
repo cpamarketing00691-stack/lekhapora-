@@ -27,6 +27,7 @@ const App: React.FC = () => {
       profile: null,
       studyHistory: [],
       subjects: [],
+      dailyTasks: [],
       streaks: 0,
       badges: [],
       currentMood: 'Great',
@@ -122,6 +123,7 @@ const App: React.FC = () => {
       profile: null,
       studyHistory: [],
       subjects: [],
+      dailyTasks: [],
       streaks: 0,
       badges: [],
       currentMood: 'Great',
@@ -165,7 +167,8 @@ const App: React.FC = () => {
     setUserState(prev => ({
       ...prev,
       profile,
-      subjects: finalSubjects
+      subjects: finalSubjects,
+      dailyTasks: []
     }));
   };
 
@@ -174,7 +177,7 @@ const App: React.FC = () => {
   }
 
   if (!userState.profile) {
-    return <Onboarding onComplete={handleProfileComplete} />;
+    return <Onboarding onComplete={handleProfileComplete} language={userState.language} />;
   }
 
   return (

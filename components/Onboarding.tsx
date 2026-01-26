@@ -1,14 +1,15 @@
 
 import React, { useState, useMemo } from 'react';
-import { Group, Religion, Medium, UserProfile } from '../types';
+import { Group, Religion, Medium, UserProfile, CollegeExam, Language } from '../types';
 import { BOARDS, YEARS, SUBJECT_OPTIONS, COMPULSORY_SUBJECTS_LIST } from '../constants';
-import { ChevronRight, ChevronLeft, BookOpen, CheckCircle2, Info, School } from 'lucide-react';
+import { ChevronRight, ChevronLeft, BookOpen, CheckCircle2, Info, School, Plus, Trash2, Calendar } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile & { selectedSubjectNames: string[] }) => void;
+  language: Language;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ onComplete, language }) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<Partial<UserProfile>>({
     fullName: '',
@@ -18,21 +19,40 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     medium: Medium.BANGLA,
     targetYear: YEARS[0],
     religion: Religion.ISLAM,
+    collegeExams: []
   });
 
-  // Flexible Subject Selection State
   const [selectedElectives, setSelectedElectives] = useState<string[]>([]);
   const [selectedFourth, setSelectedFourth] = useState<string>('');
+  const [newExam, setNewExam] = useState({ name: '', date: '' });
+
+  // Fix: Added missing t function for translation helper
+  const t = (bn: string, en: string) => language === 'bn' ? bn : en;
 
   const next = () => {
     if (step === 2) {
-      // Reset subject selection if group changes mid-onboarding
       setSelectedElectives([]);
       setSelectedFourth('');
     }
     setStep(s => s + 1);
   };
   const back = () => setStep(s => s - 1);
+
+  const addExam = () => {
+    if (!newExam.name || !newExam.date) return;
+    setData(prev => ({
+      ...prev,
+      collegeExams: [...(prev.collegeExams || []), { id: `exam-${Date.now()}`, name: newExam.name, date: newExam.date }]
+    }));
+    setNewExam({ name: '', date: '' });
+  };
+
+  const removeExam = (id: string) => {
+    setData(prev => ({
+      ...prev,
+      collegeExams: (prev.collegeExams || []).filter(ex => ex.id !== id)
+    }));
+  };
 
   const finish = () => {
     if (data.fullName && data.group && data.board && data.medium && data.targetYear && data.religion && data.college && selectedElectives.length === 3 && selectedFourth) {
@@ -41,7 +61,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         aiName: `${data.fullName.split(' ')[0]} AI`
       };
       
-      // Construct final subject list: Compulsory (3) + Electives (3) + Optional (1) = 7 Subjects
       const allSelectedSubjectNames = [
         ...COMPULSORY_SUBJECTS_LIST,
         ...selectedElectives,
@@ -61,14 +80,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     if (selectedElectives.includes(subj)) {
       setSelectedElectives(prev => prev.filter(s => s !== subj));
     } else if (selectedElectives.length < 3) {
-      // If choosing as elective, it can't be 4th
       if (subj === selectedFourth) setSelectedFourth('');
       setSelectedElectives(prev => [...prev, subj]);
     }
   };
 
   const selectFourth = (subj: string) => {
-    // If choosing as 4th, it can't be in electives
     if (selectedElectives.includes(subj)) {
       setSelectedElectives(prev => prev.filter(s => s !== subj));
     }
@@ -80,6 +97,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     if (step === 2) return !!data.group && !!data.medium;
     if (step === 3) return !!data.religion && !!data.board;
     if (step === 4) return selectedElectives.length === 3 && !!selectedFourth;
+    if (step === 5) return true; // Exams are optional but recommended
     return false;
   }, [step, data, selectedElectives, selectedFourth]);
 
@@ -88,53 +106,37 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       <div className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-[2rem] sm:rounded-[3rem] p-6 sm:p-10 shadow-xl border border-slate-100 dark:border-slate-800 transition-all">
         <div className="mb-8">
           <div className="flex gap-2 mb-6">
-            {[1, 2, 3, 4].map(i => (
+            {[1, 2, 3, 4, 5].map(i => (
               <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${i <= step ? 'bg-brand-primary' : 'bg-slate-100 dark:bg-slate-800'}`} />
             ))}
           </div>
           <h2 className="text-2xl font-black text-brand-text-p leading-none">
-            {step === 4 ? 'বিষয় নির্বাচন (Flexible)' : `ধাপ ${step}: প্রোফাইল তৈরি`}
+            {step === 5 ? 'কলেজ পরীক্ষা (Optional)' : step === 4 ? 'বিষয় নির্বাচন (Flexible)' : `ধাপ ${step}: প্রোফাইল তৈরি`}
           </h2>
           <p className="text-brand-text-s text-xs mt-2 font-bold uppercase tracking-widest">
-            {step === 4 ? 'কলেজ অনুযায়ী তোমার বিষয়গুলো বেছে নাও' : 'এআই তোমার জন্য সঠিক প্ল্যান তৈরি করতে এই তথ্যগুলো প্রয়োজন'}
+            {step === 5 ? 'তোমার কলেজের আসন্ন পরীক্ষার তারিখগুলো যোগ করো' : step === 4 ? 'কলেজ অনুযায়ী তোমার বিষয়গুলো বেছে নাও' : 'এআই তোমার জন্য সঠিক প্ল্যান তৈরি করতে এই তথ্যগুলো প্রয়োজন'}
           </p>
         </div>
 
-        <div className="min-h-[380px]">
+        <div className="min-h-[400px]">
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
               <div>
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">পূর্ণ নাম</label>
-                <input 
-                  type="text" 
-                  value={data.fullName}
-                  onChange={e => setData({...data, fullName: e.target.value})}
-                  className="w-full px-5 py-4 rounded-2xl bg-brand-bg border-2 border-transparent focus:border-brand-primary text-brand-text-p font-bold outline-none transition-all" 
-                  placeholder="তোমার নাম লেখো"
-                />
+                <input type="text" value={data.fullName} onChange={e => setData({...data, fullName: e.target.value})} className="w-full px-5 py-4 rounded-2xl bg-brand-bg border-2 border-transparent focus:border-brand-primary text-brand-text-p font-bold outline-none transition-all" placeholder="তোমার নাম লেখো" />
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">কলেজের নাম</label>
                 <div className="relative">
                   <School className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
-                  <input 
-                    type="text" 
-                    value={data.college}
-                    onChange={e => setData({...data, college: e.target.value})}
-                    className="w-full pl-12 pr-5 py-4 rounded-2xl bg-brand-bg border-2 border-transparent focus:border-brand-primary text-brand-text-p font-bold outline-none transition-all" 
-                    placeholder="যেমন: নটর ডেম কলেজ"
-                  />
+                  <input type="text" value={data.college} onChange={e => setData({...data, college: e.target.value})} className="w-full pl-12 pr-5 py-4 rounded-2xl bg-brand-bg border-2 border-transparent focus:border-brand-primary text-brand-text-p font-bold outline-none transition-all" placeholder="যেমন: নটর ডেম কলেজ" />
                 </div>
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">টার্গেট এইচএসসি বছর</label>
                 <div className="grid grid-cols-3 gap-3">
                   {YEARS.map(y => (
-                    <button 
-                      key={y}
-                      onClick={() => setData({...data, targetYear: y})}
-                      className={`py-4 rounded-2xl border-2 font-black transition-all ${data.targetYear === y ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}
-                    >
+                    <button key={y} onClick={() => setData({...data, targetYear: y})} className={`py-4 rounded-2xl border-2 font-black transition-all ${data.targetYear === y ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}>
                       {y}
                     </button>
                   ))}
@@ -149,11 +151,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">একাডেমিক গ্রুপ</label>
                 <div className="grid grid-cols-1 gap-3">
                   {Object.values(Group).map(g => (
-                    <button 
-                      key={g}
-                      onClick={() => setData({...data, group: g})}
-                      className={`px-6 py-4 text-left rounded-2xl border-2 font-black transition-all ${data.group === g ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}
-                    >
+                    <button key={g} onClick={() => setData({...data, group: g})} className={`px-6 py-4 text-left rounded-2xl border-2 font-black transition-all ${data.group === g ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}>
                       {g} Group
                     </button>
                   ))}
@@ -163,11 +161,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">মাধ্যম (Medium)</label>
                 <div className="grid grid-cols-2 gap-3">
                   {Object.values(Medium).map(m => (
-                    <button 
-                      key={m}
-                      onClick={() => setData({...data, medium: m})}
-                      className={`py-4 rounded-2xl border-2 font-black transition-all ${data.medium === m ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}
-                    >
+                    <button key={m} onClick={() => setData({...data, medium: m})} className={`py-4 rounded-2xl border-2 font-black transition-all ${data.medium === m ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}>
                       {m}
                     </button>
                   ))}
@@ -182,11 +176,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">ধর্ম (রুটিন সমন্বয়ের জন্য)</label>
                 <div className="grid grid-cols-2 gap-3">
                   {Object.values(Religion).map(r => (
-                    <button 
-                      key={r}
-                      onClick={() => setData({...data, religion: r})}
-                      className={`py-4 rounded-2xl border-2 font-black transition-all ${data.religion === r ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}
-                    >
+                    <button key={r} onClick={() => setData({...data, religion: r})} className={`py-4 rounded-2xl border-2 font-black transition-all ${data.religion === r ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}>
                       {r}
                     </button>
                   ))}
@@ -194,11 +184,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               </div>
               <div>
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-2 ml-1">শিক্ষা বোর্ড</label>
-                <select 
-                  value={data.board}
-                  onChange={e => setData({...data, board: e.target.value})}
-                  className="w-full px-5 py-4 rounded-2xl bg-brand-bg border-2 border-transparent focus:border-brand-primary text-brand-text-p font-bold outline-none appearance-none cursor-pointer"
-                >
+                <select value={data.board} onChange={e => setData({...data, board: e.target.value})} className="w-full px-5 py-4 rounded-2xl bg-brand-bg border-2 border-transparent focus:border-brand-primary text-brand-text-p font-bold outline-none appearance-none cursor-pointer">
                   {BOARDS.map(b => <option key={b} value={b}>{b} Board</option>)}
                 </select>
               </div>
@@ -206,52 +192,31 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           )}
 
           {step === 4 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 h-[420px] overflow-y-auto pr-2 scrollbar-hide">
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 h-[450px] overflow-y-auto pr-2 scrollbar-hide">
               <div className="bg-brand-surface/50 p-4 rounded-2xl border border-brand-text-s/10">
                 <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-2">আবশ্যিক বিষয় (Compulsory)</p>
                 <div className="flex flex-wrap gap-2">
                   {COMPULSORY_SUBJECTS_LIST.map(s => (
-                    <span key={s} className="px-3 py-1.5 bg-brand-primary/10 text-brand-primary rounded-lg text-[10px] font-bold border border-brand-primary/20">
-                      {s}
-                    </span>
+                    <span key={s} className="px-3 py-1.5 bg-brand-primary/10 text-brand-primary rounded-lg text-[10px] font-bold border border-brand-primary/20">{s}</span>
                   ))}
                 </div>
               </div>
-
               <div>
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-3 ml-1">মূল বিষয়সমূহ (Main Subjects - ৩টি বেছে নাও)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {groupSubjectsPool.map(subj => (
-                    <button 
-                      key={subj}
-                      onClick={() => toggleElective(subj)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 font-bold text-xs transition-all ${
-                        selectedElectives.includes(subj) 
-                          ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' 
-                          : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'
-                      }`}
-                    >
+                    <button key={subj} onClick={() => toggleElective(subj)} className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 font-bold text-xs transition-all ${selectedElectives.includes(subj) ? 'border-brand-primary bg-brand-primary/5 text-brand-primary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface'}`}>
                       {subj}
                       {selectedElectives.includes(subj) && <CheckCircle2 size={16} />}
                     </button>
                   ))}
                 </div>
               </div>
-
               <div>
                 <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-[0.2em] mb-3 ml-1">৪র্থ বিষয় (Optional - ১টি বেছে নাও)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {groupSubjectsPool.map(subj => (
-                    <button 
-                      key={`opt-${subj}`}
-                      disabled={selectedElectives.includes(subj)}
-                      onClick={() => selectFourth(subj)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 font-bold text-xs transition-all ${
-                        selectedFourth === subj 
-                          ? 'border-brand-secondary bg-brand-secondary/5 text-brand-secondary shadow-sm' 
-                          : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface disabled:opacity-30'
-                      }`}
-                    >
+                    <button key={`opt-${subj}`} disabled={selectedElectives.includes(subj)} onClick={() => selectFourth(subj)} className={`flex items-center justify-between px-4 py-3 rounded-xl border-2 font-bold text-xs transition-all ${selectedFourth === subj ? 'border-brand-secondary bg-brand-secondary/5 text-brand-secondary shadow-sm' : 'border-transparent bg-brand-bg text-brand-text-s hover:bg-brand-surface disabled:opacity-30'}`}>
                       {subj}
                       {selectedFourth === subj && <CheckCircle2 size={16} />}
                     </button>
@@ -260,23 +225,46 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
               </div>
             </div>
           )}
+
+          {step === 5 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+              <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border-2 border-brand-primary/20 space-y-4">
+                <h3 className="text-sm font-black text-brand-primary uppercase tracking-widest">{t('নতুন পরীক্ষা যোগ করো', 'Add College Exam')}</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <input type="text" value={newExam.name} onChange={e => setNewExam({...newExam, name: e.target.value})} placeholder={t("পরীক্ষার নাম (যেমন: ১ম টিউটোরিয়াল)", "Exam Name (e.g. 1st Tutorial)")} className="w-full px-4 py-3 rounded-xl bg-brand-bg border-0 font-bold outline-none text-xs" />
+                  <input type="date" value={newExam.date} onChange={e => setNewExam({...newExam, date: e.target.value})} className="w-full px-4 py-3 rounded-xl bg-brand-bg border-0 font-bold outline-none text-xs cursor-pointer" />
+                  <button onClick={addExam} className="w-full py-3 bg-brand-primary text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
+                    <Plus size={16} /> {t('অ্যাড করো', 'Add Exam')}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3 max-h-[250px] overflow-y-auto scrollbar-hide">
+                {(data.collegeExams || []).map(ex => (
+                  <div key={ex.id} className="flex items-center justify-between p-4 bg-brand-bg rounded-2xl border border-brand-text-s/10 group">
+                    <div className="flex items-center gap-3">
+                      <Calendar size={18} className="text-brand-primary" />
+                      <div>
+                        <p className="text-xs font-black text-brand-text-p">{ex.name}</p>
+                        <p className="text-[10px] font-bold text-brand-text-s uppercase">{ex.date}</p>
+                      </div>
+                    </div>
+                    <button onClick={() => removeExam(ex.id)} className="p-2 text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-8 flex gap-4">
           {step > 1 && (
-            <button 
-              onClick={back} 
-              className="flex-1 px-4 py-4 bg-brand-surface text-brand-text-p font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-brand-bg transition-all text-xs uppercase tracking-widest"
-            >
+            <button onClick={back} className="flex-1 px-4 py-4 bg-brand-surface text-brand-text-p font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-brand-bg transition-all text-xs uppercase tracking-widest">
               <ChevronLeft size={18} /> পিছনে
             </button>
           )}
-          <button 
-            onClick={step === 4 ? finish : next} 
-            disabled={!isStepValid}
-            className={`flex-[2] px-4 py-4 font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all text-xs uppercase tracking-widest disabled:opacity-30 disabled:grayscale ${step === 4 ? 'bg-brand-secondary text-white shadow-brand-secondary/20' : 'bg-brand-primary text-white shadow-brand-primary/20'}`}
-          >
-            {step === 4 ? 'পড়া শুরু করি' : 'পরবর্তী ধাপ'} <ChevronRight size={18} />
+          <button onClick={step === 5 ? finish : next} disabled={!isStepValid} className={`flex-[2] px-4 py-4 font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all text-xs uppercase tracking-widest disabled:opacity-30 disabled:grayscale ${step >= 4 ? 'bg-brand-secondary text-white shadow-brand-secondary/20' : 'bg-brand-primary text-white shadow-brand-primary/20'}`}>
+            {step === 5 ? 'পড়া শুরু করি' : 'পরবর্তী ধাপ'} <ChevronRight size={18} />
           </button>
         </div>
       </div>

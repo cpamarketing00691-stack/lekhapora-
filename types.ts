@@ -18,13 +18,37 @@ export enum Religion {
   OTHER = 'Other'
 }
 
+export enum TaskSource {
+  COLLEGE = 'College',
+  COACHING = 'Coaching',
+  BATCH = 'Batch',
+  TUTOR = 'Home Tutor',
+  SELF = 'Self Study'
+}
+
 export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
 export type Language = 'bn' | 'en';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 
+export interface CollegeExam {
+  id: string;
+  name: string;
+  date: string; // ISO YYYY-MM-DD
+}
+
+export interface Task {
+  id: string;
+  name: string;
+  source: TaskSource;
+  isCompleted: boolean;
+  subjectId?: string; // Linked subject (if matched)
+  chapterId?: string; // Linked chapter (if matched)
+  createdAt: number;
+}
+
 export interface UserProfile {
   fullName: string;
-  college: string; // Added college info
+  college: string;
   group: Group;
   board: string;
   medium: Medium;
@@ -32,6 +56,7 @@ export interface UserProfile {
   religion: Religion;
   aiName: string;
   targetExamDate?: string; // Main HSC Start Date
+  collegeExams?: CollegeExam[]; // Multiple college-specific exams
 }
 
 export interface Chapter {
@@ -53,6 +78,8 @@ export interface Subject {
 export interface StudySession {
   id: string;
   subjectId: string;
+  examId?: string; 
+  taskId?: string; // Link session to a specific focus task
   startTime: number;
   endTime?: number;
   durationSeconds: number;
@@ -65,6 +92,8 @@ export interface StudySession {
 
 export interface ActiveTimerState {
   subjectId: string;
+  examId?: string;
+  taskId?: string;
   isFocusActive: boolean;
   isRevision: boolean;
   accumulatedFocusSeconds: number;
@@ -79,6 +108,7 @@ export interface UserState {
   profile: UserProfile | null;
   studyHistory: StudySession[];
   subjects: Subject[];
+  dailyTasks: Task[]; // Today's Focus tasks
   streaks: number;
   badges: string[];
   currentMood: Mood;

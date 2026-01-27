@@ -7,30 +7,22 @@ import { createClient } from '@supabase/supabase-js';
  * Method: POST
  */
 export default async function handler(req: any, res: any) {
-  // Ensure only POST requests are allowed
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
   }
 
-  const { message, history, systemInstruction, userId } = req.body;
+  const { message, history, systemInstruction } = req.body;
 
-  // Basic validation for the required message string
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'A valid message string is required.' });
   }
 
   try {
-    /**
-     * Initialize the Google GenAI client.
-     * NOTE: Per hard-coded system instructions for @google/genai, 
-     * process.env.API_KEY is used exclusively for secure model initialization.
-     */
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 
     let reply = '';
 
-    // Generate content using either a chat session (if history exists) or a single prompt
     if (history && Array.isArray(history) && history.length > 0) {
       const chat = ai.chats.create({
         model: 'gemini-3-flash-preview',
@@ -62,10 +54,7 @@ export default async function handler(req: any, res: any) {
       throw new Error('AI model returned an empty response.');
     }
 
-    /**
-     * Securely save the interaction to Supabase using the Service Role Key.
-     * This remains purely server-side and never exposes DB keys to the frontend.
-     */
+    // Server-side logging to Supabase
     if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const supabaseAdmin = createClient(
         process.env.SUPABASE_URL,
@@ -73,18 +62,16 @@ export default async function handler(req: any, res: any) {
       );
 
       await supabaseAdmin
-        .from('chat_history')
+        .from('chat_logs')
         .insert([
           { 
-            user_id: userId || null, 
-            message: message, 
-            reply: reply,
-            created_at: new Date().toISOString()
+            user_id: null, 
+            user_message: message, 
+            ai_reply: reply
           }
         ]);
     }
 
-    // Return the response as JSON { reply: string } as requested
     return res.status(200).json({ reply });
   } catch (error: any) {
     console.error('Backend Gemini API Error:', error.message);

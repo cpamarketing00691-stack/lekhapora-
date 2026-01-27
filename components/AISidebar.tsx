@@ -17,43 +17,62 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to bottom on new messages or when loading begins
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
 
+  /**
+   * Handles sending messages to the AI backend.
+   * Connects to /api/chat via GeminiService.
+   */
   const handleSend = async (customText?: string) => {
     const textToSend = customText || input;
     if (!textToSend.trim() || isLoading) return;
     
+    // UI Feedback: Clear input immediately if manual entry
     if (!customText) setInput('');
     setError(null);
     
+    // Add user message to UI immediately
     const userMessage = { role: 'user' as const, text: textToSend };
     setMessages(prev => [...prev, userMessage]);
+    
+    // Enter loading state
     setIsLoading(true);
 
     try {
-      // The GeminiService handles the fetch to /api/chat securely
+      /**
+       * Connect to /api/chat endpoint.
+       * Logic encapsulated in GeminiService for cleaner architecture.
+       */
       const response = await geminiService.chat(userState.profile, textToSend, messages);
-      setMessages(prev => [...prev, { role: 'ai', text: response || "বুঝতে পারলাম না, আবার বলবে?" }]);
+      
+      // Update UI with the AI reply from the backend
+      setMessages(prev => [...prev, { 
+        role: 'ai', 
+        text: response || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।" 
+      }]);
     } catch (err: any) {
-      console.error("Chat UI Error:", err);
-      setError(err.message || "সার্ভারে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করো।");
-      setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত, আমি এই মুহূর্তে কাজ করতে পারছি না। একটু পরে আবার চেষ্টা করো।" }]);
+      console.error("Chat API Connection Error:", err);
+      setError("সার্ভারের সাথে যোগাযোগ করতে সমস্যা হয়েছে।");
+      
+      // Fallback AI message for error states
+      setMessages(prev => [...prev, { 
+        role: 'ai', 
+        text: "দুঃখিত, আমার সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করো।" 
+      }]);
     } finally {
+      // Exit loading state
       setIsLoading(false);
     }
   };
 
-  const handleGetAdvice = async () => {
-    if (isLoading) return;
-    handleSend("আমাকে পড়ার জন্য কিছু টিপস বা স্ট্র্যাটেজি দাও তো আমার বর্তমান প্রগ্রেস অনুযায়ী।");
-  };
-
   return (
     <div className="flex flex-col h-full bg-white dark:bg-brand-surface rounded-[2rem] overflow-hidden border border-brand-text-s/10 shadow-sm">
+      {/* Buddy Header */}
       <div className="p-5 bg-brand-primary text-white flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
@@ -66,6 +85,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         </div>
       </div>
 
+      {/* Message List */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-brand-bg/30 dark:bg-brand-bg/10">
         {messages.map((m, idx) => (
           <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2 animate-in fade-in slide-in-from-bottom-2`}>
@@ -88,6 +108,8 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
             )}
           </div>
         ))}
+        
+        {/* API Loading Animation */}
         {isLoading && (
           <div className="flex justify-start items-center gap-2 animate-pulse">
             <div className="w-6 h-6 rounded-full bg-brand-primary/10 flex items-center justify-center">
@@ -98,6 +120,8 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
             </div>
           </div>
         )}
+        
+        {/* Error Messaging */}
         {error && (
           <div className="flex justify-center">
             <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-100 dark:border-red-800">
@@ -108,11 +132,12 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         )}
       </div>
 
+      {/* Footer / Input Area */}
       <div className="p-4 bg-white dark:bg-brand-surface border-t border-brand-text-s/10 space-y-3">
-        {/* Quick Actions */}
+        {/* Interaction Suggestions */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button 
-            onClick={handleGetAdvice}
+            onClick={() => handleSend("আমাকে পড়ার জন্য কিছু টিপস বা স্ট্র্যাটেজি দাও তো আমার বর্তমান প্রগ্রেস অনুযায়ী।")}
             disabled={isLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-secondary/10 text-brand-secondary rounded-full border border-brand-secondary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-secondary/20 transition-all shrink-0 disabled:opacity-50"
           >
@@ -129,6 +154,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </button>
         </div>
 
+        {/* Text Entry Component */}
         <div className="flex gap-2 items-center bg-brand-bg dark:bg-brand-bg/50 p-2 rounded-2xl border border-brand-text-s/10 focus-within:border-brand-primary transition-all">
           <input
             type="text"

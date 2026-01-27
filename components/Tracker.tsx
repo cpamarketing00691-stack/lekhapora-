@@ -10,43 +10,17 @@ interface TrackerProps {
 
 const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [activeSubjectId, setActiveSubjectId] = useState<string>(userState.activeTimer?.subjectId || '');
-  const [activeExamId, setActiveExamId] = useState<string>(userState.activeTimer?.examId || '');
-  const [activeTaskId, setActiveTaskId] = useState<string>(userState.activeTimer?.taskId || '');
   const [isRevision, setIsRevision] = useState(userState.activeTimer?.isRevision || false);
   const [showManual, setShowManual] = useState(false);
-  
-  const [focusLevel, setFocusLevel] = useState(7);
   const [currentMood, setCurrentMood] = useState<Mood>('Focused');
 
-  const [manualData, setManualData] = useState({
-    subjectId: '',
-    examId: '',
-    taskId: '',
-    date: new Date().toISOString().split('T')[0],
-    durationMinutes: '',
-    isRevision: false,
-    mood: 'Focused' as Mood
-  });
-
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
-
-  useEffect(() => {
-    if (activeTaskId) {
-      const dailyTasks = Array.isArray(userState.dailyTasks) ? userState.dailyTasks : [];
-      const matchedTask = dailyTasks.find(task => task.id === activeTaskId);
-      if (matchedTask && matchedTask.subjectId) {
-        setActiveSubjectId(matchedTask.subjectId);
-      }
-    }
-  }, [activeTaskId, userState.dailyTasks]);
 
   const formatDuration = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    return [h, m, s]
-      .map(v => v.toString().padStart(2, '0'))
-      .join(':');
+    return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
   };
 
   const timer = userState.activeTimer;
@@ -60,8 +34,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           ...prev,
           activeTimer: {
             subjectId: activeSubjectId,
-            examId: activeExamId,
-            taskId: activeTaskId,
             isFocusActive: true,
             isRevision,
             accumulatedFocusSeconds: 0,
@@ -74,11 +46,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       }
       return {
         ...prev,
-        activeTimer: {
-          ...prev.activeTimer,
-          isFocusActive: true,
-          lastTimestamp: now
-        }
+        activeTimer: { ...prev.activeTimer, isFocusActive: true, lastTimestamp: now }
       };
     });
   };
@@ -88,232 +56,100 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       if (!prev.activeTimer) return prev;
       return {
         ...prev,
-        activeTimer: {
-          ...prev.activeTimer,
-          isFocusActive: false,
-          numBreaks: prev.activeTimer.numBreaks + 1,
-          lastTimestamp: Date.now()
-        }
+        activeTimer: { ...prev.activeTimer, isFocusActive: false, numBreaks: prev.activeTimer.numBreaks + 1, lastTimestamp: Date.now() }
       };
     });
   };
 
   const handleStopEnd = () => {
     if (!timer) return;
-    const significantThreshold = 10; 
-    if (timer.accumulatedFocusSeconds < significantThreshold) {
-      if (timer.accumulatedFocusSeconds > 0) {
-        alert(t('সেশনটি খুব ছোট হওয়ার কারণে সেভ করা হয়নি।', 'Session too short to be saved.'));
-      }
-      onUpdateState(prev => ({ ...prev, activeTimer: null }));
-      return;
-    }
-    const newSession: StudySession = {
+    const session: StudySession = {
       id: `timer-${Date.now()}`,
       subjectId: timer.subjectId,
-      examId: timer.examId,
-      taskId: timer.taskId,
       startTime: timer.sessionStartTime,
       endTime: Date.now(),
       durationSeconds: timer.accumulatedFocusSeconds,
       breakSeconds: timer.accumulatedBreakSeconds,
       numBreaks: timer.numBreaks,
-      focusLevel,
+      focusLevel: 8,
       mood: currentMood,
       isRevision: timer.isRevision
     };
     onUpdateState(prev => ({
       ...prev,
-      studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
-      streaks: (prev.streaks || 0) + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
-      currentMood,
+      studyHistory: [...(prev.studyHistory || []), session],
       activeTimer: null
     }));
   };
 
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const durationMin = parseInt(manualData.durationMinutes);
-    if (!manualData.subjectId || isNaN(durationMin) || durationMin <= 0) {
-      alert(t('অনুগ্রহ করে সঠিক বিষয় এবং সময়কাল লিখুন।', 'Please select a subject and valid duration.'));
-      return;
-    }
-    const sessionDate = new Date(manualData.date);
-    const startTime = sessionDate.getTime();
-    const durationSec = durationMin * 60;
-    const newSession: StudySession = {
-      id: `manual-${Date.now()}`,
-      subjectId: manualData.subjectId,
-      examId: manualData.examId,
-      taskId: manualData.taskId,
-      startTime: startTime,
-      endTime: startTime + (durationSec * 1000),
-      durationSeconds: durationSec,
-      breakSeconds: 0,
-      numBreaks: 0,
-      focusLevel: 8,
-      mood: manualData.mood,
-      isRevision: manualData.isRevision
-    };
-    onUpdateState(prev => ({
-      ...prev,
-      studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
-      streaks: (prev.streaks || 0) + (durationSec >= 1800 ? 1 : 0),
-      currentMood: manualData.mood
-    }));
-    setManualData({ ...manualData, subjectId: '', examId: '', taskId: '', durationMinutes: '', mood: 'Focused' });
-    setShowManual(false);
-  };
-
-  const isTimerGlobalActive = !!timer;
-  const isFocusingNow = timer?.isFocusActive || false;
-  const subjects = Array.isArray(userState.subjects) ? userState.subjects : [];
-  const dailyTasks = Array.isArray(userState.dailyTasks) ? userState.dailyTasks : [];
-  const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
-
   return (
-    <div className="max-w-2xl mx-auto space-y-6 md:space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-24 md:pb-0 px-2 sm:px-0">
-      <header className="text-center space-y-2">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-brand-text-p leading-none">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
-        <p className="text-brand-text-s font-medium text-[10px] sm:text-xs md:text-sm">{t('তোমার প্রতিটি মিনিট HSC সাফল্যের পথে গুরুত্বপূর্ণ।', 'Every minute counts toward your HSC success.')}</p>
+    <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 overflow-x-hidden px-1">
+      <header className="text-center">
+        <h2 className="text-3xl font-black tracking-tight text-brand-text-p">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
+        <p className="text-brand-text-s text-xs mt-1 font-medium">{t('তোমার সাফল্যের সময় গণনা শুরু করো।', 'Start tracking your success time.')}</p>
       </header>
 
-      <div className="flex justify-center">
-        <div className="bg-brand-surface p-1.5 rounded-full border border-brand-text-s/10 shadow-sm flex gap-1 transition-colors">
-          <button 
-            onClick={() => !isTimerGlobalActive && setShowManual(false)}
-            disabled={isTimerGlobalActive}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${!showManual ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s hover:bg-brand-bg/50'}`}
+      <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10">
+        <div className="mb-8 space-y-6">
+          <div className="flex bg-brand-bg p-1 rounded-2xl max-w-xs mx-auto">
+            <button onClick={() => !timer && setIsRevision(false)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
+            <button onClick={() => !timer && setIsRevision(true)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}>{t('রিভিশন', 'Revision')}</button>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest text-center">{t('বিষয় নির্বাচন করো', 'Choose Subject')}</label>
+            <select 
+              disabled={!!timer} 
+              value={activeSubjectId} 
+              onChange={(e) => setActiveSubjectId(e.target.value)} 
+              className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-sm font-bold text-center appearance-none outline-none transition-all"
+            >
+              <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
+              {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="text-center py-6">
+          <div 
+            className="font-black tracking-tighter tabular-nums leading-none select-none text-brand-text-p"
+            style={{ fontSize: 'clamp(3rem, 20vw, 8rem)' }}
           >
-            <Clock size={14} className="hidden sm:block" />
-            {t('টাইমার', 'Timer')}
-          </button>
+            {formatDuration(timer?.accumulatedFocusSeconds || 0)}
+          </div>
+          {timer && !timer.isFocusActive && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-brand-secondary font-black text-xs uppercase tracking-widest animate-pulse">
+              <Coffee size={14} /> {t('ব্রেকে আছো', 'ON BREAK')}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-center gap-6 mt-8">
+          {!timer?.isFocusActive ? (
+            <button 
+              onClick={handleStartResume} 
+              disabled={!activeSubjectId} 
+              className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-primary text-white flex items-center justify-center rounded-full shadow-2xl transition-all active:scale-95 disabled:opacity-30"
+            >
+              <Play size={32} className="ml-1 fill-current" />
+            </button>
+          ) : (
+            <button 
+              onClick={handlePause} 
+              className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg shadow-xl transition-all active:scale-95"
+            >
+              <Pause size={32} className="fill-current" />
+            </button>
+          )}
           <button 
-            onClick={() => !isTimerGlobalActive && setShowManual(true)}
-            disabled={isTimerGlobalActive}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all disabled:opacity-50 ${showManual ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s hover:bg-brand-bg/50'}`}
+            onClick={handleStopEnd} 
+            disabled={!timer} 
+            className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-bg text-red-500 flex items-center justify-center rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-30"
           >
-            <History size={14} className="hidden sm:block" />
-            {t('ম্যানুয়াল', 'Manual')}
+            <Square size={20} className="fill-current" />
           </button>
         </div>
       </div>
-
-      {!showManual ? (
-        <div className="bg-brand-surface rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 transition-all overflow-hidden">
-          <div className="mb-6 sm:mb-10 flex flex-col items-center gap-4 sm:gap-6">
-            <div className="w-full">
-              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-3 text-center leading-none">{t('মোড নির্বাচন', 'Select Mode')}</label>
-              <div className="flex bg-brand-bg p-1 rounded-2xl shadow-inner max-w-sm mx-auto">
-                <button onClick={() => !isTimerGlobalActive && setIsRevision(false)} className={`flex-1 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
-                <button onClick={() => !isTimerGlobalActive && setIsRevision(true)} className={`flex-1 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1 transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}><RefreshCcw size={10} />{t('রিভিশন', 'Revision')}</button>
-              </div>
-            </div>
-
-            <div className="w-full max-w-lg space-y-4">
-              <div className="space-y-1.5">
-                 <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] text-center leading-none">{t('ফোকাস টাস্ক (হোমওয়ার্ক)', 'Focus Task (Homework)')}</label>
-                 <select 
-                  disabled={isTimerGlobalActive} 
-                  value={activeTaskId} 
-                  onChange={(e) => setActiveTaskId(e.target.value)} 
-                  className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate"
-                 >
-                   <option value="">{t('টাস্ক ছাড়া পড়াশোনা', 'Study without specific task')}</option>
-                   {dailyTasks.filter(t => !t.isCompleted).map(task => (
-                     <option key={task.id} value={task.id}>{task.name} ({task.source})</option>
-                   ))}
-                 </select>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full">
-                <div>
-                  <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('বিষয়', 'Subject')}</label>
-                  <select disabled={isTimerGlobalActive} value={activeSubjectId} onChange={(e) => setActiveSubjectId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate">
-                    <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-                    {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('লক্ষ্য পরীক্ষা (ঐচ্ছিক)', 'Target Exam (Opt)')}</label>
-                  <select disabled={isTimerGlobalActive} value={activeExamId} onChange={(e) => setActiveExamId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate">
-                    <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                    {collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-center py-6 sm:py-10">
-            <div className={`text-4xl sm:text-6xl md:text-8xl lg:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none transition-all ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
-              {formatDuration(timer?.accumulatedFocusSeconds || 0)}
-            </div>
-            {isTimerGlobalActive && !isFocusingNow && (
-              <div className="mt-4 animate-pulse flex items-center justify-center gap-2 text-brand-secondary font-black text-xs uppercase tracking-widest">
-                <Coffee size={14} />
-                {t('ব্রেকে আছো: ', 'ON BREAK: ')} {formatDuration(timer?.accumulatedBreakSeconds || 0)}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-center gap-6 sm:gap-10 mt-4 sm:mt-6">
-            {!isFocusingNow ? (
-              <button onClick={handleStartResume} disabled={!activeSubjectId} className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${timer?.isRevision || isRevision ? 'bg-brand-secondary shadow-brand-secondary/40' : 'bg-brand-primary shadow-brand-primary/40'}`}>
-                <Play size={32} className="ml-1 sm:ml-2 fill-current" />
-              </button>
-            ) : (
-              <button onClick={handlePause} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg hover:scale-105 active:scale-95 shadow-xl transition-all">
-                <Pause size={32} className="fill-current" />
-              </button>
-            )}
-            <button onClick={handleStopEnd} disabled={!isTimerGlobalActive} className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-brand-bg text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-text-s/10 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30">
-              <Square size={20} className="fill-current text-red-500" />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-brand-surface rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95 duration-300">
-           <form onSubmit={handleManualSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <div className="space-y-1.5">
-                    <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
-                    <select required value={manualData.subjectId} onChange={(e) => setManualData({...manualData, subjectId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
-                      <option value="">{t('নির্বাচন করো', 'Select Subject')}</option>
-                      {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
-                    </select>
-                 </div>
-                 <div className="space-y-1.5">
-                    <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Exam (Optional)')}</label>
-                    <select value={manualData.examId} onChange={(e) => setManualData({...manualData, examId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
-                      <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                      {collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
-                    </select>
-                 </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                   <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('তারিখ', 'Date')}</label>
-                   <input type="date" required value={manualData.date} onChange={(e) => setManualData({...manualData, date: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl text-[11px] font-black transition-all text-brand-text-p outline-none" />
-                </div>
-                <div className="space-y-1.5">
-                   <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('সময়কাল (মিনিট)', 'Minutes')}</label>
-                   <input type="number" required min="1" value={manualData.durationMinutes} onChange={(e) => setManualData({...manualData, durationMinutes: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl text-[11px] font-black transition-all text-brand-text-p outline-none" />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                 <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Task (Optional)')}</label>
-                 <select value={manualData.taskId} onChange={(e) => setManualData({...manualData, taskId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
-                    <option value="">{t('নির্বাচন করো', 'Select Task')}</option>
-                    {dailyTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
-                 </select>
-              </div>
-              <button type="submit" className="w-full bg-brand-primary hover:scale-[1.01] active:scale-95 text-white font-black py-4 rounded-2xl shadow-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2">
-                <CheckCircle2 size={16} /> {t('সেভ করো', 'Save Log Entry')}
-              </button>
-           </form>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
-import { geminiService } from '../services/gemini';
 import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Lightbulb } from 'lucide-react';
 
 interface AISidebarProps {
@@ -17,7 +16,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages or when loading begins
+  // Auto-scroll to bottom on new messages or when loading status changes
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -25,47 +24,60 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   }, [messages, isLoading]);
 
   /**
-   * Handles sending messages to the AI backend.
-   * Connects to /api/chat via GeminiService.
+   * Directly handles sending the message to the backend /api/chat endpoint.
    */
   const handleSend = async (customText?: string) => {
     const textToSend = customText || input;
     if (!textToSend.trim() || isLoading) return;
     
-    // UI Feedback: Clear input immediately if manual entry
+    // UI Setup
     if (!customText) setInput('');
     setError(null);
     
-    // Add user message to UI immediately
+    // Add user message to local state
     const userMessage = { role: 'user' as const, text: textToSend };
     setMessages(prev => [...prev, userMessage]);
     
-    // Enter loading state
+    // Show loading state
     setIsLoading(true);
 
     try {
-      /**
-       * Connect to /api/chat endpoint.
-       * Logic encapsulated in GeminiService for cleaner architecture.
-       */
-      const response = await geminiService.chat(userState.profile, textToSend, messages);
+      // Create system instruction for context
+      const systemInstruction = `You are a supportive, human-like study buddy for a Bangladesh HSC student named ${userState.profile?.fullName}. 
+      Your name is ${userState.profile?.aiName}. Use a friendly "big brother/sister" tone in conversational Bangla/Banglish.`;
+
+      // Fetch from backend
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: textToSend,
+          history: messages,
+          systemInstruction: systemInstruction,
+          userId: null // Set to null as requested for base logic
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to connect to AI server');
+      }
+
+      const data = await response.json();
       
-      // Update UI with the AI reply from the backend
+      // Add AI reply to UI
       setMessages(prev => [...prev, { 
         role: 'ai', 
-        text: response || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।" 
+        text: data.reply || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।" 
       }]);
     } catch (err: any) {
-      console.error("Chat API Connection Error:", err);
+      console.error("Chat API Error:", err);
       setError("সার্ভারের সাথে যোগাযোগ করতে সমস্যা হয়েছে।");
-      
-      // Fallback AI message for error states
       setMessages(prev => [...prev, { 
         role: 'ai', 
         text: "দুঃখিত, আমার সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করো।" 
       }]);
     } finally {
-      // Exit loading state
+      // Hide loading state
       setIsLoading(false);
     }
   };
@@ -109,7 +121,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </div>
         ))}
         
-        {/* API Loading Animation */}
+        {/* Loading Indicator */}
         {isLoading && (
           <div className="flex justify-start items-center gap-2 animate-pulse">
             <div className="w-6 h-6 rounded-full bg-brand-primary/10 flex items-center justify-center">
@@ -121,7 +133,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </div>
         )}
         
-        {/* Error Messaging */}
+        {/* Error State */}
         {error && (
           <div className="flex justify-center">
             <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-100 dark:border-red-800">
@@ -134,10 +146,10 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
 
       {/* Footer / Input Area */}
       <div className="p-4 bg-white dark:bg-brand-surface border-t border-brand-text-s/10 space-y-3">
-        {/* Interaction Suggestions */}
+        {/* Quick Action Suggestions */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button 
-            onClick={() => handleSend("আমাকে পড়ার জন্য কিছু টিপস বা স্ট্র্যাটেজি দাও তো আমার বর্তমান প্রগ্রেস অনুযায়ী।")}
+            onClick={() => handleSend("আমাকে পড়ার জন্য কিছু টিপস দাও")}
             disabled={isLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-secondary/10 text-brand-secondary rounded-full border border-brand-secondary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-secondary/20 transition-all shrink-0 disabled:opacity-50"
           >
@@ -154,7 +166,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </button>
         </div>
 
-        {/* Text Entry Component */}
+        {/* Input Control */}
         <div className="flex gap-2 items-center bg-brand-bg dark:bg-brand-bg/50 p-2 rounded-2xl border border-brand-text-s/10 focus-within:border-brand-primary transition-all">
           <input
             type="text"

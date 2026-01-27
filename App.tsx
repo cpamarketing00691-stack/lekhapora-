@@ -1,16 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession } from './types.ts';
-import { CHAPTER_LISTS } from './constants.ts';
-import Onboarding from './components/Onboarding.tsx';
-import Dashboard from './components/Dashboard.tsx';
-import Tracker from './components/Tracker.tsx';
-import AISidebar from './components/AISidebar.tsx';
-import Auth from './components/Auth.tsx';
-import Settings from './components/Settings.tsx';
-import SyllabusManager from './components/SyllabusManager.tsx';
-import { Layout } from './components/Layout.tsx';
-import { supabase } from './lib/supabase.ts';
+import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession } from './types';
+import { CHAPTER_LISTS } from './constants';
+import Onboarding from './components/Onboarding';
+import Dashboard from './components/Dashboard';
+import Tracker from './components/Tracker';
+import AISidebar from './components/AISidebar';
+import Auth from './components/Auth';
+import Settings from './components/Settings';
+import SyllabusManager from './components/SyllabusManager';
+import { Layout } from './components/Layout';
+import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
 const DEFAULT_STATE: UserState = {
@@ -46,25 +46,25 @@ const App: React.FC = () => {
   const timerIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // SECURITY: Ensure loading screen clears in maximum 3 seconds no matter what
+    // SECURITY: Ensure loading screen clears in maximum 4 seconds no matter what
     const safetyTimeout = setTimeout(() => {
       if (isInitialLoading) {
         console.warn("Safety timeout triggered: Forcing app to render.");
         setIsInitialLoading(false);
       }
-    }, 3000);
+    }, 4000);
 
     const initApp = async () => {
       try {
-        // Step 1: Check Auth with a race condition (timeout)
         const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth Timeout')), 2000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth Timeout')), 2500));
         
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
 
-        if (session) {
+        // Defensive check for nested data to prevent crash
+        if (result && result.data && result.data.session) {
+          const session = result.data.session;
           setUserState(prev => ({ ...prev, isAuthenticated: true }));
-          // Fetch data in background, don't block the UI
           backgroundSync(session.user.id);
         } else {
           setUserState(prev => ({ ...prev, isAuthenticated: false }));
@@ -93,20 +93,20 @@ const App: React.FC = () => {
   }, []);
 
   const backgroundSync = async (userId: string) => {
+    if (!userId) return;
     setIsSyncing(true);
     try {
-      // Individually catch table errors to prevent one missing table from crashing the whole sync
       let remoteUserData = null;
       try {
         const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
         remoteUserData = data;
-      } catch (e) { console.warn("Sync: user_data table unreachable"); }
+      } catch (e) { console.warn("Sync: user_data unreachable"); }
 
       let remoteProfile = null;
       try {
         const { data } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
         remoteProfile = data;
-      } catch (e) { console.warn("Sync: users table unreachable"); }
+      } catch (e) { console.warn("Sync: users unreachable"); }
 
       setUserState(prev => {
         const newState = { ...prev, ...(remoteUserData?.state || {}) };
@@ -125,12 +125,16 @@ const App: React.FC = () => {
   };
 
   const saveUserData = async (state: any) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       const { isAuthenticated, ...stateToSave } = state; 
-      await supabase.from('user_data').upsert({ user_id: user.id, state: stateToSave, updated_at: new Date().toISOString() });
-    } catch (e) { console.warn("Sync Save: unreachable"); }
+      await supabase.from('user_data').upsert({ 
+        user_id: user.id, 
+        state: stateToSave, 
+        updated_at: new Date().toISOString() 
+      }, { onConflict: 'user_id' });
+    } catch (e) { console.warn("Cloud save failed (silently)"); }
   };
 
   useEffect(() => {
@@ -141,7 +145,6 @@ const App: React.FC = () => {
     }
   }, [userState]);
 
-  // Global Timer Logic
   useEffect(() => {
     if (userState.activeTimer && userState.activeTimer.isFocusActive) {
       if (!timerIntervalRef.current) {

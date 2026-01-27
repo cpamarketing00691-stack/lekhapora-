@@ -9,7 +9,6 @@ interface AuthProps {
 }
 
 // Define specific messages for persistent 429 errors
-const RETRY_EXHAUSTED_429_MESSAGE_SIGNUP = "Sign-up attempts failed due to persistent rate limiting. Please wait a longer period (e.g., 5-10 minutes) before trying again.";
 const RETRY_EXHAUSTED_429_MESSAGE_SIGNIN = "Sign-in attempts failed due to persistent rate limiting. Please wait a longer period (e.g., 5-10 minutes) before trying again.";
 
 // Helper for retry logic with specific 429 alert on first occurrence and improved final message
@@ -17,16 +16,12 @@ const retryWithDelay = async (
   fn: () => Promise<AuthResponse>,
   retries = 3,
   delay = 2000, // 2 seconds
-  isSignUp: boolean // To customize the initial and final 429 alert message
 ): Promise<AuthResponse> => {
   let result = await fn(); // First attempt
 
   if (result.error && (result.error as any).status === 429) {
     // Display the specific alert immediately on the first 429 error
-    alert(isSignUp 
-      ? "Too many sign-up attempts from this device/IP. Please wait a few minutes before trying again."
-      : "Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again."
-    );
+    alert("Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again.");
     console.warn(`Rate limit hit (429) on initial attempt. Retrying in ${delay / 1000}s... (Attempt 1/${retries + 1})`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -41,8 +36,8 @@ const retryWithDelay = async (
       await new Promise(resolve => setTimeout(resolve, delay));
     }
     // If the loop finishes, all retries failed due to persistent 429
-    // Return a specific error message to be handled by signUpUser/signInUser
-    return { data: { user: null, session: null }, error: new Error(isSignUp ? RETRY_EXHAUSTED_429_MESSAGE_SIGNUP : RETRY_EXHAUSTED_429_MESSAGE_SIGNIN) as any };
+    // Return a specific error message to be handled by signInUser
+    return { data: { user: null, session: null }, error: new Error(RETRY_EXHAUSTED_429_MESSAGE_SIGNIN) as any };
   } else {
     // Initial attempt was successful or had a non-429 error, so return its result directly
     return result;
@@ -50,56 +45,13 @@ const retryWithDelay = async (
 };
 
 const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Sign-Up Function
-  async function signUpUser(email: string, password: string, fullName: string) {
-    // Pass isSignUp: true to retryWithDelay for customized alert
-    const { data, error } = await retryWithDelay(() => supabase.auth.signUp({ email, password }), 3, 2000, true);
-    
-    if (error) { 
-      // The retryWithDelay function already returns the most specific error message.
-      // We directly alert it here.
-      alert("Sign-up failed: " + error.message);
-      return null; 
-    }
-
-    if (data.user) {
-      if (!data.session) {
-        // User created, but no session means email confirmation is required.
-        alert("Sign-up successful! Please check your email inbox to confirm your account before logging in.");
-        return null; // Don't proceed to auth success, user needs to confirm email first
-      }
-
-      // If a session exists, the user is immediately signed in (e.g., email confirmation is off)
-      // Save additional user info in 'users' table
-      const { error: dbError } = await supabase.from('users').insert([{ 
-        id: data.user.id, 
-        full_name: fullName, 
-        email: email, 
-        created_at: new Date() 
-      }]);
-      
-      if (dbError) {
-        console.error("Profile creation error:", dbError.message);
-        alert("Sign-up successful & logged in, but failed to create your profile in the 'users' table. Please ensure the 'users' table exists and has correct RLS policies for inserts. Error: " + dbError.message);
-        return data.user; // Return user to allow onAuthSuccess to proceed, App.tsx has fallback for missing profile.
-      } else {
-        alert("Sign-up successful and profile created!");
-      }
-      return data.user;
-    }
-    return null;
-  }
 
   // Sign-In Function
   async function signInUser(email: string, password: string) {
-    // Pass isSignUp: false to retryWithDelay for customized alert
-    const { data, error } = await retryWithDelay(() => supabase.auth.signInWithPassword({ email, password }), 3, 2000, false);
+    const { data, error } = await retryWithDelay(() => supabase.auth.signInWithPassword({ email, password }));
     
     if (error) { 
       // The retryWithDelay function already returns the most specific error message.
@@ -138,17 +90,9 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const result = await signInUser(email, password);
-        if (result) {
-          onAuthSuccess();
-        }
-      } else {
-        const user = await signUpUser(email, password, fullName);
-        // Only proceed to auth success if user object is returned and session exists (i.e., not pending email confirmation)
-        if (user) {
-          onAuthSuccess();
-        }
+      const result = await signInUser(email, password);
+      if (result) {
+        onAuthSuccess();
       }
     } catch (err: any) {
       console.error('Runtime Auth Error:', err);
@@ -167,22 +111,6 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
-          {!isLogin && (
-             <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
-                  <input 
-                    type="text" 
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Arif Ahmed" 
-                    required={!isLogin}
-                    className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
-                  />
-                </div>
-             </div>
-          )}
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Email</label>
             <div className="relative">
@@ -217,22 +145,10 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
             disabled={loading}
             className="w-full bg-brand-primary hover:scale-[1.02] active:scale-95 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-brand-primary/20 mt-4 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (isLogin ? 'Sign In' : 'Sign Up')}
+            {loading ? <Loader2 className="animate-spin" size={20} /> : 'Sign In'}
             {!loading && <ArrowRight size={18} />}
           </button>
         </form>
-
-        <div className="mt-8 text-center">
-          <button 
-            type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-            }}
-            className="text-[10px] font-black text-brand-primary uppercase tracking-widest hover:underline"
-          >
-            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-          </button>
-        </div>
       </div>
     </div>
   );

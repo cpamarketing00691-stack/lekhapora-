@@ -30,7 +30,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  // Auto-fill subject if a linked task is selected
   useEffect(() => {
     if (activeTaskId) {
       const dailyTasks = Array.isArray(userState.dailyTasks) ? userState.dailyTasks : [];
@@ -101,16 +100,14 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const handleStopEnd = () => {
     if (!timer) return;
-    
     const significantThreshold = 10; 
     if (timer.accumulatedFocusSeconds < significantThreshold) {
       if (timer.accumulatedFocusSeconds > 0) {
-        alert(t('সেশনটি খুব ছোট হওয়ার কারণে সেভ করা হয়নি।', 'Session too short to be saved.'));
+        alert(t('সেশনটি খুব ছোট হওয়ার কারণে সেভ করা হয়নি।', 'Session too short to be saved.'));
       }
       onUpdateState(prev => ({ ...prev, activeTimer: null }));
       return;
     }
-    
     const newSession: StudySession = {
       id: `timer-${Date.now()}`,
       subjectId: timer.subjectId,
@@ -125,31 +122,25 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       mood: currentMood,
       isRevision: timer.isRevision
     };
-
-    onUpdateState(prev => {
-      const newState = {
-        ...prev,
-        studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
-        streaks: (prev.streaks || 0) + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
-        currentMood,
-        activeTimer: null
-      };
-      return newState;
-    });
+    onUpdateState(prev => ({
+      ...prev,
+      studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
+      streaks: (prev.streaks || 0) + (timer.accumulatedFocusSeconds > 1800 ? 1 : 0),
+      currentMood,
+      activeTimer: null
+    }));
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const durationMin = parseInt(manualData.durationMinutes);
     if (!manualData.subjectId || isNaN(durationMin) || durationMin <= 0) {
-      alert(t('অনুগ্রহ করে সঠিক বিষয় এবং সময়কাল লিখুন।', 'Please select a subject and valid duration.'));
+      alert(t('অনুগ্রহ করে সঠিক বিষয় এবং সময়কাল লিখুন।', 'Please select a subject and valid duration.'));
       return;
     }
-
     const sessionDate = new Date(manualData.date);
     const startTime = sessionDate.getTime();
     const durationSec = durationMin * 60;
-
     const newSession: StudySession = {
       id: `manual-${Date.now()}`,
       subjectId: manualData.subjectId,
@@ -164,21 +155,18 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       mood: manualData.mood,
       isRevision: manualData.isRevision
     };
-
     onUpdateState(prev => ({
       ...prev,
       studyHistory: [...(Array.isArray(prev.studyHistory) ? prev.studyHistory : []), newSession],
       streaks: (prev.streaks || 0) + (durationSec >= 1800 ? 1 : 0),
       currentMood: manualData.mood
     }));
-
     setManualData({ ...manualData, subjectId: '', examId: '', taskId: '', durationMinutes: '', mood: 'Focused' });
     setShowManual(false);
   };
 
   const isTimerGlobalActive = !!timer;
   const isFocusingNow = timer?.isFocusActive || false;
-  
   const subjects = Array.isArray(userState.subjects) ? userState.subjects : [];
   const dailyTasks = Array.isArray(userState.dailyTasks) ? userState.dailyTasks : [];
   const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
@@ -231,26 +219,26 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                   onChange={(e) => setActiveTaskId(e.target.value)} 
                   className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate"
                  >
-                   <option value="">{t('টাস্ক ছাড়া পড়াশোনা', 'Study without specific task')}</option>
-                   {Array.isArray(dailyTasks) && dailyTasks.length > 0 ? dailyTasks.filter(t => !t.isCompleted).map(task => (
+                   <option value="">{t('টাস্ক ছাড়া পড়াশোনা', 'Study without specific task')}</option>
+                   {dailyTasks.filter(t => !t.isCompleted).map(task => (
                      <option key={task.id} value={task.id}>{task.name} ({task.source})</option>
-                   )) : null}
+                   ))}
                  </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full">
                 <div>
-                  <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('বিষয়', 'Subject')}</label>
+                  <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('বিষয়', 'Subject')}</label>
                   <select disabled={isTimerGlobalActive} value={activeSubjectId} onChange={(e) => setActiveSubjectId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate">
-                    <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-                    {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>) : null}
+                    <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
+                    {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('লক্ষ্য পরীক্ষা (ঐচ্ছিক)', 'Target Exam (Opt)')}</label>
                   <select disabled={isTimerGlobalActive} value={activeExamId} onChange={(e) => setActiveExamId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate">
                     <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                    {Array.isArray(collegeExams) && collegeExams.length > 0 ? collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>) : null}
+                    {collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -258,7 +246,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
 
           <div className="text-center py-6 sm:py-10">
-            <div className={`text-5xl sm:text-7xl md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none transition-all ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
+            <div className={`text-4xl sm:text-6xl md:text-8xl lg:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none transition-all ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
               {formatDuration(timer?.accumulatedFocusSeconds || 0)}
             </div>
             {isTimerGlobalActive && !isFocusingNow && (
@@ -289,17 +277,17 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
            <form onSubmit={handleManualSubmit} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div className="space-y-1.5">
-                    <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
+                    <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
                     <select required value={manualData.subjectId} onChange={(e) => setManualData({...manualData, subjectId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
                       <option value="">{t('নির্বাচন করো', 'Select Subject')}</option>
-                      {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>) : null}
+                      {subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
                     </select>
                  </div>
                  <div className="space-y-1.5">
                     <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Exam (Optional)')}</label>
                     <select value={manualData.examId} onChange={(e) => setManualData({...manualData, examId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
                       <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                      {Array.isArray(collegeExams) && collegeExams.length > 0 ? collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>) : null}
+                      {collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                     </select>
                  </div>
               </div>
@@ -317,9 +305,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                  <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Task (Optional)')}</label>
                  <select value={manualData.taskId} onChange={(e) => setManualData({...manualData, taskId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
                     <option value="">{t('নির্বাচন করো', 'Select Task')}</option>
-                    {Array.isArray(dailyTasks) && dailyTasks.length > 0 ? dailyTasks.map(task => (
-                      <option key={task.id} value={task.id}>{task.name}</option>
-                    )) : null}
+                    {dailyTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
                  </select>
               </div>
               <button type="submit" className="w-full bg-brand-primary hover:scale-[1.01] active:scale-95 text-white font-black py-4 rounded-2xl shadow-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2">

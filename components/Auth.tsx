@@ -19,7 +19,6 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     
     if (error) { 
-      // Enhanced error message for 429
       if ((error as any).status === 429) {
         alert("Too many sign-up attempts from this device/IP. Please wait a few minutes before trying again.");
       } else {
@@ -29,6 +28,13 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     }
 
     if (data.user) {
+      if (!data.session) {
+        // User created, but no session means email confirmation is required.
+        alert("Sign-up successful! Please check your email inbox to confirm your account before logging in.");
+        return null; // Don't proceed to auth success, user needs to confirm email first
+      }
+
+      // If a session exists, the user is immediately signed in (e.g., email confirmation is off)
       // Save additional user info in 'users' table
       const { error: dbError } = await supabase.from('users').insert([{ 
         id: data.user.id, 
@@ -39,12 +45,10 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       
       if (dbError) {
         console.error("Profile creation error:", dbError.message);
-        // Explicitly alert the user about the profile creation failure and potential causes.
-        // The user is authenticated, even if their custom profile data isn't saved yet.
-        alert("Sign-up successful, but failed to create user profile. Please ensure the 'users' table exists in Supabase and has correct RLS policies for insertion. Error: " + dbError.message);
+        alert("Sign-up successful & logged in, but failed to create your profile in the 'users' table. Please ensure the 'users' table exists and has correct RLS policies for inserts. Error: " + dbError.message);
         return data.user; // Return user to allow onAuthSuccess to proceed, App.tsx has fallback for missing profile.
       } else {
-        alert("Sign-up successful!");
+        alert("Sign-up successful and profile created!");
       }
       return data.user;
     }
@@ -56,10 +60,12 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) { 
-      // Enhanced error message for 429
       if ((error as any).status === 429) {
         alert("Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again.");
-      } else {
+      } else if (error.message.includes('Email not confirmed')) {
+        alert("Sign-in failed: Your email address has not been confirmed. Please check your inbox for a verification link and confirm your account.");
+      }
+      else {
         alert("Sign-in failed: " + error.message); 
       }
       return null; 
@@ -72,10 +78,11 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       
       if (profileError) {
         console.error("Error fetching user profile during sign-in:", profileError.message);
-        // Alert the user, but still proceed as the main authentication was successful.
-        // The App.tsx will redirect to Onboarding if profile is null.
-        alert("Sign-in successful, but could not fetch your profile data. You might need to complete onboarding or check Supabase 'users' table setup/RLS. Error: " + profileError.message);
-      } else {
+        alert("Sign-in successful, but could not fetch your profile data. Please ensure the 'users' table exists and has correct RLS policies for selects. You might need to complete onboarding. Error: " + profileError.message);
+      } else if (!profile) {
+        alert("Sign-in successful! Please complete your profile onboarding.");
+      }
+      else {
         alert("Sign-in successful!");
       }
       return { user: data.user, profile }; // profile can be null if not found
@@ -96,14 +103,13 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         }
       } else {
         const user = await signUpUser(email, password, fullName);
+        // Only proceed to auth success if user object is returned and session exists (i.e., not pending email confirmation)
         if (user) {
-          // If signUpUser returns a user (even if profile creation had issues), proceed to auth success.
           onAuthSuccess();
         }
       }
     } catch (err: any) {
       console.error('Runtime Auth Error:', err);
-      // Catch any unexpected runtime errors during the auth process
       alert("An unexpected error occurred during authentication: " + err.message);
     } finally {
       setLoading(false);

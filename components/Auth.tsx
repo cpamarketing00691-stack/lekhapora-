@@ -19,7 +19,12 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     
     if (error) { 
-      alert("Sign-up failed: " + error.message); 
+      // Enhanced error message for 429
+      if ((error as any).status === 429) {
+        alert("Too many sign-up attempts from this device/IP. Please wait a few minutes before trying again.");
+      } else {
+        alert("Sign-up failed: " + error.message);
+      }
       return null; 
     }
 
@@ -51,15 +56,29 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) { 
-      alert("Sign-in failed: " + error.message); 
+      // Enhanced error message for 429
+      if ((error as any).status === 429) {
+        alert("Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again.");
+      } else {
+        alert("Sign-in failed: " + error.message); 
+      }
       return null; 
     }
 
     if (data.user) {
       // Fetch user profile info
-      const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).single();
-      alert("Sign-in successful!");
-      return { user: data.user, profile };
+      // Use maybeSingle to avoid throwing if profile doesn't exist (e.g., if signup failed on profile creation)
+      const { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle(); 
+      
+      if (profileError) {
+        console.error("Error fetching user profile during sign-in:", profileError.message);
+        // Alert the user, but still proceed as the main authentication was successful.
+        // The App.tsx will redirect to Onboarding if profile is null.
+        alert("Sign-in successful, but could not fetch your profile data. You might need to complete onboarding or check Supabase 'users' table setup/RLS. Error: " + profileError.message);
+      } else {
+        alert("Sign-in successful!");
+      }
+      return { user: data.user, profile }; // profile can be null if not found
     }
     return null;
   }

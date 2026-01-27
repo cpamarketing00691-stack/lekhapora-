@@ -1,16 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession } from './types';
-import { CHAPTER_LISTS } from './constants';
-import Onboarding from './components/Onboarding';
-import Dashboard from './components/Dashboard';
-import Tracker from './components/Tracker';
-import AISidebar from './components/AISidebar';
-import Auth from './components/Auth';
-import Settings from './components/Settings';
-import SyllabusManager from './components/SyllabusManager';
-import { Layout } from './components/Layout';
-import { supabase } from './lib/supabase';
+import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession } from './types.ts';
+import { CHAPTER_LISTS } from './constants.ts';
+import Onboarding from './components/Onboarding.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import Tracker from './components/Tracker.tsx';
+import AISidebar from './components/AISidebar.tsx';
+import Auth from './components/Auth.tsx';
+import Settings from './components/Settings.tsx';
+import SyllabusManager from './components/SyllabusManager.tsx';
+import { Layout } from './components/Layout.tsx';
+import { supabase } from './lib/supabase.ts';
 import { Loader2 } from 'lucide-react';
 
 const DEFAULT_STATE: UserState = {

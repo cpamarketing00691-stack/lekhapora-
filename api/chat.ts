@@ -1,18 +1,20 @@
 
-import { supabase } from '../lib/supabase';
+// Fix: Removed unused supabase import from this file. It is now imported from lib/supabase.
+// import { supabase } from '../lib/supabase'; // This import is kept for logging purposes.
 
-// In a real application, this API key would be stored securely in environment variables.
-// For this exercise, we are using the key provided directly in the prompt.
-const OPENROUTER_API_KEY = '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';
+// Fix: Removed OpenRouter API key and related interface definitions.
+// const OPENROUTER_API_KEY = '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';
+
+// Fix: Import GoogleGenAI and necessary types from @google/genai
+import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters, Content } from "@google/genai";
+import { supabase } from '../lib/supabase'; // Keep this for Supabase logging
+
+// Fix: Initialize GoogleGenAI client with API key from environment variables as per guidelines.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface Message {
-  role: 'ai' | 'user' | 'system';
+  role: 'ai' | 'user'; // Removed 'system' as it's handled by systemInstruction parameter
   text: string;
-}
-
-interface OpenRouterMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
 }
 
 // Handler for the /api/chat endpoint
@@ -28,49 +30,37 @@ export default async function handler(req: Request): Promise<Response> {
       return new Response(JSON.stringify({ error: 'Message is required' }), { status: 400 });
     }
 
-    const messages: OpenRouterMessage[] = [];
+    // Fix: Transform messages to Gemini's 'contents' format
+    const geminiContents: Content[] = [];
 
-    // Add system instruction if provided
-    if (systemInstruction) {
-      messages.push({ role: 'system', content: systemInstruction });
-    }
-
-    // Add chat history
+    // Add chat history from previous turns
     if (Array.isArray(history)) {
       history.forEach((msg: Message) => {
-        if (msg.role === 'user') {
-          messages.push({ role: 'user', content: msg.text });
-        } else if (msg.role === 'ai') {
-          messages.push({ role: 'assistant', content: msg.text });
+        // Only include 'user' and 'ai' (model) roles in chat history for turns
+        if (msg.role === 'user' || msg.role === 'ai') {
+          geminiContents.push({
+            role: msg.role === 'user' ? 'user' : 'model', // Map 'ai' to 'model' for Gemini
+            parts: [{ text: msg.text }],
+          });
         }
       });
     }
 
     // Add the current user message
-    messages.push({ role: 'user', content: message });
+    geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
-    const openRouterResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://hsc-study-tracker.web.app", // Replace with your actual site URL
-        "X-Title": "HSC Study Tracker", // Replace with your actual site name
-        "Content-Type": "application/json"
+    // Fix: Prepare parameters for ai.models.generateContent according to guidelines
+    const generateContentParams: GenerateContentParameters = {
+      model: "gemini-3-flash-preview", // Use a recommended Gemini model for text tasks
+      contents: geminiContents,
+      config: {
+        systemInstruction: systemInstruction || undefined, // Set system instruction if provided
       },
-      body: JSON.stringify({
-        "model": "deepseek/deepseek-r1-0528:free",
-        "messages": messages
-      })
-    });
+    };
 
-    if (!openRouterResponse.ok) {
-      const errorBody = await openRouterResponse.json();
-      console.error("OpenRouter API Error:", openRouterResponse.status, errorBody);
-      throw new Error(`OpenRouter API responded with status ${openRouterResponse.status}: ${JSON.stringify(errorBody)}`);
-    }
-
-    const data = await openRouterResponse.json();
-    const aiReply = data.choices[0]?.message?.content || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।";
+    // Fix: Call Google Gemini API
+    const geminiResponse: GenerateContentResponse = await ai.models.generateContent(generateContentParams);
+    const aiReply = geminiResponse.text || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।"; // Fix: Extract text using the .text property
 
     // Log the AI interaction to Supabase
     if (userId) {
@@ -78,7 +68,7 @@ export default async function handler(req: Request): Promise<Response> {
         user_id: userId,
         prompt: message,
         response: aiReply,
-        model: "deepseek/deepseek-r1-0528:free",
+        model: generateContentParams.model, // Log the actual model used
         created_at: new Date().toISOString()
       });
 

@@ -2,6 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
 import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Lightbulb } from 'lucide-react';
+// Fix: Import supabase to fetch userId
+import { supabase } from '../lib/supabase';
 
 interface AISidebarProps {
   userState: UserState;
@@ -53,6 +55,10 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         text: msg.text
       }));
 
+      // Fix: Get userId from Supabase auth directly as UserProfile does not contain an 'id'
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+
       // Fetch from backend
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -61,7 +67,8 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           message: textToSend,
           history: chatHistoryForAPI, // Send existing messages as history
           systemInstruction: systemInstruction,
-          userId: userState.profile?.id // Include userId for logging
+          // Fix: Use the userId obtained directly from Supabase
+          userId: userId // Include userId for logging
         })
       });
 

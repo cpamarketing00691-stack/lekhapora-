@@ -2,10 +2,52 @@
 import React, { useState } from 'react';
 import { User, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { AuthResponse } from '@supabase/supabase-js';
 
 interface AuthProps {
   onAuthSuccess: () => void;
 }
+
+// Define specific messages for persistent 429 errors
+const RETRY_EXHAUSTED_429_MESSAGE_SIGNUP = "Sign-up attempts failed due to persistent rate limiting. Please wait a longer period (e.g., 5-10 minutes) before trying again.";
+const RETRY_EXHAUSTED_429_MESSAGE_SIGNIN = "Sign-in attempts failed due to persistent rate limiting. Please wait a longer period (e.g., 5-10 minutes) before trying again.";
+
+// Helper for retry logic with specific 429 alert on first occurrence and improved final message
+const retryWithDelay = async (
+  fn: () => Promise<AuthResponse>,
+  retries = 3,
+  delay = 2000, // 2 seconds
+  isSignUp: boolean // To customize the initial and final 429 alert message
+): Promise<AuthResponse> => {
+  let result = await fn(); // First attempt
+
+  if (result.error && (result.error as any).status === 429) {
+    // Display the specific alert immediately on the first 429 error
+    alert(isSignUp 
+      ? "Too many sign-up attempts from this device/IP. Please wait a few minutes before trying again."
+      : "Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again."
+    );
+    console.warn(`Rate limit hit (429) on initial attempt. Retrying in ${delay / 1000}s... (Attempt 1/${retries + 1})`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    // Subsequent retries
+    for (let i = 1; i <= retries; i++) {
+      result = await fn(); // Re-execute the function
+      if (!result.error || (result.error as any).status !== 429) {
+        // If successful, or a non-429 error, return this result
+        return result; 
+      }
+      console.warn(`Rate limit hit (429). Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${retries + 1})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    // If the loop finishes, all retries failed due to persistent 429
+    // Return a specific error message to be handled by signUpUser/signInUser
+    return { data: { user: null, session: null }, error: new Error(isSignUp ? RETRY_EXHAUSTED_429_MESSAGE_SIGNUP : RETRY_EXHAUSTED_429_MESSAGE_SIGNIN) as any };
+  } else {
+    // Initial attempt was successful or had a non-429 error, so return its result directly
+    return result;
+  }
+};
 
 const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,16 +56,15 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 2️⃣ Sign-Up Function: Using requested logic
+  // Sign-Up Function
   async function signUpUser(email: string, password: string, fullName: string) {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // Pass isSignUp: true to retryWithDelay for customized alert
+    const { data, error } = await retryWithDelay(() => supabase.auth.signUp({ email, password }), 3, 2000, true);
     
     if (error) { 
-      if ((error as any).status === 429) {
-        alert("Too many sign-up attempts from this device/IP. Please wait a few minutes before trying again.");
-      } else {
-        alert("Sign-up failed: " + error.message);
-      }
+      // The retryWithDelay function already returns the most specific error message.
+      // We directly alert it here.
+      alert("Sign-up failed: " + error.message);
       return null; 
     }
 
@@ -55,14 +96,15 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     return null;
   }
 
-  // 3️⃣ Sign-In Function: Using requested logic
+  // Sign-In Function
   async function signInUser(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // Pass isSignUp: false to retryWithDelay for customized alert
+    const { data, error } = await retryWithDelay(() => supabase.auth.signInWithPassword({ email, password }), 3, 2000, false);
     
     if (error) { 
-      if ((error as any).status === 429) {
-        alert("Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again.");
-      } else if (error.message.includes('Email not confirmed')) {
+      // The retryWithDelay function already returns the most specific error message.
+      // We directly alert it here, with a special case for unconfirmed email.
+      if (error.message.includes('Email not confirmed')) {
         alert("Sign-in failed: Your email address has not been confirmed. Please check your inbox for a verification link and confirm your account.");
       }
       else {

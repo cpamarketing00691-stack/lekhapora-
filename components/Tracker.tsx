@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserState, StudySession, Mood, ActiveTimerState, Task } from '../types';
-import { Play, Pause, Square, Zap, RefreshCcw, History, Clock, Calendar as CalIcon, CheckCircle2, Smile, Zap as FocusIcon, Coffee, Frown, Flame, GraduationCap, ListTodo, Sparkles } from 'lucide-react';
+import { Play, Pause, Square, Zap, RefreshCcw, History, Clock, Calendar as CalIcon, CheckCircle2, Smile, Zap as FocusIcon, Coffee, Frown, Flame, GraduationCap, ListTodo, Sparkles, Brain, Battery, Wind, AlertCircle } from 'lucide-react';
 
 interface TrackerProps {
   userState: UserState;
@@ -10,9 +10,19 @@ interface TrackerProps {
 
 const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [activeSubjectId, setActiveSubjectId] = useState<string>(userState.activeTimer?.subjectId || '');
+  const [activeTaskId, setActiveTaskId] = useState<string>(userState.activeTimer?.taskId || '');
   const [isRevision, setIsRevision] = useState(userState.activeTimer?.isRevision || false);
   const [showManual, setShowManual] = useState(false);
-  const [currentMood, setCurrentMood] = useState<Mood>('Focused');
+  const [currentMood, setCurrentMood] = useState<Mood>(userState.currentMood || 'Focused');
+
+  // Manual Entry States
+  const [manualData, setManualData] = useState({
+    subjectId: '',
+    durationMin: 30,
+    breakMin: 5,
+    date: new Date().toISOString().split('T')[0],
+    isRevision: false
+  });
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
@@ -34,6 +44,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           ...prev,
           activeTimer: {
             subjectId: activeSubjectId,
+            taskId: activeTaskId || undefined,
             isFocusActive: true,
             isRevision,
             accumulatedFocusSeconds: 0,
@@ -66,6 +77,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     const session: StudySession = {
       id: `timer-${Date.now()}`,
       subjectId: timer.subjectId,
+      taskId: timer.taskId,
       startTime: timer.sessionStartTime,
       endTime: Date.now(),
       durationSeconds: timer.accumulatedFocusSeconds,
@@ -82,74 +94,213 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     }));
   };
 
+  const handleManualSubmit = () => {
+    if (!manualData.subjectId) return;
+    const session: StudySession = {
+      id: `manual-${Date.now()}`,
+      subjectId: manualData.subjectId,
+      startTime: new Date(manualData.date).getTime(),
+      endTime: new Date(manualData.date).getTime() + (manualData.durationMin * 60000),
+      durationSeconds: manualData.durationMin * 60,
+      breakSeconds: manualData.breakMin * 60,
+      numBreaks: 1,
+      focusLevel: 7,
+      mood: 'Focused',
+      isRevision: manualData.isRevision
+    };
+    onUpdateState(prev => ({
+      ...prev,
+      studyHistory: [...(prev.studyHistory || []), session]
+    }));
+    setShowManual(false);
+    alert(t('সেশন সফলভাবে যোগ করা হয়েছে!', 'Manual session added successfully!'));
+  };
+
+  const moods: { label: Mood; icon: React.ReactNode; color: string }[] = [
+    { label: 'Great', icon: <Flame size={18} />, color: 'text-orange-500' },
+    { label: 'Focused', icon: <Brain size={18} />, color: 'text-brand-primary' },
+    { label: 'Tired', icon: <Battery size={18} />, color: 'text-amber-500' },
+    { label: 'Stressed', icon: <AlertCircle size={18} />, color: 'text-rose-500' },
+    { label: 'Burnt Out', icon: <Wind size={18} />, color: 'text-slate-400' },
+  ];
+
+  const filteredTasks = userState.dailyTasks.filter(task => 
+    !task.isCompleted && (!activeSubjectId || task.subjectId === activeSubjectId)
+  );
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 overflow-x-hidden px-1">
-      <header className="text-center">
-        <h2 className="text-3xl font-black tracking-tight text-brand-text-p">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
-        <p className="text-brand-text-s text-xs mt-1 font-medium">{t('তোমার সাফল্যের সময় গণনা শুরু করো।', 'Start tracking your success time.')}</p>
+    <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 overflow-x-hidden px-1 pb-10">
+      <header className="text-center flex items-center justify-between">
+        <div className="w-10"></div>
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-brand-text-p">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
+          <p className="text-brand-text-s text-xs mt-1 font-medium">{t('তোমার সাফল্যের সময় গণনা শুরু করো।', 'Start tracking your success time.')}</p>
+        </div>
+        <button 
+          onClick={() => setShowManual(!showManual)}
+          className={`p-2.5 rounded-2xl transition-all ${showManual ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-text-s border border-brand-text-s/10'}`}
+          title={t('ম্যানুয়াল এন্ট্রি', 'Manual Entry')}
+        >
+          <History size={20} />
+        </button>
       </header>
 
-      <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10">
-        <div className="mb-8 space-y-6">
-          <div className="flex bg-brand-bg p-1 rounded-2xl max-w-xs mx-auto">
-            <button onClick={() => !timer && setIsRevision(false)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
-            <button onClick={() => !timer && setIsRevision(true)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}>{t('রিভিশন', 'Revision')}</button>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest text-center">{t('বিষয় নির্বাচন করো', 'Choose Subject')}</label>
-            <select 
-              disabled={!!timer} 
-              value={activeSubjectId} 
-              onChange={(e) => setActiveSubjectId(e.target.value)} 
-              className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-sm font-bold text-center appearance-none outline-none transition-all"
-            >
-              <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-              {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
-            </select>
+      {showManual ? (
+        <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95">
+          <h3 className="text-lg font-black mb-6 text-center">{t('ম্যানুয়াল পড়াশোনা যোগ করো', 'Add Manual Study Session')}</h3>
+          <div className="space-y-4">
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
+                 <select 
+                   value={manualData.subjectId}
+                   onChange={e => setManualData({...manualData, subjectId: e.target.value})}
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                 >
+                   <option value="">{t('নির্বাচন করো', 'Select')}</option>
+                   {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                 </select>
+               </div>
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('তারিখ', 'Date')}</label>
+                 <input 
+                   type="date"
+                   value={manualData.date}
+                   onChange={e => setManualData({...manualData, date: e.target.value})}
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                 />
+               </div>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পড়ার সময় (মিনিট)', 'Focus Min')}</label>
+                 <input 
+                   type="number"
+                   value={manualData.durationMin}
+                   onChange={e => setManualData({...manualData, durationMin: parseInt(e.target.value)})}
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                 />
+               </div>
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('ব্রিকের সময় (মিনিট)', 'Break Min')}</label>
+                 <input 
+                   type="number"
+                   value={manualData.breakMin}
+                   onChange={e => setManualData({...manualData, breakMin: parseInt(e.target.value)})}
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                 />
+               </div>
+             </div>
+             <button 
+              onClick={handleManualSubmit}
+              className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px]"
+             >
+               {t('সেভ করো', 'Save Session')}
+             </button>
           </div>
         </div>
-
-        <div className="text-center py-6">
-          <div 
-            className="font-black tracking-tighter tabular-nums leading-none select-none text-brand-text-p"
-            style={{ fontSize: 'clamp(3rem, 20vw, 8rem)' }}
-          >
-            {formatDuration(timer?.accumulatedFocusSeconds || 0)}
-          </div>
-          {timer && !timer.isFocusActive && (
-            <div className="mt-4 flex items-center justify-center gap-2 text-brand-secondary font-black text-xs uppercase tracking-widest animate-pulse">
-              <Coffee size={14} /> {t('ব্রেকে আছো', 'ON BREAK')}
+      ) : (
+        <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10">
+          <div className="mb-8 space-y-6">
+            <div className="flex bg-brand-bg p-1 rounded-2xl max-w-xs mx-auto">
+              <button onClick={() => !timer && setIsRevision(false)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
+              <button onClick={() => !timer && setIsRevision(true)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}>{t('রিভিশন', 'Revision')}</button>
             </div>
-          )}
-        </div>
 
-        <div className="flex items-center justify-center gap-6 mt-8">
-          {!timer?.isFocusActive ? (
-            <button 
-              onClick={handleStartResume} 
-              disabled={!activeSubjectId} 
-              className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-primary text-white flex items-center justify-center rounded-full shadow-2xl transition-all active:scale-95 disabled:opacity-30"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় নির্বাচন করো', 'Choose Subject')}</label>
+                <select 
+                  disabled={!!timer} 
+                  value={activeSubjectId} 
+                  onChange={(e) => setActiveSubjectId(e.target.value)} 
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-xs font-bold appearance-none outline-none transition-all"
+                >
+                  <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
+                  {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Focus Task (Optional)')}</label>
+                <select 
+                  disabled={!!timer} 
+                  value={activeTaskId} 
+                  onChange={(e) => setActiveTaskId(e.target.value)} 
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-xs font-bold appearance-none outline-none transition-all"
+                >
+                  <option value="">{t('টাস্ক বেছে নাও', 'Choose Task')}</option>
+                  {filteredTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center py-6 relative">
+            <div 
+              className="font-black tracking-tighter tabular-nums leading-none select-none text-brand-text-p transition-all"
+              style={{ fontSize: 'clamp(3rem, 18vw, 7.5rem)' }}
             >
-              <Play size={32} className="ml-1 fill-current" />
-            </button>
-          ) : (
-            <button 
-              onClick={handlePause} 
-              className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg shadow-xl transition-all active:scale-95"
-            >
-              <Pause size={32} className="fill-current" />
-            </button>
-          )}
-          <button 
-            onClick={handleStopEnd} 
-            disabled={!timer} 
-            className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-bg text-red-500 flex items-center justify-center rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-30"
-          >
-            <Square size={20} className="fill-current" />
-          </button>
+              {formatDuration(timer?.accumulatedFocusSeconds || 0)}
+            </div>
+            
+            <div className="flex items-center justify-center gap-6 mt-4">
+              <div className="flex items-center gap-2 text-brand-text-s font-black text-[10px] uppercase tracking-widest">
+                <FocusIcon size={12} className="text-brand-primary" />
+                <span>{t('ফোকাস', 'FOCUS')}</span>
+              </div>
+              <div className={`flex items-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${timer && !timer.isFocusActive ? 'text-brand-secondary' : 'text-brand-text-s opacity-30'}`}>
+                <Coffee size={12} />
+                <span>{t('ব্রেক', 'BREAK')}: {formatDuration(timer?.accumulatedBreakSeconds || 0)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-8 mt-10">
+            {/* Mood Selector (Only visible or active when timer exists) */}
+            <div className={`flex gap-3 p-2 bg-brand-bg rounded-3xl transition-all ${!timer ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
+              {moods.map(m => (
+                <button
+                  key={m.label}
+                  onClick={() => setCurrentMood(m.label)}
+                  className={`p-3 rounded-2xl transition-all ${currentMood === m.label ? 'bg-brand-surface shadow-md scale-110' : 'hover:bg-brand-surface/50 opacity-40'}`}
+                  title={m.label}
+                >
+                  <div className={currentMood === m.label ? m.color : 'text-brand-text-s'}>
+                    {m.icon}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-center gap-6">
+              {!timer?.isFocusActive ? (
+                <button 
+                  onClick={handleStartResume} 
+                  disabled={!activeSubjectId} 
+                  className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-primary text-white flex items-center justify-center rounded-full shadow-2xl transition-all active:scale-95 disabled:opacity-30 hover:scale-105"
+                >
+                  <Play size={32} className="ml-1 fill-current" />
+                </button>
+              ) : (
+                <button 
+                  onClick={handlePause} 
+                  className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg shadow-xl transition-all active:scale-95 hover:scale-105"
+                >
+                  <Pause size={32} className="fill-current" />
+                </button>
+              )}
+              <button 
+                onClick={handleStopEnd} 
+                disabled={!timer} 
+                className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-bg text-red-500 flex items-center justify-center rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-30 hover:bg-red-50"
+              >
+                <Square size={20} className="fill-current" />
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

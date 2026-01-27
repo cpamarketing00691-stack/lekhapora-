@@ -46,7 +46,6 @@ const App: React.FC = () => {
   const timerIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // SECURITY: Ensure loading screen clears in maximum 4 seconds no matter what
     const safetyTimeout = setTimeout(() => {
       if (isInitialLoading) {
         console.warn("Safety timeout triggered: Forcing app to render.");
@@ -61,7 +60,6 @@ const App: React.FC = () => {
         
         const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
 
-        // Defensive check for nested data to prevent crash
         if (result && result.data && result.data.session) {
           const session = result.data.session;
           setUserState(prev => ({ ...prev, isAuthenticated: true }));
@@ -146,7 +144,7 @@ const App: React.FC = () => {
   }, [userState]);
 
   useEffect(() => {
-    if (userState.activeTimer && userState.activeTimer.isFocusActive) {
+    if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
         timerIntervalRef.current = window.setInterval(() => {
           setUserState(prev => {
@@ -154,12 +152,19 @@ const App: React.FC = () => {
             const now = Date.now();
             const delta = Math.floor((now - prev.activeTimer.lastTimestamp) / 1000);
             if (delta < 1) return prev;
+
+            const isFocus = prev.activeTimer.isFocusActive;
             return {
               ...prev,
               activeTimer: {
                 ...prev.activeTimer,
                 lastTimestamp: prev.activeTimer.lastTimestamp + (delta * 1000),
-                accumulatedFocusSeconds: prev.activeTimer.accumulatedFocusSeconds + delta
+                accumulatedFocusSeconds: isFocus 
+                  ? prev.activeTimer.accumulatedFocusSeconds + delta 
+                  : prev.activeTimer.accumulatedFocusSeconds,
+                accumulatedBreakSeconds: !isFocus 
+                  ? prev.activeTimer.accumulatedBreakSeconds + delta 
+                  : prev.activeTimer.accumulatedBreakSeconds
               }
             };
           });
@@ -172,7 +177,7 @@ const App: React.FC = () => {
       }
     }
     return () => { if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current); };
-  }, [userState.activeTimer?.isFocusActive]);
+  }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

@@ -1,7 +1,6 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { UserState, Subject, Chapter, Difficulty } from '../types';
-import { geminiService } from '../services/gemini';
 import { 
   Camera, Plus, Trash2, Calendar, CheckCircle2, 
   Loader2, AlertTriangle, FileText, CheckCircle, 
@@ -27,6 +26,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
+  // The readFileAsBase64 function is kept, but its output is no longer sent to an AI.
   const readFileAsBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -45,53 +45,14 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     setIsProcessing(true);
     try {
-      const base64 = await readFileAsBase64(file);
-      const result = await geminiService.analyzeSyllabusImage(userState.profile, base64, file.type);
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      // The base64 encoding is performed but the result is not used by an AI.
+      // const base64 = await readFileAsBase64(file); 
       
-      if (result && Array.isArray(result.subjects) && result.subjects.length > 0) {
-        onUpdateState(prev => {
-          const currentSubjects = Array.isArray(prev.subjects) ? [...prev.subjects] : [];
-          
-          result.subjects.forEach((scannedSub: any) => {
-            const existingIdx = currentSubjects.findIndex(s => 
-              s.name.toLowerCase().includes(scannedSub.name.toLowerCase()) || 
-              scannedSub.name.toLowerCase().includes(s.name.toLowerCase()) && 
-              s.paper === scannedSub.paper
-            );
-
-            const chapters: Chapter[] = Array.isArray(scannedSub.chapters) ? scannedSub.chapters.map((chName: string, chIdx: number) => ({
-              id: `ch-${Date.now()}-${chIdx}-${Math.random()}`,
-              name: chName,
-              isCompleted: false
-            })) : [];
-
-            if (existingIdx > -1) {
-              const existingSub = currentSubjects[existingIdx];
-              const newChapters = Array.isArray(existingSub.chapters) ? [...existingSub.chapters] : [];
-              chapters.forEach(c => {
-                if (!newChapters.some(ec => ec.name.toLowerCase() === c.name.toLowerCase())) {
-                  newChapters.push(c);
-                }
-              });
-              currentSubjects[existingIdx] = { ...existingSub, chapters: newChapters };
-            } else {
-              currentSubjects.push({
-                id: `scanned-${Date.now()}-${Math.random()}`,
-                name: scannedSub.name,
-                paper: scannedSub.paper as 1 | 2,
-                chapters
-              });
-            }
-          });
-
-          return { ...prev, subjects: currentSubjects };
-        });
-        alert(t("সিলেবাস সফলভাবে আপডেট করা হয়েছে!", "Syllabus updated successfully!"));
-      } else {
-        alert(t("সিলেবাসে কোনো তথ্য পাওয়া যায়নি। ছবি পরিষ্কার করে আবার তোলো।", "No syllabus data found. Please take a clearer photo."));
-      }
+      alert(t("সিলেবাস স্ক্যান ফিচারটি সাময়িকভাবে বন্ধ আছে। ম্যানুয়ালি যোগ করুন।", "Syllabus scanning feature is temporarily unavailable. Please add manually."));
     } catch (error) {
-      console.error("Failed to process image:", error);
+      console.error("Failed to process image (simulated):", error);
       alert(t("সিলেবাস এক্সট্রাক্ট করতে সমস্যা হয়েছে। আবার চেষ্টা করো।", "Failed to extract syllabus. Please try again."));
     } finally {
       setIsProcessing(false);
@@ -105,40 +66,14 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     setIsRoutineProcessing(true);
     try {
-      const base64 = await readFileAsBase64(file);
-      const result = await geminiService.analyzeExamRoutineImage(userState.profile, base64, file.type);
-      
-      if (result && Array.isArray(result.exams) && result.exams.length > 0) {
-        let matchCount = 0;
-        onUpdateState(prev => {
-          const rawSubjects = Array.isArray(prev.subjects) ? prev.subjects : [];
-          const updatedSubjects = rawSubjects.map(sub => {
-            const match = result.exams.find((ex: any) => {
-              const exName = ex.subjectName.toLowerCase();
-              const subName = sub.name.toLowerCase();
-              const nameMatch = exName.includes(subName) || subName.includes(exName);
-              return nameMatch && parseInt(ex.paper) === sub.paper;
-            });
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      // The base64 encoding is performed but the result is not used by an AI.
+      // const base64 = await readFileAsBase64(file); 
 
-            if (match) {
-              matchCount++;
-              return { ...sub, examDate: match.date };
-            }
-            return sub;
-          });
-          return { ...prev, subjects: updatedSubjects };
-        });
-
-        if (matchCount > 0) {
-          alert(t(`${matchCount}টি বিষয়ের পরীক্ষার তারিখ রুটিন থেকে আপডেট করা হয়েছে!`, `Updated exam dates for ${matchCount} subjects from routine!`));
-        } else {
-          alert(t("রুটিন থেকে কোনো বিষয়ের মিল পাওয়া যায়নি।", "No matching subjects found in the routine image."));
-        }
-      } else {
-        alert(t("রুটিন থেকে কোনো তারিখ পাওয়া যায়নি। ছবি পরিষ্কার করে আবার তোলো।", "No dates found in routine. Please take a clearer photo."));
-      }
+      alert(t("রুটিন আপলোড ফিচারটি সাময়িকভাবে বন্ধ আছে। ম্যানুয়ালি যোগ করুন।", "Routine upload feature is temporarily unavailable. Please add manually."));
     } catch (error) {
-      console.error("Failed to process routine:", error);
+      console.error("Failed to process routine (simulated):", error);
       alert(t("রুটিন প্রসেস করতে সমস্যা হয়েছে।", "Failed to process routine."));
     } finally {
       setIsRoutineProcessing(false);
@@ -172,6 +107,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
     setManualSubject({ name: '', paper: 1, chapters: '' });
     setShowManualAdd(false);
+    alert(t("বিষয় সফলভাবে যোগ করা হয়েছে!", "Subject added successfully!"));
   };
 
   const handleBulkRoutineAdd = () => {

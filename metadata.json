@@ -2,7 +2,6 @@
   "name": "HSC Study Tracker (NCTB)",
   "description": "A comprehensive study tracking application for Bangladesh HSC students with AI-powered planning, religious awareness, and strict progress tracking.",
   "requestFramePermissions": [
-    "camera",
     "microphone"
   ]
 }

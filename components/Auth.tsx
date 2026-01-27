@@ -34,11 +34,16 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       
       if (dbError) {
         console.error("Profile creation error:", dbError.message);
+        // Explicitly alert the user about the profile creation failure and potential causes.
+        // The user is authenticated, even if their custom profile data isn't saved yet.
+        alert("Sign-up successful, but failed to create user profile. Please ensure the 'users' table exists in Supabase and has correct RLS policies for insertion. Error: " + dbError.message);
+        return data.user; // Return user to allow onAuthSuccess to proceed, App.tsx has fallback for missing profile.
+      } else {
+        alert("Sign-up successful!");
       }
+      return data.user;
     }
-
-    alert("Sign-up successful!");
-    return data.user;
+    return null;
   }
 
   // 3️⃣ Sign-In Function: Using requested logic
@@ -73,11 +78,14 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       } else {
         const user = await signUpUser(email, password, fullName);
         if (user) {
+          // If signUpUser returns a user (even if profile creation had issues), proceed to auth success.
           onAuthSuccess();
         }
       }
     } catch (err: any) {
       console.error('Runtime Auth Error:', err);
+      // Catch any unexpected runtime errors during the auth process
+      alert("An unexpected error occurred during authentication: " + err.message);
     } finally {
       setLoading(false);
     }

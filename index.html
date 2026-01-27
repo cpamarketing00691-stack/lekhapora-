@@ -71,46 +71,69 @@
         
         .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 
-        /* Mobile & Tablet Overrides (Non-destructive) */
+        /* Responsive Overrides - CSS ONLY */
         @media (max-width: 480px) {
           .max-w-xl { max-width: 100% !important; margin: 0 !important; border-radius: 1.5rem !important; }
-          .p-10 { padding: 1rem !important; }
-          .p-8 { padding: 1rem !important; }
-          .p-6 { padding: 0.75rem !important; }
-          .text-5xl { font-size: 2.5rem !important; }
-          .text-4xl { font-size: 2rem !important; }
+          .p-10 { padding: 1.25rem !important; }
+          .p-8 { padding: 1.15rem !important; }
+          .p-6 { padding: 1rem !important; }
+          .text-5xl { font-size: 2.75rem !important; }
+          .text-4xl { font-size: 2.25rem !important; }
           
-          /* Handle fixed height constraints from JS-added classes */
-          .min-h-\[400px\] { min-height: 50vh !important; }
-          .h-\[450px\] { height: auto !important; max-height: 60vh !important; }
-          
-          /* Prevent modal clipping */
-          .bg-white.dark\:bg-slate-900.rounded-\[2rem\] {
-            max-height: 90vh;
-            overflow-y: auto;
+          /* Force fixed heights to be scrollable on small screens */
+          .min-h-\[400px\] { 
+            min-height: auto !important; 
+            max-height: 60vh !important; 
+            overflow-y: auto !important; 
+            padding-right: 4px;
+          }
+          .h-\[450px\] { 
+            height: auto !important; 
+            max-height: 55vh !important; 
+            overflow-y: auto !important; 
+            padding-right: 4px;
+          }
+
+          /* Dashboard Grid Adjustments */
+          .grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3 {
+            grid-template-columns: 1fr !important;
           }
         }
 
+        /* Tablet Grid Logic Optimization */
         @media (min-width: 481px) and (max-width: 1024px) {
           .lg\:grid-cols-12 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
           .lg\:col-span-8 { grid-column: span 6 / span 6 !important; }
           .lg\:col-span-4 { grid-column: span 6 / span 6 !important; }
           .lg\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          
+          /* Modal Sizing */
+          .max-w-xl { max-width: 90% !important; }
         }
 
-        /* Safe Area Padding for notch devices */
+        /* Handle iOS Notch and Safe Areas */
         main {
-          padding-bottom: calc(8rem + env(safe-area-inset-bottom)) !important;
+          padding-top: env(safe-area-inset-top) !important;
+          padding-bottom: calc(8.5rem + env(safe-area-inset-bottom)) !important;
         }
         nav {
           padding-bottom: env(safe-area-inset-bottom) !important;
         }
 
-        /* Prevent button text overflow */
-        button {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
+        /* Fix for Recharts responsiveness inside CSS grid */
+        .recharts-responsive-container {
+          min-width: 0 !important;
+        }
+
+        /* Smooth scrollbar for forced scrollable areas */
+        .min-h-\[400px\]::-webkit-scrollbar,
+        .h-\[450px\]::-webkit-scrollbar {
+          width: 4px;
+        }
+        .min-h-\[400px\]::-webkit-scrollbar-thumb,
+        .h-\[450px\]::-webkit-scrollbar-thumb {
+          background: rgba(var(--brand-primary), 0.2);
+          border-radius: 10px;
         }
     </style>
 <script type="importmap">

@@ -76,7 +76,7 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error('Backend Gemini API Error:', error.message);
     return res.status(500).json({ 
-      error: 'An internal server error occurred while communicating with the AI.' 
+      error: 'error.message || error.toString()' 
     });
   }
 }

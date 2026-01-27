@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Lock, Mail, ArrowRight, Loader2, UserPlus } from 'lucide-react';
+import { User, Lock, Mail, ArrowRight, Loader2, UserPlus, Chrome } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { AuthResponse } from '@supabase/supabase-js';
 
@@ -86,6 +86,16 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     }
     return null;
   }
+
+  const handleGoogleSignIn = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) alert("Google sign-in failed: " + error.message);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,6 +183,21 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
             {!loading && (mode === 'signin' ? <ArrowRight size={18} /> : <UserPlus size={18} />)}
           </button>
         </form>
+
+        <div className="relative flex items-center gap-4 my-6">
+          <div className="flex-1 h-px bg-brand-text-s/10"></div>
+          <span className="text-[8px] font-black uppercase text-brand-text-s tracking-widest">OR</span>
+          <div className="flex-1 h-px bg-brand-text-s/10"></div>
+        </div>
+
+        <button 
+          type="button"
+          onClick={handleGoogleSignIn}
+          className="w-full bg-white dark:bg-brand-bg hover:scale-[1.02] active:scale-95 text-brand-text-p border border-brand-text-s/20 font-bold py-4 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-sm"
+        >
+          <Chrome size={18} className="text-brand-primary" />
+          <span className="text-sm">Continue with Google</span>
+        </button>
 
         <div className="mt-8 text-center">
           <button 

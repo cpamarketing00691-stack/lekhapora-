@@ -13,7 +13,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isManualChapterMode, setIsManualChapterMode] = useState(false);
   const [newTask, setNewTask] = useState({ 
     name: '', 
     source: TaskSource.PERSONAL,
@@ -65,7 +64,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     if (subjectFilter) filteredSessions = filteredSessions.filter(s => s.subjectId === subjectFilter);
     if (examFilter) filteredSessions = filteredSessions.filter(s => s.examId === examFilter);
 
-    // Add active session time to stats if relevant
     const activeSessionFocus = userState.activeTimer?.accumulatedFocusSeconds || 0;
     const activeSessionBreak = userState.activeTimer?.accumulatedBreakSeconds || 0;
 
@@ -184,7 +182,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const getSubjectName = (id: string) => {
     const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
     const sub = rawSubjects.find(s => s.id === id);
-    return sub ? `${sub.name} (P${sub.paper})` : t('সাধারণ পড়াশোনা', 'General Study');
+    if (!sub) return t('সাধারণ পড়াশোনা', 'General Study');
+    return `${sub.name} (${t(sub.paper === 1 ? '১ম পত্র' : '২য় পত্র', sub.paper === 1 ? '1st Paper' : '2nd Paper')})`;
   };
 
   const getExamName = (id: string) => {

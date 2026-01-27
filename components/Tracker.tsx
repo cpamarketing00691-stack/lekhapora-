@@ -20,13 +20,27 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const timer = userState.activeTimer;
 
-  // Derive unique subject names
+  // Sync local selection state with the active timer on mount or change
+  useEffect(() => {
+    if (timer) {
+      const currentSubject = userState.subjects.find(s => s.id === timer.subjectId);
+      if (currentSubject) {
+        setSelectedSubjectName(currentSubject.name);
+        setSelectedPaper(currentSubject.paper);
+      }
+      if (timer.taskId) setActiveTaskId(timer.taskId);
+      if (timer.examId) setActiveExamId(timer.examId);
+      setIsRevision(timer.isRevision);
+    }
+  }, [!!timer, timer?.subjectId]);
+
+  // Derive unique subject names for the dropdown
   const subjectNames = useMemo(() => {
     const names = new Set(userState.subjects.map(s => s.name));
     return Array.from(names).sort();
   }, [userState.subjects]);
 
-  // Find the exact subject ID based on name and paper
+  // Find the target subject based on selection
   const targetSubject = useMemo(() => {
     return userState.subjects.find(s => s.name === selectedSubjectName && s.paper === selectedPaper);
   }, [selectedSubjectName, selectedPaper, userState.subjects]);
@@ -69,12 +83,17 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           }
         };
       }
-      // Resume from pause
+
+      // RESUME LOGIC: Account for partial seconds spent in break mode before resuming
+      const elapsedMs = now - prev.activeTimer.lastTimestamp;
+      const deltaSeconds = Math.floor(elapsedMs / 1000);
+      
       return {
         ...prev,
         activeTimer: { 
           ...prev.activeTimer, 
           isFocusActive: true, 
+          accumulatedBreakSeconds: prev.activeTimer.accumulatedBreakSeconds + deltaSeconds,
           lastTimestamp: now 
         }
       };
@@ -84,13 +103,20 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const handlePause = () => {
     onUpdateState(prev => {
       if (!prev.activeTimer) return prev;
+      const now = Date.now();
+      
+      // PAUSE LOGIC: Account for partial seconds spent in focus mode before pausing
+      const elapsedMs = now - prev.activeTimer.lastTimestamp;
+      const deltaSeconds = Math.floor(elapsedMs / 1000);
+
       return {
         ...prev,
         activeTimer: { 
           ...prev.activeTimer, 
           isFocusActive: false, 
+          accumulatedFocusSeconds: prev.activeTimer.accumulatedFocusSeconds + deltaSeconds,
           numBreaks: prev.activeTimer.numBreaks + 1, 
-          lastTimestamp: Date.now() 
+          lastTimestamp: now 
         }
       };
     });
@@ -98,15 +124,22 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const handleStopEnd = () => {
     if (!timer) return;
+    const now = Date.now();
+    const elapsedMs = now - timer.lastTimestamp;
+    const deltaSeconds = Math.floor(elapsedMs / 1000);
+
+    const finalFocus = timer.accumulatedFocusSeconds + (timer.isFocusActive ? deltaSeconds : 0);
+    const finalBreak = timer.accumulatedBreakSeconds + (!timer.isFocusActive ? deltaSeconds : 0);
+
     const session: StudySession = {
       id: `timer-${Date.now()}`,
       subjectId: timer.subjectId,
       taskId: timer.taskId,
       examId: timer.examId,
       startTime: timer.sessionStartTime,
-      endTime: Date.now(),
-      durationSeconds: timer.accumulatedFocusSeconds,
-      breakSeconds: timer.accumulatedBreakSeconds,
+      endTime: now,
+      durationSeconds: finalFocus,
+      breakSeconds: finalBreak,
       numBreaks: timer.numBreaks,
       focusLevel: 8,
       mood: currentMood,
@@ -127,6 +160,17 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     { label: 'Burnt Out', icon: <Wind size={18} />, color: 'text-slate-400' },
   ];
 
+  const upcomingExams = useMemo(() => {
+    const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
+    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
+    const subjectExams = rawSubjects.filter(s => !!s.examDate).map(s => ({
+      id: s.id,
+      name: `${s.name} (P${s.paper})`,
+      type: 'subject'
+    }));
+    return [...collegeExams.map(ex => ({ id: ex.id, name: ex.name, type: 'college' })), ...subjectExams];
+  }, [userState.profile?.collegeExams, userState.subjects]);
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 pb-12">
       <header className="text-center">
@@ -135,7 +179,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       </header>
 
       <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10 transition-all">
-        {/* Advanced Selection UI */}
+        {/* Selection Area */}
         <div className="mb-8 space-y-6">
           <div className="flex bg-brand-bg p-1 rounded-2xl max-w-[300px] mx-auto border border-brand-text-s/5">
             <button 
@@ -155,7 +199,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Subject Name Dropdown */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় নির্বাচন', 'Choose Subject')}</label>
               <div className="relative">
@@ -172,7 +215,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               </div>
             </div>
 
-            {/* Paper Selection Toggle */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পত্র/পার্ট নির্বাচন', 'Select Paper')}</label>
               <div className="flex bg-brand-bg p-1 rounded-2xl h-[52px]">
@@ -194,25 +236,42 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             </div>
           </div>
 
-          {/* Task Selector */}
-          <div className="space-y-1.5">
-            <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('হোমওয়ার্ক/টাস্ক (ঐচ্ছিক)', 'Focus Task (Optional)')}</label>
-            <div className="relative">
-              <select 
-                disabled={!!timer} 
-                value={activeTaskId} 
-                onChange={(e) => setActiveTaskId(e.target.value)} 
-                className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-4 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
-              >
-                <option value="">{t('টাস্ক বেছে নাও', 'Choose Task')}</option>
-                {availableTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
-              </select>
-              {!timer && <ListTodo className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-s pointer-events-none opacity-40" size={16} />}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('হোমওয়ার্ক/টাস্ক', 'Focus Task')}</label>
+              <div className="relative">
+                <select 
+                  disabled={!!timer} 
+                  value={activeTaskId} 
+                  onChange={(e) => setActiveTaskId(e.target.value)} 
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-4 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
+                >
+                  <option value="">{t('টাস্ক বেছে নাও', 'Choose Task')}</option>
+                  {availableTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
+                </select>
+                {!timer && <ListTodo className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-s pointer-events-none opacity-40" size={16} />}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পরীক্ষা সংযোগ', 'Link Exam')}</label>
+              <div className="relative">
+                <select 
+                  disabled={!!timer} 
+                  value={activeExamId} 
+                  onChange={(e) => setActiveExamId(e.target.value)} 
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-4 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
+                >
+                  <option value="">{t('পরীক্ষা বেছে নাও', 'Choose Exam')}</option>
+                  {upcomingExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                </select>
+                {!timer && <GraduationCap className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-s pointer-events-none opacity-40" size={16} />}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Dynamic Timer Core */}
+        {/* Timer UI */}
         <div className="text-center py-6">
           <div 
             className={`font-black tracking-tighter tabular-nums leading-none select-none transition-all drop-shadow-sm ${timer?.isFocusActive === false ? 'text-brand-secondary scale-95 opacity-80' : 'text-brand-text-p scale-100'}`}
@@ -242,7 +301,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
         </div>
 
-        {/* Controls and Mood */}
+        {/* Controls */}
         <div className="flex flex-col items-center gap-8 mt-6">
           <div className={`flex gap-3 p-2 bg-brand-bg rounded-3xl transition-all shadow-inner ${!timer ? 'opacity-30 pointer-events-none grayscale scale-95' : 'scale-100'}`}>
             {moods.map(m => (

@@ -109,7 +109,7 @@ const App: React.FC = () => {
     }
   }, [userState]);
 
-  // Optimized Global Timer logic
+  // Optimized Global Timer logic with partial second preservation
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
@@ -126,6 +126,8 @@ const App: React.FC = () => {
             const isFocus = prev.activeTimer.isFocusActive;
             const updatedTimer = {
               ...prev.activeTimer,
+              // Move timestamp forward by exactly the number of seconds processed
+              // This preserves the millisecond remainder for the next tick
               lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? prev.activeTimer.accumulatedFocusSeconds + deltaSeconds 
@@ -152,7 +154,6 @@ const App: React.FC = () => {
     const { selectedSubjectNames, ...profile } = onboardingData;
     const finalSubjects: Subject[] = [];
     
-    // NCTB subjects typically have two papers
     selectedSubjectNames.forEach((name, idx) => {
       [1, 2].forEach(paperNum => {
         const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({

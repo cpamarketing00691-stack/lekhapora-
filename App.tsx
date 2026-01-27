@@ -34,16 +34,18 @@ const App: React.FC = () => {
         const parsed = JSON.parse(saved);
         const state = { ...DEFAULT_STATE, ...parsed };
         
-        // RECONCILIATION: On app load, catch up on time elapsed since the last save.
+        // RECONCILIATION: Immediate catch-up on mount.
+        // We use Date.now() to calculate exactly how many seconds passed while the app was closed.
         if (state.activeTimer) {
           const now = Date.now();
           const elapsedMs = now - state.activeTimer.lastTimestamp;
-          const deltaSeconds = Math.floor(elapsedMs / 1000);
+          const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
           
           if (deltaSeconds > 0) {
             const isFocus = state.activeTimer.isFocusActive;
             state.activeTimer = {
               ...state.activeTimer,
+              // Move the anchor forward by exact seconds used
               lastTimestamp: state.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? state.activeTimer.accumulatedFocusSeconds + deltaSeconds 
@@ -56,7 +58,7 @@ const App: React.FC = () => {
         }
         return state;
       } catch (e) {
-        console.error("Local storage corrupt:", e);
+        console.error("Local storage recovery failed:", e);
       }
     }
     return DEFAULT_STATE;
@@ -77,10 +79,10 @@ const App: React.FC = () => {
         const { data } = await supabase.auth.getSession();
         if (data?.session) {
           setUserState(prev => ({ ...prev, isAuthenticated: true }));
-          backgroundSync(data.session.user.id);
+          await backgroundSync(data.session.user.id);
         }
       } catch (error) {
-        console.error("Init failed:", error);
+        console.error("Auth init failed:", error);
       } finally {
         setIsInitialLoading(false);
         clearTimeout(safetyTimeout);
@@ -107,18 +109,23 @@ const App: React.FC = () => {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
         setUserState(prev => {
-          // SAFE SYNC: If we have an active timer locally, don't let cloud state overwrite it blindly
-          // if the cloud state doesn't have an active timer or is clearly older.
-          if (prev.activeTimer && !data.state.activeTimer) {
-             return { ...prev, ...data.state, activeTimer: prev.activeTimer, isAuthenticated: true };
+          // PROTECT LOCAL TIMER: If a timer is currently running locally, do not overwrite it with cloud data
+          // unless the cloud data also has a timer and it's specifically newer (larger timestamp).
+          if (prev.activeTimer) {
+            const cloudTimer = data.state.activeTimer;
+            if (!cloudTimer || cloudTimer.lastTimestamp < prev.activeTimer.lastTimestamp) {
+              // Merging cloud data but keeping local timer progress
+              return { ...prev, ...data.state, activeTimer: prev.activeTimer, isAuthenticated: true };
+            }
           }
 
           const newState = { ...prev, ...data.state, isAuthenticated: true };
-          // Re-reconcile after cloud sync to ensure no gap exists
+          
+          // RE-RECONCILE after sync: Ensures the cloud timestamp is brought up to the current browser time.
           if (newState.activeTimer) {
              const now = Date.now();
              const elapsedMs = now - newState.activeTimer.lastTimestamp;
-             const deltaSeconds = Math.floor(elapsedMs / 1000);
+             const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
              if (deltaSeconds > 0) {
                newState.activeTimer.accumulatedFocusSeconds += newState.activeTimer.isFocusActive ? deltaSeconds : 0;
                newState.activeTimer.accumulatedBreakSeconds += !newState.activeTimer.isFocusActive ? deltaSeconds : 0;
@@ -128,7 +135,7 @@ const App: React.FC = () => {
           return newState;
         });
       }
-    } catch (e) { console.warn("Sync failed"); }
+    } catch (e) { console.warn("Background sync failed"); }
   };
 
   const saveUserData = async (state: UserState) => {
@@ -145,15 +152,15 @@ const App: React.FC = () => {
     } catch (e) { }
   };
 
-  // Immediate LocalStorage update + Debounced Cloud Update
+  // PERSISTENCE EFFECT: Syncs userState to LocalStorage immediately and to Cloud periodically.
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     
     if (userState.isAuthenticated) {
-      // If timer is running, we only save to cloud every 30s to prevent the "never-firing" debounce issue
       const timeSinceLastSave = Date.now() - lastCloudSaveRef.current;
       const isTimerRunning = !!userState.activeTimer;
       
+      // If a timer is running, force cloud save every 30s to minimize data loss on browser crash.
       if (isTimerRunning && timeSinceLastSave > 30000) {
         saveUserData(userState);
       } else {
@@ -163,6 +170,8 @@ const App: React.FC = () => {
     }
   }, [userState]);
 
+  // BACKGROUND-SAFE INTERVAL: Advances the state every second using Date.now() deltas.
+  // This allows the timer to accurately bridge gaps when the browser throttles background tabs.
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
@@ -179,6 +188,7 @@ const App: React.FC = () => {
             const isFocus = prev.activeTimer.isFocusActive;
             const updatedTimer = {
               ...prev.activeTimer,
+              // Exact second increment to keep sync between current time and accumulated counts
               lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? prev.activeTimer.accumulatedFocusSeconds + deltaSeconds 

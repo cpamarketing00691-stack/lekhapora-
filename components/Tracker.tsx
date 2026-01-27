@@ -16,6 +16,13 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [activeExamId, setActiveExamId] = useState<string>('');
   const [isRevision, setIsRevision] = useState(false);
   const [currentMood, setCurrentMood] = useState<Mood>('Focused');
+  
+  // UI ONLY: Sub-second ticker to make the display feel alive even if the parent state update is throttled.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(id);
+  }, []);
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
@@ -35,6 +42,16 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       setIsRevision(timer.isRevision);
     }
   }, [!!timer, timer?.subjectId]);
+
+  // Derive display values using Date.now() to bridge the gap between state ticks.
+  const { displayFocusSeconds, displayBreakSeconds } = useMemo(() => {
+    if (!timer) return { displayFocusSeconds: 0, displayBreakSeconds: 0 };
+    const diffSecs = Math.max(0, Math.floor((now - timer.lastTimestamp) / 1000));
+    return {
+      displayFocusSeconds: timer.accumulatedFocusSeconds + (timer.isFocusActive ? diffSecs : 0),
+      displayBreakSeconds: timer.accumulatedBreakSeconds + (!timer.isFocusActive ? diffSecs : 0)
+    };
+  }, [timer, now]);
 
   // Derive unique subject names for the dropdown
   const subjectNames = useMemo(() => {
@@ -71,7 +88,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     }
     
     onUpdateState(prev => {
-      const now = Date.now();
+      const nowTs = Date.now();
       if (!prev.activeTimer) {
         return {
           ...prev,
@@ -85,14 +102,15 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             accumulatedFocusSeconds: 0,
             accumulatedBreakSeconds: 0,
             numBreaks: 0,
-            lastTimestamp: now,
-            sessionStartTime: now
+            lastTimestamp: nowTs,
+            sessionStartTime: nowTs
           }
         };
       }
 
-      const elapsedMs = now - prev.activeTimer.lastTimestamp;
-      const deltaSeconds = Math.floor(elapsedMs / 1000);
+      // RESUME STUDY: Finalize the break count using current timestamp before switching.
+      const elapsedMs = nowTs - prev.activeTimer.lastTimestamp;
+      const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
       
       return {
         ...prev,
@@ -100,7 +118,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           ...prev.activeTimer, 
           isFocusActive: true, 
           accumulatedBreakSeconds: prev.activeTimer.accumulatedBreakSeconds + deltaSeconds,
-          lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000) 
+          lastTimestamp: nowTs // Reset anchor to now
         }
       };
     });
@@ -109,10 +127,11 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const handlePause = () => {
     onUpdateState(prev => {
       if (!prev.activeTimer) return prev;
-      const now = Date.now();
+      const nowTs = Date.now();
       
-      const elapsedMs = now - prev.activeTimer.lastTimestamp;
-      const deltaSeconds = Math.floor(elapsedMs / 1000);
+      // START BREAK: Finalize the study count using current timestamp before switching.
+      const elapsedMs = nowTs - prev.activeTimer.lastTimestamp;
+      const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
 
       return {
         ...prev,
@@ -121,7 +140,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           isFocusActive: false, 
           accumulatedFocusSeconds: prev.activeTimer.accumulatedFocusSeconds + deltaSeconds,
           numBreaks: prev.activeTimer.numBreaks + 1, 
-          lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000)
+          lastTimestamp: nowTs // Reset anchor to now
         }
       };
     });
@@ -129,9 +148,9 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const handleStopEnd = () => {
     if (!timer) return;
-    const now = Date.now();
-    const elapsedMs = now - timer.lastTimestamp;
-    const deltaSeconds = Math.floor(elapsedMs / 1000);
+    const nowTs = Date.now();
+    const elapsedMs = nowTs - timer.lastTimestamp;
+    const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
 
     const finalFocus = timer.accumulatedFocusSeconds + (timer.isFocusActive ? deltaSeconds : 0);
     const finalBreak = timer.accumulatedBreakSeconds + (!timer.isFocusActive ? deltaSeconds : 0);
@@ -143,7 +162,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       chapterId: timer.chapterId,
       examId: timer.examId,
       startTime: timer.sessionStartTime,
-      endTime: now,
+      endTime: nowTs,
       durationSeconds: finalFocus,
       breakSeconds: finalBreak,
       numBreaks: timer.numBreaks,
@@ -283,7 +302,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             className={`font-black tracking-tighter tabular-nums leading-none select-none transition-all drop-shadow-sm ${timer?.isFocusActive === false ? 'text-brand-secondary scale-95 opacity-80' : 'text-brand-text-p scale-100'}`}
             style={{ fontSize: 'clamp(3rem, 18vw, 7.5rem)' }}
           >
-            {formatDuration(timer?.accumulatedFocusSeconds || 0)}
+            {formatDuration(displayFocusSeconds)}
           </div>
           
           <div className="flex items-center justify-center gap-10 mt-8">
@@ -292,7 +311,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 <FocusIcon size={12} className={timer?.isFocusActive ? "animate-pulse" : ""} />
                 <span>{t('ফোকাস টাইম', 'FOCUS TIME')}</span>
               </div>
-              <p className="text-sm font-bold text-brand-text-p">{formatDuration(timer?.accumulatedFocusSeconds || 0)}</p>
+              <p className="text-sm font-bold text-brand-text-p">{formatDuration(displayFocusSeconds)}</p>
             </div>
             
             <div className="h-10 w-px bg-brand-text-s/10"></div>
@@ -302,7 +321,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 <Coffee size={12} className={timer && !timer.isFocusActive ? "animate-bounce" : ""} />
                 <span>{t('ব্রেক টাইম', 'BREAK TIME')}</span>
               </div>
-              <p className="text-sm font-bold">{formatDuration(timer?.accumulatedBreakSeconds || 0)}</p>
+              <p className="text-sm font-bold">{formatDuration(displayBreakSeconds)}</p>
             </div>
           </div>
         </div>

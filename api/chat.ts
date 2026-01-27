@@ -1,14 +1,11 @@
 
 // Fix: Import GoogleGenAI and necessary types from @google/genai
 import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters, Content } from "@google/genai";
-import { supabase } from '../lib/supabase.ts';
+import { supabase } from '../lib/supabase';
 
 export const config = {
   runtime: 'edge',
 };
-
-// Fix: Initialize GoogleGenAI client with API key from environment variables
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 interface Message {
   role: 'ai' | 'user'; 
@@ -20,6 +17,13 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405 });
   }
 
+  // Initialize inside handler to prevent build-time failures if API_KEY is not yet in environment
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'Internal Server Error: AI Configuration Missing' }), { status: 500 });
+  }
+  const ai = new GoogleGenAI({ apiKey });
+
   try {
     const { message, history, systemInstruction, userId } = await req.json();
 
@@ -29,7 +33,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     const geminiContents: Content[] = [];
 
-    if (Array.isArray(history)) {
+    if (history && Array.isArray(history)) {
       history.forEach((msg: Message) => {
         if (msg.role === 'user' || msg.role === 'ai') {
           geminiContents.push({
@@ -54,13 +58,17 @@ export default async function handler(req: Request): Promise<Response> {
     const aiReply = geminiResponse.text || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।";
 
     if (userId) {
-      await supabase.from('ai_logs').insert({
-        user_id: userId,
-        prompt: message,
-        response: aiReply,
-        model: generateContentParams.model,
-        created_at: new Date().toISOString()
-      });
+      try {
+        await supabase.from('ai_logs').insert({
+          user_id: userId,
+          prompt: message,
+          response: aiReply,
+          model: generateContentParams.model,
+          created_at: new Date().toISOString()
+        });
+      } catch (logErr) {
+        console.error("Non-fatal logging error:", logErr);
+      }
     }
 
     return new Response(JSON.stringify({ reply: aiReply }), { status: 200 });

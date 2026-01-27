@@ -44,83 +44,80 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
   ];
 
   return (
-    <div className="min-h-full flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden h-full">
+    <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden">
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-64 lg:w-72 bg-brand-surface border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
+      <aside className="hidden md:flex flex-col w-64 bg-brand-surface border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
         <div className="mb-10">
-          <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic tracking-tight">
+          <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic">
             HSC TRACKER
           </h1>
         </div>
         
-        <nav className="flex-1 space-y-2 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 space-y-3 overflow-y-auto scrollbar-hide">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all duration-200 ${
+              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
                 activeTab === item.id 
-                  ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20 font-bold' 
+                  ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/20 font-bold scale-105' 
                   : 'hover:bg-brand-bg/50 text-brand-text-s hover:text-brand-text-p'
               }`}
             >
               {item.icon}
-              <span className="text-sm">{item.label}</span>
+              {item.label}
             </button>
           ))}
         </nav>
 
-        <div className="mt-auto pt-8 space-y-3">
-           <div className="flex items-center gap-3 p-4 bg-brand-bg/50 rounded-2xl border border-brand-text-s/10 overflow-hidden">
+        <div className="mt-auto pt-8 space-y-4">
+           <div className="flex items-center gap-3 p-4 bg-brand-bg/50 rounded-3xl border border-brand-text-s/10">
              <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-black text-lg shrink-0">
                {userProfile.fullName?.[0] || 'U'}
              </div>
              <div className="min-w-0">
                <p className="text-sm font-bold truncate leading-none mb-1">{userProfile.fullName}</p>
-               <p className="text-[10px] uppercase font-black text-brand-text-s leading-none">{userProfile.group}</p>
+               <p className="text-[9px] uppercase font-black text-brand-text-s leading-none">{userProfile.group}</p>
              </div>
            </div>
-           <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-brand-bg/50 rounded-xl text-brand-text-s transition-all">
+           <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-brand-bg/50 rounded-2xl text-brand-text-s transition-all">
              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-             <span className="text-xs font-bold uppercase tracking-widest">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')}</span>
+             <span className="text-sm font-bold">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')}</span>
            </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 h-full relative overflow-hidden">
-        <header className="flex items-center justify-between px-6 py-4 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors safe-pt">
-          <h1 className="font-black text-brand-primary italic tracking-tight text-base">HSC TRACKER</h1>
-          <div className="flex gap-1 items-center">
+      <main className="flex-1 flex flex-col min-w-0 h-full md:h-screen relative">
+        <header className="flex items-center justify-between px-5 py-3.5 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
+          <h1 className="font-black text-brand-primary italic tracking-tight text-sm">HSC TRACKER</h1>
+          <div className="flex gap-1">
             <button onClick={toggleTheme} className="p-2 text-brand-text-s hover:text-brand-text-p transition-colors active:scale-90">
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-black text-xs">
-              {userProfile.fullName?.[0] || 'U'}
-            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-8 md:py-10 pb-32 md:pb-12 scroll-smooth scrollbar-hide">
-          <div className="max-w-5xl mx-auto h-full">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth scrollbar-hide">
+          <div className="max-w-6xl mx-auto h-full">
             {children}
           </div>
         </div>
 
         {/* Mobile Nav */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around bg-brand-surface/95 backdrop-blur-xl border-t border-brand-text-s/10 px-2 sm:px-4 pt-2.5 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgb(0,0,0,0.05)] transition-colors">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around bg-brand-surface/90 backdrop-blur-xl border-t border-brand-text-s/10 px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgb(0,0,0,0.05)] transition-colors">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center gap-1.5 p-1 transition-all active:scale-95 flex-1 min-w-0 ${
+              className={`flex flex-col items-center gap-1.5 p-1.5 transition-all active:scale-95 ${
                 activeTab === item.id ? 'text-brand-primary' : 'text-brand-text-s'
               }`}
             >
-              <div className={`transition-all flex items-center justify-center w-full max-w-[56px] h-10 rounded-2xl ${activeTab === item.id ? 'bg-brand-primary/10' : ''}`}>
-                {React.cloneElement(item.icon as React.ReactElement<any>, { size: 20 })}
+              <div className={`transition-all ${activeTab === item.id ? 'bg-brand-primary/10 px-4 py-2 rounded-2xl' : 'px-4 py-2'}`}>
+                {React.cloneElement(item.icon as React.ReactElement<any>, { size: 18 })}
               </div>
-              <span className="text-[9px] font-black uppercase tracking-tight leading-none text-center truncate w-full px-1">{item.label}</span>
+              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest leading-none">{item.label}</span>
             </button>
           ))}
         </nav>

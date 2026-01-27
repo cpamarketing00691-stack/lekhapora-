@@ -16,7 +16,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [showManual, setShowManual] = useState(false);
   const [currentMood, setCurrentMood] = useState<Mood>(userState.currentMood || 'Focused');
 
-  // Manual Entry States
   const [manualData, setManualData] = useState({
     subjectId: '',
     durationMin: 30,
@@ -138,38 +137,33 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     { label: 'Burnt Out', icon: <Wind size={18} />, color: 'text-slate-400' },
   ];
 
-  const filteredTasks = userState.dailyTasks.filter(task => 
-    !task.isCompleted && (!activeSubjectId || task.subjectId === activeSubjectId)
-  );
-
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 overflow-x-hidden px-1 pb-10">
-      <header className="text-center flex items-center justify-between">
+    <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 pb-12">
+      <header className="flex items-center justify-between px-2">
         <div className="w-10"></div>
-        <div>
-          <h2 className="text-3xl font-black tracking-tight text-brand-text-p">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
-          <p className="text-brand-text-s text-xs mt-1 font-medium">{t('তোমার সাফল্যের সময় গণনা শুরু করো।', 'Start tracking your success time.')}</p>
+        <div className="text-center">
+          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-brand-text-p">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
+          <p className="text-brand-text-s text-[10px] sm:text-xs font-medium">{t('তোমার সাফল্যের সময় গণনা করো।', 'Track your time to success.')}</p>
         </div>
         <button 
           onClick={() => setShowManual(!showManual)}
-          className={`p-2.5 rounded-2xl transition-all ${showManual ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-text-s border border-brand-text-s/10'}`}
-          title={t('ম্যানুয়াল এন্ট্রি', 'Manual Entry')}
+          className={`p-2.5 rounded-2xl transition-all shadow-sm ${showManual ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-text-s border border-brand-text-s/10'}`}
         >
-          <History size={20} />
+          <History size={18} />
         </button>
       </header>
 
       {showManual ? (
         <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95">
-          <h3 className="text-lg font-black mb-6 text-center">{t('ম্যানুয়াল পড়াশোনা যোগ করো', 'Add Manual Study Session')}</h3>
+          <h3 className="text-lg font-black mb-6 text-center">{t('ম্যানুয়াল পড়াশোনা যোগ করো', 'Manual Study Entry')}</h3>
           <div className="space-y-4">
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div className="space-y-1.5">
                  <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
                  <select 
                    value={manualData.subjectId}
                    onChange={e => setManualData({...manualData, subjectId: e.target.value})}
-                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-3 text-xs font-bold outline-none"
                  >
                    <option value="">{t('নির্বাচন করো', 'Select')}</option>
                    {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
@@ -181,102 +175,102 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                    type="date"
                    value={manualData.date}
                    onChange={e => setManualData({...manualData, date: e.target.value})}
-                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-3 text-xs font-bold outline-none cursor-pointer"
                  />
                </div>
              </div>
              <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1.5">
-                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পড়ার সময় (মিনিট)', 'Focus Min')}</label>
+                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পড়া (মিনিট)', 'Focus min')}</label>
                  <input 
                    type="number"
                    value={manualData.durationMin}
                    onChange={e => setManualData({...manualData, durationMin: parseInt(e.target.value)})}
-                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-3 text-xs font-bold outline-none"
                  />
                </div>
                <div className="space-y-1.5">
-                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('ব্রিকের সময় (মিনিট)', 'Break Min')}</label>
+                 <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('ব্রেক (মিনিট)', 'Break min')}</label>
                  <input 
                    type="number"
                    value={manualData.breakMin}
                    onChange={e => setManualData({...manualData, breakMin: parseInt(e.target.value)})}
-                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-xl px-4 py-3 text-xs font-bold outline-none"
+                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-3 text-xs font-bold outline-none"
                  />
                </div>
              </div>
              <button 
               onClick={handleManualSubmit}
-              className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px]"
+              className="w-full py-4 mt-2 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
              >
                {t('সেভ করো', 'Save Session')}
              </button>
           </div>
         </div>
       ) : (
-        <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10">
+        <div className="bg-brand-surface rounded-[2.5rem] p-6 sm:p-10 shadow-xl border border-brand-text-s/10 transition-all">
           <div className="mb-8 space-y-6">
-            <div className="flex bg-brand-bg p-1 rounded-2xl max-w-xs mx-auto">
-              <button onClick={() => !timer && setIsRevision(false)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
-              <button onClick={() => !timer && setIsRevision(true)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}>{t('রিভিশন', 'Revision')}</button>
+            <div className="flex bg-brand-bg p-1 rounded-2xl max-w-[280px] mx-auto border border-brand-text-s/5">
+              <button onClick={() => !timer && setIsRevision(false)} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
+              <button onClick={() => !timer && setIsRevision(true)} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}>{t('রিভিশন', 'Revision')}</button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় নির্বাচন করো', 'Choose Subject')}</label>
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় বেছে নাও', 'Choose Subject')}</label>
                 <select 
                   disabled={!!timer} 
                   value={activeSubjectId} 
                   onChange={(e) => setActiveSubjectId(e.target.value)} 
-                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-xs font-bold appearance-none outline-none transition-all"
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-3.5 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
                 >
-                  <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-                  {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}
+                  <option value="">{t('নির্বাচন করো', 'Select')}</option>
+                  {userState.subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>)}
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Linked Exam (Optional)')}</label>
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Exam (Optional)')}</label>
                 <select 
                   disabled={!!timer} 
                   value={activeExamId} 
                   onChange={(e) => setActiveExamId(e.target.value)} 
-                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-xs font-bold appearance-none outline-none transition-all"
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-3.5 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
                 >
-                  <option value="">{t('পরীক্ষা বেছে নাও', 'Choose Exam')}</option>
+                  <option value="">{t('নির্বাচন করো', 'Select')}</option>
                   {upcomingExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                 </select>
               </div>
             </div>
           </div>
 
-          <div className="text-center py-6 relative">
+          <div className="text-center py-6">
             <div 
               className="font-black tracking-tighter tabular-nums leading-none select-none text-brand-text-p transition-all"
-              style={{ fontSize: 'clamp(3rem, 18vw, 7.5rem)' }}
+              style={{ fontSize: 'clamp(2.5rem, 16vw, 6.5rem)' }}
             >
               {formatDuration(timer?.accumulatedFocusSeconds || 0)}
             </div>
             
             <div className="flex items-center justify-center gap-6 mt-4">
-              <div className="flex items-center gap-2 text-brand-text-s font-black text-[10px] uppercase tracking-widest">
+              <div className="flex items-center gap-1.5 text-brand-text-s font-black text-[9px] uppercase tracking-widest">
                 <FocusIcon size={12} className="text-brand-primary" />
                 <span>{t('ফোকাস', 'FOCUS')}</span>
               </div>
-              <div className={`flex items-center gap-2 font-black text-[10px] uppercase tracking-widest transition-all ${timer && !timer.isFocusActive ? 'text-brand-secondary' : 'text-brand-text-s opacity-30'}`}>
+              <div className={`flex items-center gap-1.5 font-black text-[9px] uppercase tracking-widest transition-all ${timer && !timer.isFocusActive ? 'text-brand-secondary' : 'text-brand-text-s opacity-30'}`}>
                 <Coffee size={12} />
                 <span>{t('ব্রেক', 'BREAK')}: {formatDuration(timer?.accumulatedBreakSeconds || 0)}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-8 mt-10">
-            <div className={`flex gap-3 p-2 bg-brand-bg rounded-3xl transition-all ${!timer ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
+          <div className="flex flex-col items-center gap-8 mt-6">
+            <div className={`flex gap-2.5 p-1.5 bg-brand-bg rounded-3xl transition-all ${!timer ? 'opacity-30 pointer-events-none grayscale scale-95' : 'scale-100'}`}>
               {moods.map(m => (
                 <button
                   key={m.label}
                   onClick={() => setCurrentMood(m.label)}
-                  className={`p-3 rounded-2xl transition-all ${currentMood === m.label ? 'bg-brand-surface shadow-md scale-110' : 'hover:bg-brand-surface/50 opacity-40'}`}
+                  className={`p-2.5 rounded-2xl transition-all ${currentMood === m.label ? 'bg-brand-surface shadow-md scale-110' : 'opacity-40 hover:opacity-100'}`}
                   title={m.label}
                 >
                   <div className={currentMood === m.label ? m.color : 'text-brand-text-s'}>
@@ -286,19 +280,19 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               ))}
             </div>
 
-            <div className="flex items-center justify-center gap-6">
+            <div className="flex items-center justify-center gap-6 pb-2">
               {!timer?.isFocusActive ? (
                 <button 
                   onClick={handleStartResume} 
                   disabled={!activeSubjectId} 
-                  className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-primary text-white flex items-center justify-center rounded-full shadow-2xl transition-all active:scale-95 disabled:opacity-30 hover:scale-105"
+                  className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-primary text-white flex items-center justify-center rounded-full shadow-2xl transition-all active:scale-90 disabled:opacity-30 hover:scale-105"
                 >
                   <Play size={32} className="ml-1 fill-current" />
                 </button>
               ) : (
                 <button 
                   onClick={handlePause} 
-                  className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg shadow-xl transition-all active:scale-95 hover:scale-105"
+                  className="w-20 h-20 sm:w-24 sm:h-24 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg shadow-xl transition-all active:scale-90 hover:scale-105"
                 >
                   <Pause size={32} className="fill-current" />
                 </button>
@@ -306,7 +300,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               <button 
                 onClick={handleStopEnd} 
                 disabled={!timer} 
-                className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-bg text-red-500 flex items-center justify-center rounded-full shadow-lg transition-all active:scale-95 disabled:opacity-30 hover:bg-red-50"
+                className="w-14 h-14 bg-brand-bg text-red-500 flex items-center justify-center rounded-full shadow-lg transition-all active:scale-90 disabled:opacity-30 hover:bg-red-50"
               >
                 <Square size={20} className="fill-current" />
               </button>

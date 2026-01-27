@@ -65,23 +65,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     if (subjectFilter) filteredSessions = filteredSessions.filter(s => s.subjectId === subjectFilter);
     if (examFilter) filteredSessions = filteredSessions.filter(s => s.examId === examFilter);
 
+    // Add active session time to stats if relevant
+    const activeSessionFocus = userState.activeTimer?.accumulatedFocusSeconds || 0;
+    const activeSessionBreak = userState.activeTimer?.accumulatedBreakSeconds || 0;
+
     const regularFocusSeconds = filteredSessions
       .filter(s => !s.isRevision)
-      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0);
+      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + (!userState.activeTimer?.isRevision ? activeSessionFocus : 0);
     
     const revisionFocusSeconds = filteredSessions
       .filter(s => s.isRevision)
-      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0);
+      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + (userState.activeTimer?.isRevision ? activeSessionFocus : 0);
 
     const todayFocusSeconds = filteredSessions
       .filter(s => getLocalDateString(s.startTime) === today)
-      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0);
+      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + activeSessionFocus;
 
     const totalBreakSeconds = filteredSessions
-      .reduce((acc, curr) => acc + (curr.breakSeconds || 0), 0);
+      .reduce((acc, curr) => acc + (curr.breakSeconds || 0), 0) + activeSessionBreak;
     
     const totalBreaks = filteredSessions
-      .reduce((acc, curr) => acc + (curr.numBreaks || 0), 0);
+      .reduce((acc, curr) => acc + (curr.numBreaks || 0), 0) + (userState.activeTimer?.numBreaks || 0);
 
     const dailyGoalSeconds = 4 * 3600; 
     const studyTimeFactor = Math.min(100, Math.round((todayFocusSeconds / dailyGoalSeconds) * 100)); 
@@ -123,7 +127,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         revision: revisionFactor
       }
     };
-  }, [userState.studyHistory, userState.subjects, userState.streaks, userState.language, subjectFilter, examFilter]);
+  }, [userState.studyHistory, userState.subjects, userState.streaks, userState.language, subjectFilter, examFilter, userState.activeTimer]);
 
   const upcomingExams = useMemo(() => {
     const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
@@ -192,29 +196,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const addTask = () => {
     if (!newTask.name.trim()) return;
 
-    let finalChapterId = newTask.chapterId;
-    let finalCustomChapterName = newTask.customChapterName.trim();
-
-    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
-    if (isManualChapterMode && finalCustomChapterName && newTask.subjectId) {
-      const selectedSub = rawSubjects.find(s => s.id === newTask.subjectId);
-      const match = Array.isArray(selectedSub?.chapters) ? selectedSub?.chapters.find(c => 
-        c.name.toLowerCase() === finalCustomChapterName.toLowerCase()
-      ) : null;
-      if (match) {
-        finalChapterId = match.id;
-        finalCustomChapterName = ''; 
-      }
-    }
-
     const task: Task = {
       id: `task-${Date.now()}`,
       name: newTask.name.trim(),
-      source: TaskSource.PERSONAL,
+      source: newTask.source,
       isCompleted: false,
       subjectId: newTask.subjectId || undefined,
-      chapterId: finalChapterId || undefined,
-      customChapterName: finalCustomChapterName || undefined,
+      chapterId: newTask.chapterId || undefined,
+      customChapterName: newTask.customChapterName || undefined,
       createdAt: Date.now()
     };
 
@@ -224,7 +213,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     }));
     setNewTask({ name: '', source: TaskSource.PERSONAL, subjectId: '', chapterId: '', customChapterName: '' });
     setIsTaskModalOpen(false);
-    setIsManualChapterMode(false);
   };
 
   const toggleTask = (id: string) => {
@@ -245,9 +233,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const primaryColor = isDark ? '#5FB3A2' : '#5B7DBE';
   const secondaryColor = isDark ? '#8B9CF2' : '#7FAE9E';
 
-  const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
-  const selectedSubject = rawSubjects.find(s => s.id === newTask.subjectId);
-
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-12">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -265,26 +250,34 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
 
       {/* Active Session Sync Card */}
       {userState.activeTimer && (
-        <div className="bg-brand-primary text-white p-6 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 animate-in slide-in-from-top-4 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/10">
-          <div className="flex items-center gap-5 w-full md:w-auto">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0">
+        <div className="bg-brand-primary text-white p-6 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 animate-in slide-in-from-top-4 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/10 relative overflow-hidden">
+          <Sparkles className="absolute -right-10 -bottom-10 opacity-10" size={150} />
+          <div className="flex items-center gap-5 w-full md:w-auto relative z-10">
+            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md shrink-0 border border-white/30">
               <PlayCircle size={32} className="animate-pulse" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">{t('বর্তমানে পড়ছো', 'Current Study Session')}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">{t('বর্তমানে পড়ছো', 'Currently Studying')}</p>
               <h3 className="text-lg sm:text-xl font-black truncate">{getSubjectName(userState.activeTimer.subjectId)}</h3>
-              <p className="text-[10px] font-bold opacity-80">{userState.activeTimer.isRevision ? t('রিভিশন সেশন', 'Revision Mode') : t('পড়াশোনা সেশন', 'Study Mode')}</p>
+              <p className="text-[10px] font-bold opacity-80 flex items-center gap-2">
+                {userState.activeTimer.isRevision ? t('রিভিশন মোড', 'Revision Mode') : t('পড়াশোনা মোড', 'Study Mode')}
+                {userState.activeTimer.taskId && (
+                  <span className="bg-white/10 px-2 py-0.5 rounded-full border border-white/20">
+                    {userState.dailyTasks.find(t => t.id === userState.activeTimer?.taskId)?.name}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-6 sm:gap-10 w-full md:w-auto justify-center md:justify-end border-t md:border-t-0 border-white/10 pt-4 md:pt-0">
+          <div className="flex items-center gap-6 sm:gap-10 w-full md:w-auto justify-center md:justify-end border-t md:border-t-0 border-white/10 pt-4 md:pt-0 relative z-10">
             <div className="text-center">
-              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{t('পড়ার সময়', 'Study')}</p>
+              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{t('পড়া', 'FOCUS')}</p>
               <p className="text-xl sm:text-2xl font-black tabular-nums">{formatDuration(userState.activeTimer.accumulatedFocusSeconds)}</p>
             </div>
             <div className="h-10 w-px bg-white/20 hidden sm:block"></div>
             <div className="text-center">
-              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{t('ব্রেক', 'Break')}</p>
-              <p className="text-xl sm:text-2xl font-black tabular-nums">{formatDuration(userState.activeTimer.accumulatedBreakSeconds)}</p>
+              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{t('ব্রেক', 'BREAK')}</p>
+              <p className="text-xl sm:text-2xl font-black tabular-nums text-white/80">{formatDuration(userState.activeTimer.accumulatedBreakSeconds)}</p>
             </div>
           </div>
         </div>
@@ -355,17 +348,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.map(task => (
-            <div key={task.id} className={`group flex flex-col p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary'}`}>
+            <div key={task.id} className={`group flex flex-col p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary shadow-sm'}`}>
               <div className="flex items-start justify-between gap-2">
                  <button onClick={() => toggleTask(task.id)} className="flex items-start gap-3 min-w-0 text-left">
-                    <div className={`mt-0.5 shrink-0 ${task.isCompleted ? 'text-emerald-500' : 'text-brand-text-s'}`}>
+                    <div className={`mt-0.5 shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-500' : 'text-brand-text-s'}`}>
                       {task.isCompleted ? <CheckCircle size={18} /> : <Circle size={18} />}
                     </div>
                     <div className="min-w-0">
-                      <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
+                      <p className={`text-xs font-bold leading-tight transition-all ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
                       
                       <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-text-s bg-brand-surface px-1.5 py-0.5 rounded">
+                        <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-text-s bg-brand-surface px-1.5 py-0.5 rounded shadow-xs">
                           <Tag size={8} /> {task.source}
                         </span>
                         {task.subjectId && (
@@ -376,7 +369,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       </div>
                     </div>
                  </button>
-                 <button onClick={() => deleteTask(task.id)} className="p-1.5 text-brand-text-s hover:text-red-500 transition-all">
+                 <button onClick={() => deleteTask(task.id)} className="p-1.5 text-brand-text-s hover:text-red-500 transition-all active:scale-90">
                     <Trash2 size={14} />
                  </button>
               </div>
@@ -446,70 +439,64 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           </div>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm overflow-hidden">
-          <h4 className="text-xs sm:text-sm font-black text-brand-text-s flex items-center gap-2 uppercase tracking-[0.2em] mb-6">
-            <BarChart3 size={16} className="text-brand-primary" /> {t('সাপ্তাহিক রিপোর্ট', 'Weekly Report')}
-          </h4>
-          <div className="h-56 sm:h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: isDark ? '#8A94A6' : '#6B7280' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: isDark ? '#8A94A6' : '#6B7280' }} unit="h" />
-                <Tooltip 
-                   cursor={{ fill: 'rgba(0,0,0,0.05)' }}
-                   contentStyle={{ backgroundColor: isDark ? '#1B2636' : '#E9EDF0', border: 'none', borderRadius: '12px', fontSize: '10px' }}
-                />
-                <Bar dataKey="study" stackId="a" fill={primaryColor} barSize={20} />
-                <Bar dataKey="revision" stackId="a" fill={secondaryColor} radius={[4, 4, 0, 0]} barSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <History size={16} className="text-brand-secondary" />
-              <h4 className="text-xs sm:text-sm font-black text-brand-text-p uppercase tracking-widest">{t('সেশন হিস্ট্রি', 'Session History')}</h4>
-            </div>
-          </div>
-          <div className="flex-1 space-y-4 overflow-y-auto pr-1 max-h-[400px] scrollbar-hide">
-            {recentSessions.length > 0 ? recentSessions.map((session) => (
-              <div key={session.id} className="flex flex-col gap-2 p-4 rounded-2xl bg-brand-bg/50 border border-brand-text-s/10 hover:border-brand-primary transition-all">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="min-w-0">
-                    <h5 className="font-black text-[10px] sm:text-[11px] text-brand-text-p mb-1 truncate">
-                      {getSubjectName(session.subjectId)}
-                    </h5>
-                    <div className="flex flex-wrap items-center gap-2">
-                       <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-text-s flex items-center gap-1">
-                         {session.isRevision ? t('রিভিশন', 'Revision') : t('পড়াশোনা', 'Study')}
-                       </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full">
-                    {new Date(session.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </div>
+      
+      {/* Task Modal Recovery */}
+      {isTaskModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+             <div className="w-full max-w-md bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="font-black text-brand-text-p uppercase tracking-widest">{t('নতুন হোমওয়ার্ক যোগ করো', 'New Homework Task')}</h4>
+                  <button onClick={() => setIsTaskModalOpen(false)} className="text-brand-text-s hover:text-brand-text-p"><X size={20} /></button>
                 </div>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <div className="bg-brand-bg p-2 rounded-xl flex items-center gap-2">
-                    <Clock size={10} className="text-brand-primary shrink-0" />
-                    <p className="text-[9px] sm:text-[10px] font-black text-brand-text-p tabular-nums leading-none">{formatDuration(session.durationSeconds)}</p>
-                  </div>
-                  <div className="bg-brand-bg p-2 rounded-xl flex items-center gap-2">
-                    <Coffee size={10} className="text-brand-secondary shrink-0" />
-                    <p className="text-[9px] sm:text-[10px] font-black text-brand-text-p tabular-nums leading-none">{formatDuration(session.breakSeconds)}</p>
-                  </div>
+                <div className="space-y-5">
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('টাস্কের নাম', 'Task Name')}</label>
+                      <input 
+                        type="text" 
+                        value={newTask.name}
+                        onChange={e => setNewTask({...newTask, name: e.target.value})}
+                        placeholder={t("যেমন: ফিজিক্স ৩য় অধ্যায় ম্যাথ", "e.g. Physics Ch 3 Problems")}
+                        className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary"
+                      />
+                   </div>
+
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় (ঐচ্ছিক)', 'Subject (Optional)')}</label>
+                      <select 
+                        value={newTask.subjectId} 
+                        onChange={e => setNewTask({...newTask, subjectId: e.target.value})}
+                        className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
+                      >
+                        <option value="">{t('নির্বাচন করো', 'Select')}</option>
+                        {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
+                      </select>
+                   </div>
+
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('উৎস (Source)', 'Source')}</label>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.values(TaskSource).map(source => (
+                          <button 
+                            key={source}
+                            onClick={() => setNewTask({...newTask, source})}
+                            className={`px-3 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg border-2 transition-all ${newTask.source === source ? 'bg-brand-primary/10 border-brand-primary text-brand-primary' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-surface'}`}
+                          >
+                            {source}
+                          </button>
+                        ))}
+                      </div>
+                   </div>
+
+                   <button 
+                    onClick={addTask}
+                    className="w-full py-4 mt-2 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                   >
+                     {t('অ্যাড হোমওয়ার্ক', 'Add Homework')}
+                   </button>
                 </div>
-              </div>
-            )) : (
-              <p className="text-center text-[10px] font-bold text-brand-text-s py-10">{t('কোনো তথ্য নেই', 'No history found')}</p>
-            )}
+             </div>
           </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

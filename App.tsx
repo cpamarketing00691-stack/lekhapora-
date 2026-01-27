@@ -35,7 +35,6 @@ const App: React.FC = () => {
         const state = { ...DEFAULT_STATE, ...parsed };
         
         // RECONCILIATION: On app load, catch up on time elapsed since the last save.
-        // This ensures the timer remains accurate across page refreshes and browser closes.
         if (state.activeTimer) {
           const now = Date.now();
           const elapsedMs = now - state.activeTimer.lastTimestamp;
@@ -66,6 +65,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number | null>(null);
+  const lastCloudSaveRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
@@ -107,6 +107,12 @@ const App: React.FC = () => {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
         setUserState(prev => {
+          // SAFE SYNC: If we have an active timer locally, don't let cloud state overwrite it blindly
+          // if the cloud state doesn't have an active timer or is clearly older.
+          if (prev.activeTimer && !data.state.activeTimer) {
+             return { ...prev, ...data.state, activeTimer: prev.activeTimer, isAuthenticated: true };
+          }
+
           const newState = { ...prev, ...data.state, isAuthenticated: true };
           // Re-reconcile after cloud sync to ensure no gap exists
           if (newState.activeTimer) {
@@ -125,7 +131,7 @@ const App: React.FC = () => {
     } catch (e) { console.warn("Sync failed"); }
   };
 
-  const saveUserData = async (state: any) => {
+  const saveUserData = async (state: UserState) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -135,19 +141,28 @@ const App: React.FC = () => {
         state: stateToSave, 
         updated_at: new Date().toISOString() 
       }, { onConflict: 'user_id' });
+      lastCloudSaveRef.current = Date.now();
     } catch (e) { }
   };
 
+  // Immediate LocalStorage update + Debounced Cloud Update
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
+    
     if (userState.isAuthenticated) {
-      const timeoutId = setTimeout(() => saveUserData(userState), 3000);
-      return () => clearTimeout(timeoutId);
+      // If timer is running, we only save to cloud every 30s to prevent the "never-firing" debounce issue
+      const timeSinceLastSave = Date.now() - lastCloudSaveRef.current;
+      const isTimerRunning = !!userState.activeTimer;
+      
+      if (isTimerRunning && timeSinceLastSave > 30000) {
+        saveUserData(userState);
+      } else {
+        const timeoutId = setTimeout(() => saveUserData(userState), 3000);
+        return () => clearTimeout(timeoutId);
+      }
     }
   }, [userState]);
 
-  // BACKGROUND-SAFE TIMER: Relies on timestamps (Date.now()) instead of reliable setInterval ticks.
-  // This allows the timer to accurately bridge gaps when the browser throttles background tabs.
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
@@ -164,7 +179,6 @@ const App: React.FC = () => {
             const isFocus = prev.activeTimer.isFocusActive;
             const updatedTimer = {
               ...prev.activeTimer,
-              // Move the timestamp forward by full seconds. Remaining milliseconds are preserved for the next tick.
               lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? prev.activeTimer.accumulatedFocusSeconds + deltaSeconds 

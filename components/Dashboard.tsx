@@ -72,16 +72,21 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     if (subjectFilter) filteredSessions = filteredSessions.filter(s => s.subjectId === subjectFilter);
     if (examFilter) filteredSessions = filteredSessions.filter(s => s.examId === examFilter);
 
-    const activeSessionFocus = userState.activeTimer?.accumulatedFocusSeconds || 0;
-    const activeSessionBreak = userState.activeTimer?.accumulatedBreakSeconds || 0;
+    // Sync metrics: Only include active timer stats if they match the current filters
+    const timerMatchesFilters = (!subjectFilter || userState.activeTimer?.subjectId === subjectFilter) &&
+                                (!examFilter || userState.activeTimer?.examId === examFilter);
+
+    const activeSessionFocus = timerMatchesFilters ? (userState.activeTimer?.accumulatedFocusSeconds || 0) : 0;
+    const activeSessionBreak = timerMatchesFilters ? (userState.activeTimer?.accumulatedBreakSeconds || 0) : 0;
+    const activeNumBreaks = timerMatchesFilters ? (userState.activeTimer?.numBreaks || 0) : 0;
 
     const regularFocusSeconds = filteredSessions
       .filter(s => !s.isRevision)
-      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + (!userState.activeTimer?.isRevision ? activeSessionFocus : 0);
+      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + (timerMatchesFilters && !userState.activeTimer?.isRevision ? activeSessionFocus : 0);
     
     const revisionFocusSeconds = filteredSessions
       .filter(s => s.isRevision)
-      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + (userState.activeTimer?.isRevision ? activeSessionFocus : 0);
+      .reduce((acc, curr) => acc + (curr.durationSeconds || 0), 0) + (timerMatchesFilters && userState.activeTimer?.isRevision ? activeSessionFocus : 0);
 
     const todayFocusSeconds = filteredSessions
       .filter(s => getLocalDateString(s.startTime) === today)
@@ -91,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       .reduce((acc, curr) => acc + (curr.breakSeconds || 0), 0) + activeSessionBreak;
     
     const totalBreaks = filteredSessions
-      .reduce((acc, curr) => acc + (curr.numBreaks || 0), 0) + (userState.activeTimer?.numBreaks || 0);
+      .reduce((acc, curr) => acc + (curr.numBreaks || 0), 0) + activeNumBreaks;
 
     const dailyGoalSeconds = 4 * 3600; 
     const studyTimeFactor = Math.min(100, Math.round((todayFocusSeconds / dailyGoalSeconds) * 100)); 
@@ -181,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     const task: Task = {
       id: `task-${Date.now()}`,
       name: newTask.name.trim(),
-      source: newTask.source,
+      source: TaskSource.PERSONAL,
       isCompleted: false,
       subjectId: newTask.subjectId || undefined,
       chapterId: newTask.chapterId || undefined,

@@ -94,7 +94,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           ...prev.activeTimer, 
           isFocusActive: true, 
           accumulatedBreakSeconds: prev.activeTimer.accumulatedBreakSeconds + deltaSeconds,
-          lastTimestamp: now 
+          // Preserve millisecond remainder to avoid losing time on rapid clicks
+          lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000) 
         }
       };
     });
@@ -116,7 +117,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           isFocusActive: false, 
           accumulatedFocusSeconds: prev.activeTimer.accumulatedFocusSeconds + deltaSeconds,
           numBreaks: prev.activeTimer.numBreaks + 1, 
-          lastTimestamp: now 
+          // Preserve millisecond remainder
+          lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000)
         }
       };
     });
@@ -216,7 +218,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পত্র/পার্ট নির্বাচন', 'Select Paper')}</label>
+              <label className="block text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('পত্র/পার্ট নির্বাচন', 'Select Paper')}</label>
               <div className="flex bg-brand-bg p-1 rounded-2xl h-[52px]">
                 <button 
                   disabled={!!timer}

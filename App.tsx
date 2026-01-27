@@ -147,7 +147,14 @@ const App: React.FC = () => {
         timerIntervalRef.current = null;
       }
     }
-    return () => { if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current); };
+    // CRITICAL FIX: Ensure the ref is nulled on cleanup so that mode transitions (which re-run the effect)
+    // can successfully restart the interval.
+    return () => { 
+      if (timerIntervalRef.current) {
+        window.clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      } 
+    };
   }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);
 
   const handleProfileComplete = (onboardingData: UserProfile & { selectedSubjectNames: string[] }) => {

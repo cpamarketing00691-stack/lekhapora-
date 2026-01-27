@@ -81,6 +81,7 @@ export interface StudySession {
   subjectId: string;
   examId?: string; 
   taskId?: string; // Link session to a specific focus task
+  chapterId?: string; // Explicitly track which chapter was studied
   startTime: number;
   endTime?: number;
   durationSeconds: number;
@@ -95,6 +96,7 @@ export interface ActiveTimerState {
   subjectId: string;
   examId?: string;
   taskId?: string;
+  chapterId?: string;
   isFocusActive: boolean;
   isRevision: boolean;
   accumulatedFocusSeconds: number;

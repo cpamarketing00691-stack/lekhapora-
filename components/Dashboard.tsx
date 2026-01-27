@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, CollegeExam, Task, TaskSource, StudySession } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle, Flame, Battery, Wind, AlertCircle, Brain } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -30,6 +30,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     return [h, m, s]
       .map(v => v.toString().padStart(2, '0'))
       .join(':');
+  };
+
+  const formatTime12h = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   const getLocalDateString = (timestamp: number) => {
@@ -142,41 +150,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       .slice(0, 8);
   }, [userState.profile?.collegeExams, userState.subjects]);
 
-  const weeklyData = useMemo(() => {
-    const data = [];
-    const today = new Date();
-    const history = Array.isArray(userState.studyHistory) ? userState.studyHistory : [];
-    
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const dateStr = getLocalDateString(d.getTime());
-      
-      const daySessions = history.filter(s => getLocalDateString(s.startTime) === dateStr);
-
-      const studySeconds = daySessions.filter(s => !s.isRevision).reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
-      const revisionSeconds = daySessions.filter(s => s.isRevision).reduce((acc, s) => acc + (s.durationSeconds || 0), 0);
-
-      const dayIndex = d.getDay();
-      const labelsBN = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহ', 'শুক্র', 'শনি'];
-      const labelsEN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      
-      data.push({
-        name: userState.language === 'bn' ? labelsBN[dayIndex] : labelsEN[dayIndex],
-        study: Number((studySeconds / 3600).toFixed(1)),
-        revision: Number((revisionSeconds / 3600).toFixed(1))
-      });
-    }
-    return data;
-  }, [userState.studyHistory, userState.language]);
-
   const recentSessions = useMemo(() => {
     const history = Array.isArray(userState.studyHistory) ? userState.studyHistory : [];
     return [...history]
       .filter(s => !subjectFilter || s.subjectId === subjectFilter)
       .filter(s => !examFilter || s.examId === examFilter)
       .sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
-      .slice(0, 8);
+      .slice(0, 10);
   }, [userState.studyHistory, subjectFilter, examFilter]);
 
   const getSubjectName = (id: string) => {
@@ -186,10 +166,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     return `${sub.name} (${t(sub.paper === 1 ? '১ম পত্র' : '২য় পত্র', sub.paper === 1 ? '1st Paper' : '2nd Paper')})`;
   };
 
-  const getExamName = (id: string) => {
-    const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
-    const ex = collegeExams.find(e => e.id === id);
-    return ex ? ex.name : '';
+  const getChapterName = (subjectId: string, chapterId: string) => {
+    const sub = userState.subjects.find(s => s.id === subjectId);
+    return sub?.chapters.find(c => c.id === chapterId)?.name || '';
+  };
+
+  const getTaskName = (id: string) => {
+    return userState.dailyTasks.find(t => t.id === id)?.name || '';
   };
 
   const addTask = () => {
@@ -228,9 +211,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     }));
   };
 
-  const isDark = document.documentElement.classList.contains('dark');
-  const primaryColor = isDark ? '#5FB3A2' : '#5B7DBE';
-  const secondaryColor = isDark ? '#8B9CF2' : '#7FAE9E';
+  const moodIcons: Record<string, React.ReactNode> = {
+    'Great': <Flame size={14} className="text-orange-500" />,
+    'Focused': <Brain size={14} className="text-brand-primary" />,
+    'Tired': <Battery size={14} className="text-amber-500" />,
+    'Stressed': <AlertCircle size={14} className="text-rose-500" />,
+    'Burnt Out': <Wind size={14} className="text-slate-400" />
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-12">
@@ -258,11 +245,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">{t('বর্তমানে পড়ছো', 'Currently Studying')}</p>
               <h3 className="text-lg sm:text-xl font-black truncate">{getSubjectName(userState.activeTimer.subjectId)}</h3>
-              <p className="text-[10px] font-bold opacity-80 flex items-center gap-2">
+              <p className="text-[10px] font-bold opacity-80 flex flex-wrap items-center gap-2">
                 {userState.activeTimer.isRevision ? t('রিভিশন মোড', 'Revision Mode') : t('পড়াশোনা মোড', 'Study Mode')}
+                {userState.activeTimer.chapterId && (
+                   <span className="bg-white/10 px-2 py-0.5 rounded-full border border-white/20 whitespace-nowrap">
+                    {getChapterName(userState.activeTimer.subjectId, userState.activeTimer.chapterId)}
+                  </span>
+                )}
                 {userState.activeTimer.taskId && (
-                  <span className="bg-white/10 px-2 py-0.5 rounded-full border border-white/20">
-                    {userState.dailyTasks.find(t => t.id === userState.activeTimer?.taskId)?.name}
+                  <span className="bg-white/10 px-2 py-0.5 rounded-full border border-white/20 whitespace-nowrap">
+                    {getTaskName(userState.activeTimer.taskId)}
                   </span>
                 )}
               </p>
@@ -282,6 +274,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       )}
 
+      {/* Main Stats Summary Cards */}
       <section className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
         {userState.profile?.targetExamDate && (
           <div className="bg-brand-primary text-white p-5 rounded-[2.25rem] shadow-lg border border-white/10 flex flex-col justify-between min-w-[160px] snap-center shrink-0">
@@ -329,113 +322,167 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         })}
       </section>
 
-      <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-             <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary shrink-0">
-               <ListTodo size={20} />
-             </div>
-             <h3 className="text-lg font-black text-brand-text-p leading-tight">{t('আজকের লক্ষ্য / হোমওয়ার্ক', 'Today\'s Focus / Homework')}</h3>
-          </div>
-          <button 
-            onClick={() => setIsTaskModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-brand-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all w-full sm:w-auto justify-center"
-          >
-            <Plus size={14} /> {t('নতুন হোমওয়ার্ক', 'Add HW')}
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.map(task => (
-            <div key={task.id} className={`group flex flex-col p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary shadow-sm'}`}>
-              <div className="flex items-start justify-between gap-2">
-                 <button onClick={() => toggleTask(task.id)} className="flex items-start gap-3 min-w-0 text-left">
-                    <div className={`mt-0.5 shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-500' : 'text-brand-text-s'}`}>
-                      {task.isCompleted ? <CheckCircle size={18} /> : <Circle size={18} />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className={`text-xs font-bold leading-tight transition-all ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
-                      
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-text-s bg-brand-surface px-1.5 py-0.5 rounded shadow-xs">
-                          <Tag size={8} /> {task.source}
-                        </span>
-                        {task.subjectId && (
-                           <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded border border-brand-primary/20 truncate max-w-[120px]">
-                             <BookCheck size={8} /> {getSubjectName(task.subjectId)}
-                           </span>
-                        )}
-                      </div>
-                    </div>
-                 </button>
-                 <button onClick={() => deleteTask(task.id)} className="p-1.5 text-brand-text-s hover:text-red-500 transition-all active:scale-90">
-                    <Trash2 size={14} />
-                 </button>
-              </div>
-            </div>
-          )) : (
-            <div className="col-span-full py-8 text-center space-y-3 bg-brand-bg/30 rounded-3xl border border-dashed border-brand-text-s/10">
-               <Info className="mx-auto text-brand-text-s opacity-20" size={32} />
-               <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">{t('আজকের কোনো হোমওয়ার্ক নেই', 'No homework set for today')}</p>
-            </div>
-          )}
-        </div>
-      </section>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] shadow-sm border border-brand-text-s/10 relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 relative z-10 gap-4">
-            <div>
-              <h3 className="text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-1">{t('প্রস্তুতি লেভেল', 'Readiness Level')}</h3>
-              <div className="flex items-baseline gap-2">
-                <h2 className="text-5xl sm:text-6xl font-black text-brand-text-p leading-none tracking-tighter">{stats.score}</h2>
-                <span className="text-xl font-bold text-brand-text-s/30">%</span>
+        {/* Left Column: Readiness and Activity History */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Readiness Card */}
+          <section className="bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 relative z-10 gap-4">
+              <div>
+                <h3 className="text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-1">{t('প্রস্তুতি লেভেল', 'Readiness Level')}</h3>
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-5xl sm:text-6xl font-black text-brand-text-p leading-none tracking-tighter">{stats.score}</h2>
+                  <span className="text-xl font-bold text-brand-text-s/30">%</span>
+                </div>
+              </div>
+              <div className="sm:text-right">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-brand-primary text-white shadow-xl shadow-brand-primary/30 mb-2 transform hover:scale-105 transition-transform">
+                  <Target size={14} />
+                  <span className="text-xs font-black uppercase tracking-widest leading-none">{stats.readinessLabel}</span>
+                </div>
               </div>
             </div>
-            <div className="sm:text-right">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-brand-primary text-white shadow-xl shadow-brand-primary/30 mb-2 transform hover:scale-105 transition-transform">
-                <Target size={14} />
-                <span className="text-xs font-black uppercase tracking-widest leading-none">{stats.readinessLabel}</span>
-              </div>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 relative z-10">
-            {[
-              { label: t('আজকের পড়া', 'Today'), value: stats.factors.study, color: 'from-brand-primary to-brand-primary/60' },
-              { label: t('সিলেবাস', 'Syllabus'), value: stats.factors.completion, color: 'from-brand-secondary to-brand-secondary/60' },
-              { label: t('ধারাবাহিকতা', 'Streak'), value: stats.factors.consistency, color: 'from-orange-500 to-amber-400' },
-              { label: t('রিভিশন', 'Revision'), value: stats.factors.revision, color: 'from-purple-500 to-pink-400' }
-            ].map((factor, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex justify-between text-[10px] font-black uppercase tracking-wider">
-                  <span className="text-brand-text-s">{factor.label}</span>
-                  <span className="text-brand-text-p">{factor.value}%</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 relative z-10">
+              {[
+                { label: t('আজকের পড়া', 'Today'), value: stats.factors.study, color: 'from-brand-primary to-brand-primary/60' },
+                { label: t('সিলেবাস', 'Syllabus'), value: stats.factors.completion, color: 'from-brand-secondary to-brand-secondary/60' },
+                { label: t('ধারাবাহিকতা', 'Streak'), value: stats.factors.consistency, color: 'from-orange-500 to-amber-400' },
+                { label: t('রিভিশন', 'Revision'), value: stats.factors.revision, color: 'from-purple-500 to-pink-400' }
+              ].map((factor, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex justify-between text-[10px] font-black uppercase tracking-wider">
+                    <span className="text-brand-text-s">{factor.label}</span>
+                    <span className="text-brand-text-p">{factor.value}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-brand-bg rounded-full overflow-hidden shadow-inner">
+                    <div className={`h-full bg-gradient-to-r ${factor.color} rounded-full transition-all duration-1000`} style={{ width: `${factor.value}%` }} />
+                  </div>
                 </div>
-                <div className="h-2 w-full bg-brand-bg rounded-full overflow-hidden shadow-inner">
-                  <div className={`h-full bg-gradient-to-r ${factor.color} rounded-full transition-all duration-1000`} style={{ width: `${factor.value}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Activity Log - RECENT SESSIONS */}
+          <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-3">
+                 <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
+                   <History size={20} />
+                 </div>
+                 <h3 className="text-lg font-black text-brand-text-p">{t('সাম্প্রতিক অ্যাক্টিভিটি', 'Recent Activity')}</h3>
+               </div>
+               <button className="text-[9px] font-black uppercase tracking-widest text-brand-text-s hover:text-brand-primary transition-all">
+                 {t('সব দেখো', 'View All')}
+               </button>
+            </div>
+
+            <div className="space-y-4">
+               {recentSessions.length > 0 ? recentSessions.map((session) => (
+                 <div key={session.id} className="flex gap-4 group">
+                    <div className="flex flex-col items-center">
+                       <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border border-brand-text-s/10 ${session.isRevision ? 'bg-brand-secondary/10 text-brand-secondary' : 'bg-brand-primary/10 text-brand-primary'}`}>
+                         <BookOpen size={18} />
+                       </div>
+                       <div className="flex-1 w-px bg-brand-text-s/10 my-1 group-last:hidden"></div>
+                    </div>
+                    <div className="flex-1 min-w-0 pb-4">
+                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                          <h4 className="text-xs sm:text-sm font-black text-brand-text-p truncate">
+                            {getSubjectName(session.subjectId)}
+                            {session.isRevision && <span className="ml-2 text-[8px] bg-brand-secondary/10 text-brand-secondary px-1.5 py-0.5 rounded-md uppercase">{t('রিভিশন', 'Revision')}</span>}
+                          </h4>
+                          <span className="text-[10px] font-black text-brand-text-s tabular-nums whitespace-nowrap bg-brand-bg px-2 py-0.5 rounded-lg border border-brand-text-s/10">
+                            {formatTime12h(session.startTime)} - {session.endTime ? formatTime12h(session.endTime) : '...'}
+                          </span>
+                       </div>
+                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-text-s truncate">
+                             <Clock size={12} className="opacity-40" />
+                             <span>{formatDuration(session.durationSeconds)}</span>
+                          </div>
+                          {(session.chapterId || session.taskId) && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-text-s truncate">
+                               <Sparkles size={12} className="opacity-40" />
+                               <span>{session.chapterId ? getChapterName(session.subjectId, session.chapterId) : getTaskName(session.taskId || '')}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-brand-text-s">
+                             {moodIcons[session.mood]}
+                             <span>{session.mood}</span>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+               )) : (
+                 <div className="py-12 text-center space-y-3 opacity-30">
+                    <History className="mx-auto" size={40} />
+                    <p className="text-[10px] font-black uppercase tracking-widest">{t('কোনো তথ্য পাওয়া যায়নি', 'No activity found yet')}</p>
+                 </div>
+               )}
+            </div>
+          </section>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-6">
-          <div className="bg-brand-primary text-white p-6 sm:p-8 rounded-[2.5rem] shadow-2xl shadow-brand-primary/20 relative overflow-hidden group flex flex-col justify-center">
-            <TrendingUp size={48} className="absolute -right-4 -top-4 opacity-10 group-hover:scale-125 transition-transform duration-700 hidden sm:block" />
-            <div className="relative z-10">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">{t('মোট পড়াশোনা', 'Total Focus')}</p>
-              <h2 className="text-3xl sm:text-4xl font-black tracking-tighter tabular-nums leading-tight">{stats.totalDisplay}</h2>
-              <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-1">{t('আজকের:', 'Today:')} {stats.todayDisplay}</p>
+        {/* Right Column: Totals and Tasks */}
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6">
+            <div className="bg-brand-primary text-white p-6 sm:p-8 rounded-[2.5rem] shadow-2xl shadow-brand-primary/20 relative overflow-hidden group flex flex-col justify-center">
+              <TrendingUp size={48} className="absolute -right-4 -top-4 opacity-10 group-hover:scale-125 transition-transform duration-700 hidden sm:block" />
+              <div className="relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-2">{t('মোট পড়াশোনা', 'Total Focus')}</p>
+                <h2 className="text-3xl sm:text-4xl font-black tracking-tighter tabular-nums leading-tight">{stats.totalDisplay}</h2>
+                <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-1">{t('আজকের:', 'Today:')} {stats.todayDisplay}</p>
+              </div>
+            </div>
+            <div className="bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative group flex flex-col justify-center">
+              <div className="relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s mb-2">{t('মোট ব্রেক', 'Total Break')}</p>
+                <h2 className="text-3xl sm:text-4xl font-black text-brand-secondary tracking-tighter tabular-nums leading-tight">{stats.breakDisplay}</h2>
+                <p className="text-[10px] font-bold text-brand-text-s/30 mt-1 uppercase tracking-widest">{stats.totalBreaks} {t('টি ব্রেক', 'Breaks Taken')}</p>
+              </div>
             </div>
           </div>
-          <div className="bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative group flex flex-col justify-center">
-            <div className="relative z-10">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s mb-2">{t('মোট ব্রেক', 'Total Break')}</p>
-              <h2 className="text-3xl sm:text-4xl font-black text-brand-secondary tracking-tighter tabular-nums leading-tight">{stats.breakDisplay}</h2>
-              <p className="text-[10px] font-bold text-brand-text-s/30 mt-1 uppercase tracking-widest">{stats.totalBreaks} {t('টি ব্রেক', 'Breaks Taken')}</p>
+
+          {/* Homework Section */}
+          <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                 <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary shrink-0">
+                   <ListTodo size={20} />
+                 </div>
+                 <h3 className="text-lg font-black text-brand-text-p leading-tight">{t('লক্ষ্য / টাস্ক', 'Focus Tasks')}</h3>
+              </div>
+              <button 
+                onClick={() => setIsTaskModalOpen(true)}
+                className="p-2 bg-brand-primary text-white rounded-xl shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all"
+              >
+                <Plus size={16} />
+              </button>
             </div>
-          </div>
+
+            <div className="space-y-3">
+              {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.slice(0, 5).map(task => (
+                <div key={task.id} className={`group flex items-start gap-3 p-3 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary'}`}>
+                   <button onClick={() => toggleTask(task.id)} className={`mt-0.5 shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-500' : 'text-brand-text-s'}`}>
+                      {task.isCompleted ? <CheckCircle size={16} /> : <Circle size={16} />}
+                   </button>
+                   <div className="min-w-0 flex-1">
+                      <p className={`text-[11px] font-bold leading-tight transition-all truncate ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
+                      <p className="text-[8px] font-black uppercase text-brand-text-s mt-1 tracking-widest">{task.source}</p>
+                   </div>
+                   <button onClick={() => deleteTask(task.id)} className="p-1 text-brand-text-s hover:text-red-500 transition-all active:scale-90 md:opacity-0 group-hover:opacity-100">
+                      <Trash2 size={12} />
+                   </button>
+                </div>
+              )) : (
+                <div className="py-6 text-center space-y-2 opacity-20">
+                   <Info className="mx-auto" size={24} />
+                   <p className="text-[9px] font-black uppercase tracking-widest">{t('কোনো টাস্ক নেই', 'No tasks set')}</p>
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
       

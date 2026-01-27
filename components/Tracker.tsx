@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserState, StudySession, Mood, ActiveTimerState, Task, Subject } from '../types';
-import { Play, Pause, Square, History, Clock, Brain, Battery, Wind, AlertCircle, Flame, Coffee, Zap as FocusIcon, ListTodo, GraduationCap, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Play, Pause, Square, History, Clock, Brain, Battery, Wind, AlertCircle, Flame, Coffee, Zap as FocusIcon, ListTodo, GraduationCap, ChevronDown, CheckCircle2, BookOpen } from 'lucide-react';
 
 interface TrackerProps {
   userState: UserState;
@@ -11,6 +11,7 @@ interface TrackerProps {
 const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [selectedSubjectName, setSelectedSubjectName] = useState<string>('');
   const [selectedPaper, setSelectedPaper] = useState<1 | 2>(1);
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('');
   const [activeTaskId, setActiveTaskId] = useState<string>('');
   const [activeExamId, setActiveExamId] = useState<string>('');
   const [isRevision, setIsRevision] = useState(false);
@@ -29,6 +30,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
         setSelectedPaper(currentSubject.paper);
       }
       if (timer.taskId) setActiveTaskId(timer.taskId);
+      if (timer.chapterId) setSelectedChapterId(timer.chapterId);
       if (timer.examId) setActiveExamId(timer.examId);
       setIsRevision(timer.isRevision);
     }
@@ -44,6 +46,10 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const targetSubject = useMemo(() => {
     return userState.subjects.find(s => s.name === selectedSubjectName && s.paper === selectedPaper);
   }, [selectedSubjectName, selectedPaper, userState.subjects]);
+
+  const chapters = useMemo(() => {
+    return targetSubject?.chapters || [];
+  }, [targetSubject]);
 
   const availableTasks = useMemo(() => {
     return userState.dailyTasks.filter(task => 
@@ -72,6 +78,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           activeTimer: {
             subjectId: targetSubject.id,
             taskId: activeTaskId || undefined,
+            chapterId: selectedChapterId || undefined,
             examId: activeExamId || undefined,
             isFocusActive: true,
             isRevision,
@@ -84,7 +91,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
         };
       }
 
-      // RESUME LOGIC: Account for partial seconds spent in break mode before resuming
       const elapsedMs = now - prev.activeTimer.lastTimestamp;
       const deltaSeconds = Math.floor(elapsedMs / 1000);
       
@@ -94,7 +100,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           ...prev.activeTimer, 
           isFocusActive: true, 
           accumulatedBreakSeconds: prev.activeTimer.accumulatedBreakSeconds + deltaSeconds,
-          // Preserve millisecond remainder to avoid losing time on rapid clicks
           lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000) 
         }
       };
@@ -106,7 +111,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       if (!prev.activeTimer) return prev;
       const now = Date.now();
       
-      // PAUSE LOGIC: Account for partial seconds spent in focus mode before pausing
       const elapsedMs = now - prev.activeTimer.lastTimestamp;
       const deltaSeconds = Math.floor(elapsedMs / 1000);
 
@@ -117,7 +121,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           isFocusActive: false, 
           accumulatedFocusSeconds: prev.activeTimer.accumulatedFocusSeconds + deltaSeconds,
           numBreaks: prev.activeTimer.numBreaks + 1, 
-          // Preserve millisecond remainder
           lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000)
         }
       };
@@ -137,6 +140,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       id: `timer-${Date.now()}`,
       subjectId: timer.subjectId,
       taskId: timer.taskId,
+      chapterId: timer.chapterId,
       examId: timer.examId,
       startTime: timer.sessionStartTime,
       endTime: now,
@@ -240,7 +244,23 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('হোমওয়ার্ক/টাস্ক', 'Focus Task')}</label>
+              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('চ্যাপ্টার (ঐচ্ছিক)', 'Chapter (Optional)')}</label>
+              <div className="relative">
+                <select 
+                  disabled={!!timer} 
+                  value={selectedChapterId} 
+                  onChange={(e) => setSelectedChapterId(e.target.value)} 
+                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-4 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
+                >
+                  <option value="">{t('চ্যাপ্টার বেছে নাও', 'Choose Chapter')}</option>
+                  {chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                </select>
+                {!timer && <BookOpen className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-s pointer-events-none opacity-40" size={16} />}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Task (Optional)')}</label>
               <div className="relative">
                 <select 
                   disabled={!!timer} 
@@ -252,22 +272,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                   {availableTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
                 </select>
                 {!timer && <ListTodo className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-s pointer-events-none opacity-40" size={16} />}
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পরীক্ষা সংযোগ', 'Link Exam')}</label>
-              <div className="relative">
-                <select 
-                  disabled={!!timer} 
-                  value={activeExamId} 
-                  onChange={(e) => setActiveExamId(e.target.value)} 
-                  className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-4 text-xs font-bold appearance-none outline-none transition-all disabled:opacity-50"
-                >
-                  <option value="">{t('পরীক্ষা বেছে নাও', 'Choose Exam')}</option>
-                  {upcomingExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
-                </select>
-                {!timer && <GraduationCap className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-text-s pointer-events-none opacity-40" size={16} />}
               </div>
             </div>
           </div>
@@ -357,6 +361,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
              <h4 className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">{t('চলতি সেশন', 'Current Session')}</h4>
              <p className="text-sm font-bold text-brand-text-p truncate">
                {selectedSubjectName} {t(selectedPaper === 1 ? '১ম পত্র' : '২য় পত্র', selectedPaper === 1 ? '1st Paper' : '2nd Paper')}
+               {selectedChapterId && ` • ${targetSubject?.chapters.find(c => c.id === selectedChapterId)?.name}`}
                {timer.taskId && ` • ${userState.dailyTasks.find(t => t.id === timer.taskId)?.name}`}
              </p>
            </div>

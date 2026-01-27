@@ -71,46 +71,46 @@
         
         .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 
-        /* Responsive Overrides (CSS Only) */
+        /* Mobile & Tablet Overrides (Non-destructive) */
         @media (max-width: 480px) {
           .max-w-xl { max-width: 100% !important; margin: 0 !important; border-radius: 1.5rem !important; }
-          .p-10 { padding: 1.25rem !important; }
-          .p-8 { padding: 1.15rem !important; }
-          .text-5xl { font-size: 2.75rem !important; }
-          .text-4xl { font-size: 2.25rem !important; }
-          /* Fix fixed-height containers on mobile */
-          .min-h-\[400px\] { min-height: auto !important; max-height: 60vh !important; overflow-y: auto !important; }
-          .h-\[450px\] { height: auto !important; max-height: 55vh !important; overflow-y: auto !important; }
+          .p-10 { padding: 1rem !important; }
+          .p-8 { padding: 1rem !important; }
+          .p-6 { padding: 0.75rem !important; }
+          .text-5xl { font-size: 2.5rem !important; }
+          .text-4xl { font-size: 2rem !important; }
+          
+          /* Handle fixed height constraints from JS-added classes */
+          .min-h-\[400px\] { min-height: 50vh !important; }
+          .h-\[450px\] { height: auto !important; max-height: 60vh !important; }
+          
+          /* Prevent modal clipping */
+          .bg-white.dark\:bg-slate-900.rounded-\[2rem\] {
+            max-height: 90vh;
+            overflow-y: auto;
+          }
         }
 
-        /* Tablet Grid Logic Optimization */
-        @media (min-width: 481px) and (max-width: 1023px) {
+        @media (min-width: 481px) and (max-width: 1024px) {
+          .lg\:grid-cols-12 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+          .lg\:col-span-8 { grid-column: span 6 / span 6 !important; }
+          .lg\:col-span-4 { grid-column: span 6 / span 6 !important; }
           .lg\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-          .lg\:col-span-2 { grid-column: span 2 / span 2 !important; }
-          .lg\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; }
-          .lg\:col-span-8 { grid-column: span 12 / span 12 !important; }
-          .lg\:col-span-4 { grid-column: span 12 / span 12 !important; }
         }
 
-        /* Safely handle notched devices and dynamic height */
+        /* Safe Area Padding for notch devices */
         main {
-          padding-top: env(safe-area-inset-top) !important;
           padding-bottom: calc(8rem + env(safe-area-inset-bottom)) !important;
         }
-        
         nav {
           padding-bottom: env(safe-area-inset-bottom) !important;
         }
 
-        /* Smooth Chart & Card Scaling */
-        .recharts-responsive-container { min-width: 0 !important; width: 100% !important; }
-        .grid { width: 100% !important; }
-        
-        /* Ensure Onboarding doesn't clip off screen */
-        .w-full.max-w-xl {
-          max-height: 95dvh;
-          display: flex;
-          flex-direction: column;
+        /* Prevent button text overflow */
+        button {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
     </style>
 <script type="importmap">

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { User, Lock, Mail, ArrowRight, Loader2, UserPlus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { AuthResponse } from '@supabase/supabase-js';
 
@@ -9,84 +9,76 @@ interface AuthProps {
 }
 
 // Define specific messages for persistent 429 errors
-const RETRY_EXHAUSTED_429_MESSAGE_SIGNIN = "Sign-in attempts failed due to persistent rate limiting. Please wait a longer period (e.g., 5-10 minutes) before trying again.";
+const RETRY_EXHAUSTED_429_MESSAGE = "Persistent rate limiting detected. Please wait 5-10 minutes before trying again.";
 
-// Helper for retry logic with specific 429 alert on first occurrence and improved final message
+// Helper for retry logic with specific 429 alert
 const retryWithDelay = async (
   fn: () => Promise<AuthResponse>,
   retries = 3,
-  delay = 2000, // 2 seconds
+  delay = 2000,
 ): Promise<AuthResponse> => {
-  let result = await fn(); // First attempt
+  let result = await fn();
 
   if (result.error && (result.error as any).status === 429) {
-    // Display the specific alert immediately on the first 429 error
-    alert("Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again.");
-    console.warn(`Auth.tsx: Rate limit hit (429) on initial attempt. Retrying in ${delay / 1000}s... (Attempt 1/${retries + 1})`);
+    alert("Too many attempts from this device/IP. Please wait a few minutes.");
+    console.warn(`Auth.tsx: Rate limit hit (429). Retrying...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
-    // Subsequent retries
     for (let i = 1; i <= retries; i++) {
-      result = await fn(); // Re-execute the function
-      if (!result.error || (result.error as any).status !== 429) {
-        // If successful, or a non-429 error, return this result
-        return result; 
-      }
-      console.warn(`Auth.tsx: Rate limit hit (429). Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${retries + 1})`);
+      result = await fn();
+      if (!result.error || (result.error as any).status !== 429) return result;
       await new Promise(resolve => setTimeout(resolve, delay));
     }
-    // If the loop finishes, all retries failed due to persistent 429
-    // Return a specific error message to be handled by signInUser
-    return { data: { user: null, session: null }, error: new Error(RETRY_EXHAUSTED_429_MESSAGE_SIGNIN) as any };
-  } else {
-    // Initial attempt was successful or had a non-429 error, so return its result directly
-    return result;
+    return { data: { user: null, session: null }, error: new Error(RETRY_EXHAUSTED_429_MESSAGE) as any };
   }
+  return result;
 };
 
 const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
 
   // Sign-In Function
   async function signInUser(email: string, password: string) {
-    console.log("Auth.tsx: Attempting sign-in for email:", email);
     const { data, error } = await retryWithDelay(() => supabase.auth.signInWithPassword({ email, password }));
     
-    if (error) { 
-      // The retryWithDelay function already returns the most specific error message.
-      // We directly alert it here, with a special case for unconfirmed email.
-      console.error("Auth.tsx: Sign-in error:", error.message);
+    if (error) {
       if (error.message.includes('Email not confirmed')) {
-        alert("Sign-in failed: Your email address has not been confirmed. Please check your inbox for a verification link and confirm your account.");
-      } else if (error.message.includes(RETRY_EXHAUSTED_429_MESSAGE_SIGNIN)) {
-        alert(RETRY_EXHAUSTED_429_MESSAGE_SIGNIN);
-      }
-      else {
+        alert("Please check your email for a verification link to confirm your account.");
+      } else {
         alert("Sign-in failed: " + error.message); 
       }
       return null; 
     }
 
     if (data.user) {
-      console.log("Auth.tsx: Sign-in successful for user:", data.user.id);
-      // Fetch user profile info
-      // Use maybeSingle to avoid throwing if profile doesn't exist (e.g., if signup failed on profile creation)
-      const { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle(); 
-      
-      if (profileError) {
-        console.error("Auth.tsx: Error fetching user profile during sign-in:", profileError.message);
-        alert("Sign-in successful, but could not fetch your profile data. Please ensure the 'users' table exists and has correct RLS policies for selects. You might need to complete onboarding. Error: " + profileError.message);
-      } else if (!profile) {
-        console.log("Auth.tsx: User profile not found, proceeding to onboarding.");
-        alert("Sign-in successful! Please complete your profile onboarding.");
+      const { data: profile } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle(); 
+      return { user: data.user, profile };
+    }
+    return null;
+  }
+
+  // Sign-Up Function
+  async function signUpUser(email: string, password: string) {
+    const { data, error } = await retryWithDelay(() => supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        emailRedirectTo: window.location.origin
       }
-      else {
-        console.log("Auth.tsx: User profile found.");
-        alert("Sign-in successful!");
-      }
-      return { user: data.user, profile }; // profile can be null if not found
+    }));
+
+    if (error) {
+      alert("Sign-up failed: " + error.message);
+      return null;
+    }
+
+    if (data.user) {
+      alert("Registration successful! Please check your email inbox for a confirmation link before signing in.");
+      setMode('signin');
+      return data.user;
     }
     return null;
   }
@@ -95,19 +87,18 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
-    console.log("Auth.tsx: Handling sign-in form submission.");
 
     try {
-      const result = await signInUser(email, password);
-      if (result) {
-        onAuthSuccess();
+      if (mode === 'signin') {
+        const result = await signInUser(email, password);
+        if (result) onAuthSuccess();
+      } else {
+        await signUpUser(email, password);
       }
     } catch (err: any) {
-      console.error('Auth.tsx: An unexpected error occurred during authentication:', err);
-      alert("An unexpected error occurred during authentication: " + err.message);
+      alert("An unexpected error occurred: " + err.message);
     } finally {
-      setLoading(false); // Ensure loading state is always reset
-      console.log("Auth.tsx: Sign-in submission process completed.");
+      setLoading(false);
     }
   };
 
@@ -116,7 +107,9 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       <div className="w-full max-w-md bg-brand-surface rounded-[2.5rem] p-8 sm:p-10 shadow-2xl shadow-brand-primary/10 border border-brand-text-s/10 animate-in fade-in zoom-in-95 duration-500">
         <div className="text-center mb-10">
           <h1 className="text-3xl font-black text-brand-primary italic">HSC TRACKER</h1>
-          <p className="text-brand-text-s font-bold uppercase tracking-widest text-[10px] mt-2">Professional Study Management</p>
+          <p className="text-brand-text-s font-black uppercase tracking-widest text-[10px] mt-2">
+            {mode === 'signin' ? 'Welcome Back' : 'Create New Account'}
+          </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -144,6 +137,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" 
                 required
+                minLength={6}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
               />
             </div>
@@ -154,10 +148,19 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
             disabled={loading}
             className="w-full bg-brand-primary hover:scale-[1.02] active:scale-95 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-brand-primary/20 mt-4 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : 'Sign In'}
-            {!loading && <ArrowRight size={18} />}
+            {loading ? <Loader2 className="animate-spin" size={20} /> : (mode === 'signin' ? 'Sign In' : 'Create Account')}
+            {!loading && (mode === 'signin' ? <ArrowRight size={18} /> : <UserPlus size={18} />)}
           </button>
         </form>
+
+        <div className="mt-8 text-center">
+          <button 
+            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+            className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s hover:text-brand-primary transition-colors"
+          >
+            {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+          </button>
+        </div>
       </div>
     </div>
   );

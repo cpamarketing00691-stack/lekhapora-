@@ -24,7 +24,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   }, [messages, isLoading]);
 
   /**
-   * Handles sending messages. Now provides a static response.
+   * Handles sending messages to the /api/chat endpoint.
    */
   const handleSend = async (customText?: string) => {
     const textToSend = customText || input;
@@ -42,23 +42,46 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
     setIsLoading(true);
 
     try {
-      // Simulate API call and delay
-      await new Promise(resolve => setTimeout(resolve, 1000)); 
-      
-      // Static response instead of AI-generated content
-      const staticReply = "আমি একটি ডামি রেসপন্স। গুগল জেমিনি এপিআই এই প্রজেক্ট থেকে সরানো হয়েছে। আপনার প্রশ্ন শুনতে পেয়েছি!";
+      // Create system instruction for context
+      const systemInstruction = `You are a supportive, human-like study buddy for a Bangladesh HSC student named ${userState.profile?.fullName}. 
+      Your name is ${userState.profile?.aiName}. Use a friendly "big brother/sister" tone in conversational Bangla/Banglish.`;
+
+      // Filter out system messages and map to a format expected by the API if necessary,
+      // though the current api/chat.ts handles raw history.
+      const chatHistoryForAPI = messages.map(msg => ({
+        role: msg.role === 'ai' ? 'ai' : 'user', // Ensure roles are 'ai' or 'user' for history
+        text: msg.text
+      }));
+
+      // Fetch from backend
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: textToSend,
+          history: chatHistoryForAPI, // Send existing messages as history
+          systemInstruction: systemInstruction,
+          userId: userState.profile?.id // Include userId for logging
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from AI server');
+      }
+
+      const data = await response.json();
       
       // Add AI reply to UI
       setMessages(prev => [...prev, { 
         role: 'ai', 
-        text: staticReply 
+        text: data.reply || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।" 
       }]);
     } catch (err: any) {
-      console.error("Chat Error (simulated):", err);
+      console.error("Chat API Error:", err);
       setError("সার্ভারের সাথে যোগাযোগ করতে সমস্যা হয়েছে।");
       setMessages(prev => [...prev, { 
         role: 'ai', 
-        text: "দুঃখিত, আমার সার্ভারে সমস্যা হচ্ছে। এটি এখন ডামি মোডে চলছে।" 
+        text: "দুঃখিত, আমার সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করো।" 
       }]);
     } finally {
       // Hide loading state
@@ -76,7 +99,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </div>
           <div>
             <h3 className="font-black text-sm tracking-tight">{userState.profile?.aiName}</h3>
-            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Study Buddy Active (Dummy Mode)</p>
+            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Study Buddy Active</p>
           </div>
         </div>
       </div>

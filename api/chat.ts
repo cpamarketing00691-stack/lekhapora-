@@ -76,7 +76,7 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error('Backend Gemini API Error:', error.message);
     return res.status(500).json({ 
-      error: 'error.message || error.toString()' 
+      error:error.message || error.toString()
     });
   }
 }

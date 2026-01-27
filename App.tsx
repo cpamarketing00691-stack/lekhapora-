@@ -41,34 +41,23 @@ const App: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
-  const [isSyncing, setIsSyncing] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
-      if (isInitialLoading) {
-        console.warn("Safety timeout triggered: Forcing app to render.");
-        setIsInitialLoading(false);
-      }
+      if (isInitialLoading) setIsInitialLoading(false);
     }, 4000);
 
     const initApp = async () => {
       try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Auth Timeout')), 2500));
-        
-        const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
-
-        if (result && result.data && result.data.session) {
-          const session = result.data.session;
+        const { data } = await supabase.auth.getSession();
+        if (data?.session) {
           setUserState(prev => ({ ...prev, isAuthenticated: true }));
-          backgroundSync(session.user.id);
-        } else {
-          setUserState(prev => ({ ...prev, isAuthenticated: false }));
+          backgroundSync(data.session.user.id);
         }
       } catch (error) {
-        console.error("Init failed, proceeding with local data:", error);
+        console.error("Init failed:", error);
       } finally {
         setIsInitialLoading(false);
         clearTimeout(safetyTimeout);
@@ -91,35 +80,12 @@ const App: React.FC = () => {
   }, []);
 
   const backgroundSync = async (userId: string) => {
-    if (!userId) return;
-    setIsSyncing(true);
     try {
-      let remoteUserData = null;
-      try {
-        const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
-        remoteUserData = data;
-      } catch (e) { console.warn("Sync: user_data unreachable"); }
-
-      let remoteProfile = null;
-      try {
-        const { data } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-        remoteProfile = data;
-      } catch (e) { console.warn("Sync: users unreachable"); }
-
-      setUserState(prev => {
-        const newState = { ...prev, ...(remoteUserData?.state || {}) };
-        if (remoteProfile) {
-          newState.profile = {
-            ...(newState.profile || {}),
-            fullName: remoteProfile.full_name,
-            group: newState.profile?.group || Group.SCIENCE
-          } as UserProfile;
-        }
-        return { ...newState, isAuthenticated: true };
-      });
-    } finally {
-      setIsSyncing(false);
-    }
+      const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
+      if (data?.state) {
+        setUserState(prev => ({ ...prev, ...data.state, isAuthenticated: true }));
+      }
+    } catch (e) { console.warn("Sync failed"); }
   };
 
   const saveUserData = async (state: any) => {
@@ -132,7 +98,7 @@ const App: React.FC = () => {
         state: stateToSave, 
         updated_at: new Date().toISOString() 
       }, { onConflict: 'user_id' });
-    } catch (e) { console.warn("Cloud save failed (silently)"); }
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -143,30 +109,33 @@ const App: React.FC = () => {
     }
   }, [userState]);
 
+  // Optimized Global Timer logic
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
         timerIntervalRef.current = window.setInterval(() => {
           setUserState(prev => {
             if (!prev.activeTimer) return prev;
+            
             const now = Date.now();
-            const delta = Math.floor((now - prev.activeTimer.lastTimestamp) / 1000);
-            if (delta < 1) return prev;
+            const elapsedMs = now - prev.activeTimer.lastTimestamp;
+            const deltaSeconds = Math.floor(elapsedMs / 1000);
+            
+            if (deltaSeconds < 1) return prev;
 
             const isFocus = prev.activeTimer.isFocusActive;
-            return {
-              ...prev,
-              activeTimer: {
-                ...prev.activeTimer,
-                lastTimestamp: prev.activeTimer.lastTimestamp + (delta * 1000),
-                accumulatedFocusSeconds: isFocus 
-                  ? prev.activeTimer.accumulatedFocusSeconds + delta 
-                  : prev.activeTimer.accumulatedFocusSeconds,
-                accumulatedBreakSeconds: !isFocus 
-                  ? prev.activeTimer.accumulatedBreakSeconds + delta 
-                  : prev.activeTimer.accumulatedBreakSeconds
-              }
+            const updatedTimer = {
+              ...prev.activeTimer,
+              lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000),
+              accumulatedFocusSeconds: isFocus 
+                ? prev.activeTimer.accumulatedFocusSeconds + deltaSeconds 
+                : prev.activeTimer.accumulatedFocusSeconds,
+              accumulatedBreakSeconds: !isFocus 
+                ? prev.activeTimer.accumulatedBreakSeconds + deltaSeconds 
+                : prev.activeTimer.accumulatedBreakSeconds
             };
+
+            return { ...prev, activeTimer: updatedTimer };
           });
         }, 1000);
       }
@@ -179,22 +148,25 @@ const App: React.FC = () => {
     return () => { if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current); };
   }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUserState(DEFAULT_STATE);
-    localStorage.removeItem('hsc_study_tracker_state');
-  };
-
   const handleProfileComplete = (onboardingData: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profile } = onboardingData;
     const finalSubjects: Subject[] = [];
+    
+    // NCTB subjects typically have two papers
     selectedSubjectNames.forEach((name, idx) => {
-      const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
-        id: `ch-${idx}-${chIdx}-${Date.now()}`,
-        name: ch,
-        isCompleted: false
-      }));
-      finalSubjects.push({ id: `sub-${idx}-${Date.now()}`, name, paper: 1, chapters });
+      [1, 2].forEach(paperNum => {
+        const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
+          id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
+          name: ch,
+          isCompleted: false
+        }));
+        finalSubjects.push({ 
+          id: `sub-${idx}-${paperNum}-${Date.now()}`, 
+          name, 
+          paper: paperNum as 1 | 2, 
+          chapters 
+        });
+      });
     });
 
     setUserState(prev => ({ ...prev, profile, subjects: finalSubjects }));
@@ -209,13 +181,8 @@ const App: React.FC = () => {
     );
   }
 
-  if (!userState.isAuthenticated) {
-    return <Auth onAuthSuccess={() => setUserState(prev => ({ ...prev, isAuthenticated: true }))} />;
-  }
-
-  if (!userState.profile) {
-    return <Onboarding onComplete={handleProfileComplete} language={userState.language} />;
-  }
+  if (!userState.isAuthenticated) return <Auth onAuthSuccess={() => setUserState(prev => ({ ...prev, isAuthenticated: true }))} />;
+  if (!userState.profile) return <Onboarding onComplete={handleProfileComplete} language={userState.language} />;
 
   return (
     <Layout userProfile={userState.profile} activeTab={activeTab} onTabChange={setActiveTab} language={userState.language}>
@@ -223,7 +190,7 @@ const App: React.FC = () => {
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'ai' && <div className="h-full"><AISidebar userState={userState} /></div>}
-      {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={handleLogout} />}
+      {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={() => setUserState(DEFAULT_STATE)} />}
     </Layout>
   );
 };

@@ -22,7 +22,7 @@ const retryWithDelay = async (
   if (result.error && (result.error as any).status === 429) {
     // Display the specific alert immediately on the first 429 error
     alert("Too many sign-in attempts from this device/IP. Please wait a few minutes before trying again.");
-    console.warn(`Rate limit hit (429) on initial attempt. Retrying in ${delay / 1000}s... (Attempt 1/${retries + 1})`);
+    console.warn(`Auth.tsx: Rate limit hit (429) on initial attempt. Retrying in ${delay / 1000}s... (Attempt 1/${retries + 1})`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
     // Subsequent retries
@@ -32,7 +32,7 @@ const retryWithDelay = async (
         // If successful, or a non-429 error, return this result
         return result; 
       }
-      console.warn(`Rate limit hit (429). Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${retries + 1})`);
+      console.warn(`Auth.tsx: Rate limit hit (429). Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${retries + 1})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
     // If the loop finishes, all retries failed due to persistent 429
@@ -51,13 +51,17 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
 
   // Sign-In Function
   async function signInUser(email: string, password: string) {
+    console.log("Auth.tsx: Attempting sign-in for email:", email);
     const { data, error } = await retryWithDelay(() => supabase.auth.signInWithPassword({ email, password }));
     
     if (error) { 
       // The retryWithDelay function already returns the most specific error message.
       // We directly alert it here, with a special case for unconfirmed email.
+      console.error("Auth.tsx: Sign-in error:", error.message);
       if (error.message.includes('Email not confirmed')) {
         alert("Sign-in failed: Your email address has not been confirmed. Please check your inbox for a verification link and confirm your account.");
+      } else if (error.message.includes(RETRY_EXHAUSTED_429_MESSAGE_SIGNIN)) {
+        alert(RETRY_EXHAUSTED_429_MESSAGE_SIGNIN);
       }
       else {
         alert("Sign-in failed: " + error.message); 
@@ -66,17 +70,20 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     }
 
     if (data.user) {
+      console.log("Auth.tsx: Sign-in successful for user:", data.user.id);
       // Fetch user profile info
       // Use maybeSingle to avoid throwing if profile doesn't exist (e.g., if signup failed on profile creation)
       const { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.user.id).maybeSingle(); 
       
       if (profileError) {
-        console.error("Error fetching user profile during sign-in:", profileError.message);
+        console.error("Auth.tsx: Error fetching user profile during sign-in:", profileError.message);
         alert("Sign-in successful, but could not fetch your profile data. Please ensure the 'users' table exists and has correct RLS policies for selects. You might need to complete onboarding. Error: " + profileError.message);
       } else if (!profile) {
+        console.log("Auth.tsx: User profile not found, proceeding to onboarding.");
         alert("Sign-in successful! Please complete your profile onboarding.");
       }
       else {
+        console.log("Auth.tsx: User profile found.");
         alert("Sign-in successful!");
       }
       return { user: data.user, profile }; // profile can be null if not found
@@ -88,6 +95,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
+    console.log("Auth.tsx: Handling sign-in form submission.");
 
     try {
       const result = await signInUser(email, password);
@@ -95,10 +103,11 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         onAuthSuccess();
       }
     } catch (err: any) {
-      console.error('Runtime Auth Error:', err);
+      console.error('Auth.tsx: An unexpected error occurred during authentication:', err);
       alert("An unexpected error occurred during authentication: " + err.message);
     } finally {
-      setLoading(false);
+      setLoading(false); // Ensure loading state is always reset
+      console.log("Auth.tsx: Sign-in submission process completed.");
     }
   };
 

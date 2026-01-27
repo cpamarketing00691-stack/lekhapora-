@@ -4,7 +4,6 @@ import { UserProfile, Language } from '../types';
 import { Home, Timer, BookOpen, Bot, Sun, Moon, Settings } from 'lucide-react';
 
 interface LayoutProps {
-  // Fix: React.Node doesn't exist, changed to React.ReactNode
   children: React.ReactNode;
   userProfile: UserProfile;
   activeTab: string;
@@ -40,7 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     { id: 'dashboard', icon: <Home size={20} />, label: t('হোম', 'Home') },
     { id: 'tracker', icon: <Timer size={20} />, label: t('ফোকাস', 'Focus') },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus') },
-    { id: 'ai', icon: <Bot size={20} />, label: t('চ্যাট', 'Buddy') },
+    { id: 'ai', icon: <Bot size={20} />, label: t('Buddy', 'Buddy') },
     { id: 'settings', icon: <Settings size={20} />, label: t('সেটিংস', 'Settings') },
   ];
 
@@ -61,7 +60,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
               onClick={() => onTabChange(item.id)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
                 activeTab === item.id 
-                  ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/20 font-bold' 
+                  ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/20 font-bold scale-105' 
                   : 'hover:bg-brand-bg/50 text-brand-text-s hover:text-brand-text-p'
               }`}
             >
@@ -74,7 +73,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         <div className="mt-auto pt-8 space-y-4">
            <div className="flex items-center gap-3 p-4 bg-brand-bg/50 rounded-3xl border border-brand-text-s/10">
              <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-black text-lg shrink-0">
-               {userProfile.fullName[0]}
+               {userProfile.fullName?.[0] || 'U'}
              </div>
              <div className="min-w-0">
                <p className="text-sm font-bold truncate leading-none mb-1">{userProfile.fullName}</p>
@@ -93,30 +92,29 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         <header className="flex items-center justify-between px-5 py-3.5 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
           <h1 className="font-black text-brand-primary italic tracking-tight text-sm">HSC TRACKER</h1>
           <div className="flex gap-1">
-            <button onClick={toggleTheme} className="p-2 text-brand-text-s hover:text-brand-text-p transition-colors">
+            <button onClick={toggleTheme} className="p-2 text-brand-text-s hover:text-brand-text-p transition-colors active:scale-90">
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth scrollbar-hide">
           <div className="max-w-6xl mx-auto h-full">
             {children}
           </div>
         </div>
 
         {/* Mobile Nav */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around bg-brand-surface/90 backdrop-blur-xl border-t border-brand-text-s/10 px-4 pt-2.5 pb-7 sm:pb-8 shadow-[0_-10px_30px_rgb(0,0,0,0.05)] transition-colors">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around bg-brand-surface/90 backdrop-blur-xl border-t border-brand-text-s/10 px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgb(0,0,0,0.05)] transition-colors">
           {navItems.map((item) => (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center gap-1 p-2 transition-all ${
-                activeTab === item.id ? 'text-brand-primary scale-105' : 'text-brand-text-s'
+              className={`flex flex-col items-center gap-1.5 p-1.5 transition-all active:scale-95 ${
+                activeTab === item.id ? 'text-brand-primary' : 'text-brand-text-s'
               }`}
             >
-              <div className={`${activeTab === item.id ? 'bg-brand-primary/10 px-3 py-1.5 rounded-xl' : 'px-3 py-1.5'}`}>
-                {/* Fix: Added any cast to avoid TS error on 'size' prop when cloning */}
+              <div className={`transition-all ${activeTab === item.id ? 'bg-brand-primary/10 px-4 py-2 rounded-2xl' : 'px-4 py-2'}`}>
                 {React.cloneElement(item.icon as React.ReactElement<any>, { size: 18 })}
               </div>
               <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest leading-none">{item.label}</span>

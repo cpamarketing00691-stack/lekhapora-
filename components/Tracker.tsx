@@ -212,13 +212,13 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       </div>
 
       {!showManual ? (
-        <div className="bg-brand-surface rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 transition-all">
-          <div className="mb-10 flex flex-col items-center gap-6">
+        <div className="bg-brand-surface rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 transition-all overflow-hidden">
+          <div className="mb-6 sm:mb-10 flex flex-col items-center gap-4 sm:gap-6">
             <div className="w-full">
-              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-4 text-center leading-none">{t('মোড নির্বাচন', 'Select Mode')}</label>
+              <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-3 text-center leading-none">{t('মোড নির্বাচন', 'Select Mode')}</label>
               <div className="flex bg-brand-bg p-1 rounded-2xl shadow-inner max-w-sm mx-auto">
-                <button onClick={() => !isTimerGlobalActive && setIsRevision(false)} className={`flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
-                <button onClick={() => !isTimerGlobalActive && setIsRevision(true)} className={`flex-1 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}><RefreshCcw size={10} />{t('রিভিশন', 'Revision')}</button>
+                <button onClick={() => !isTimerGlobalActive && setIsRevision(false)} className={`flex-1 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isRevision ? 'bg-brand-surface text-brand-primary shadow-sm' : 'text-brand-text-s'}`}>{t('পড়াশোনা', 'Study')}</button>
+                <button onClick={() => !isTimerGlobalActive && setIsRevision(true)} className={`flex-1 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1 transition-all ${isRevision ? 'bg-brand-surface text-brand-secondary shadow-sm' : 'text-brand-text-s'}`}><RefreshCcw size={10} />{t('রিভিশন', 'Revision')}</button>
               </div>
             </div>
 
@@ -229,30 +229,27 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                   disabled={isTimerGlobalActive} 
                   value={activeTaskId} 
                   onChange={(e) => setActiveTaskId(e.target.value)} 
-                  className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p"
+                  className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate"
                  >
                    <option value="">{t('টাস্ক ছাড়া পড়াশোনা', 'Study without specific task')}</option>
-                   {/* Safe Array Handling for dailyTasks filtering and mapping */}
                    {Array.isArray(dailyTasks) && dailyTasks.length > 0 ? dailyTasks.filter(t => !t.isCompleted).map(task => (
                      <option key={task.id} value={task.id}>{task.name} ({task.source})</option>
                    )) : null}
                  </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full">
                 <div>
                   <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('বিষয়', 'Subject')}</label>
-                  <select disabled={isTimerGlobalActive} value={activeSubjectId} onChange={(e) => setActiveSubjectId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p">
+                  <select disabled={isTimerGlobalActive} value={activeSubjectId} onChange={(e) => setActiveSubjectId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate">
                     <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-                    {/* Safe Array Handling for subjects mapping */}
                     {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>) : null}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-[0.2em] mb-2 text-center leading-none">{t('লক্ষ্য পরীক্ষা (ঐচ্ছিক)', 'Target Exam (Opt)')}</label>
-                  <select disabled={isTimerGlobalActive} value={activeExamId} onChange={(e) => setActiveExamId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p">
+                  <select disabled={isTimerGlobalActive} value={activeExamId} onChange={(e) => setActiveExamId(e.target.value)} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-3 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] sm:text-xs font-bold transition-all disabled:opacity-50 appearance-none text-center text-brand-text-p truncate">
                     <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                    {/* Safe Array Handling for collegeExams mapping */}
                     {Array.isArray(collegeExams) && collegeExams.length > 0 ? collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>) : null}
                   </select>
                 </div>
@@ -260,8 +257,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             </div>
           </div>
 
-          <div className="text-center py-10">
-            <div className={`text-[8rem] sm:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
+          <div className="text-center py-6 sm:py-10">
+            <div className={`text-5xl sm:text-7xl md:text-[10rem] font-black tracking-tighter tabular-nums leading-none select-none transition-all ${timer?.isRevision || isRevision ? 'text-brand-secondary' : 'text-brand-text-p'}`}>
               {formatDuration(timer?.accumulatedFocusSeconds || 0)}
             </div>
             {isTimerGlobalActive && !isFocusingNow && (
@@ -272,38 +269,36 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
             )}
           </div>
 
-          <div className="flex items-center justify-center gap-10 mt-6">
+          <div className="flex items-center justify-center gap-6 sm:gap-10 mt-4 sm:mt-6">
             {!isFocusingNow ? (
-              <button onClick={handleStartResume} disabled={!activeSubjectId} className={`w-24 h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${timer?.isRevision || isRevision ? 'bg-brand-secondary shadow-brand-secondary/40' : 'bg-brand-primary shadow-brand-primary/40'}`}>
-                <Play size={40} className="ml-2 fill-current" />
+              <button onClick={handleStartResume} disabled={!activeSubjectId} className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 text-white flex items-center justify-center rounded-full hover:scale-105 active:scale-95 shadow-2xl transition-all disabled:opacity-20 disabled:grayscale ${timer?.isRevision || isRevision ? 'bg-brand-secondary shadow-brand-secondary/40' : 'bg-brand-primary shadow-brand-primary/40'}`}>
+                <Play size={32} className="ml-1 sm:ml-2 fill-current" />
               </button>
             ) : (
-              <button onClick={handlePause} className="w-24 h-24 md:w-28 md:h-28 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg hover:scale-105 active:scale-95 shadow-xl transition-all">
-                <Pause size={40} className="fill-current" />
+              <button onClick={handlePause} className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 bg-brand-surface text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-bg hover:scale-105 active:scale-95 shadow-xl transition-all">
+                <Pause size={32} className="fill-current" />
               </button>
             )}
-            <button onClick={handleStopEnd} disabled={!isTimerGlobalActive} className="w-16 h-16 md:w-20 md:h-20 bg-brand-bg text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-text-s/10 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30">
-              <Square size={24} className="fill-current text-red-500" />
+            <button onClick={handleStopEnd} disabled={!isTimerGlobalActive} className="w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-brand-bg text-brand-text-p flex items-center justify-center rounded-full border-4 border-brand-text-s/10 hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-30">
+              <Square size={20} className="fill-current text-red-500" />
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-brand-surface rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95 duration-300">
-           <form onSubmit={handleManualSubmit} className="space-y-6 md:space-y-8">
+        <div className="bg-brand-surface rounded-[2rem] sm:rounded-[3rem] p-5 sm:p-10 shadow-xl border border-brand-text-s/10 animate-in zoom-in-95 duration-300">
+           <form onSubmit={handleManualSubmit} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <div className="space-y-1.5">
                     <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('বিষয়', 'Subject')}</label>
-                    <select required value={manualData.subjectId} onChange={(e) => setManualData({...manualData, subjectId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
+                    <select required value={manualData.subjectId} onChange={(e) => setManualData({...manualData, subjectId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
                       <option value="">{t('নির্বাচন করো', 'Select Subject')}</option>
-                      {/* Safe Array Handling for manual subjects mapping */}
                       {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => <option key={sub.id} value={sub.id}>{sub.name} (P{sub.paper})</option>) : null}
                     </select>
                  </div>
                  <div className="space-y-1.5">
                     <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Exam (Optional)')}</label>
-                    <select value={manualData.examId} onChange={(e) => setManualData({...manualData, examId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
+                    <select value={manualData.examId} onChange={(e) => setManualData({...manualData, examId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
                       <option value="">{t('পরীক্ষা নির্বাচন', 'None')}</option>
-                      {/* Safe Array Handling for manual collegeExams mapping */}
                       {Array.isArray(collegeExams) && collegeExams.length > 0 ? collegeExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>) : null}
                     </select>
                  </div>
@@ -311,24 +306,23 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                    <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('তারিখ', 'Date')}</label>
-                   <input type="date" required value={manualData.date} onChange={(e) => setManualData({...manualData, date: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl text-xs font-black transition-all text-brand-text-p outline-none" />
+                   <input type="date" required value={manualData.date} onChange={(e) => setManualData({...manualData, date: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl text-[11px] font-black transition-all text-brand-text-p outline-none" />
                 </div>
                 <div className="space-y-1.5">
                    <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('সময়কাল (মিনিট)', 'Minutes')}</label>
-                   <input type="number" required min="1" value={manualData.durationMinutes} onChange={(e) => setManualData({...manualData, durationMinutes: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl text-xs font-black transition-all text-brand-text-p outline-none" />
+                   <input type="number" required min="1" value={manualData.durationMinutes} onChange={(e) => setManualData({...manualData, durationMinutes: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl text-[11px] font-black transition-all text-brand-text-p outline-none" />
                 </div>
               </div>
               <div className="space-y-1.5">
                  <label className="block text-[9px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Task (Optional)')}</label>
-                 <select value={manualData.taskId} onChange={(e) => setManualData({...manualData, taskId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-xs font-black transition-all text-brand-text-p outline-none">
+                 <select value={manualData.taskId} onChange={(e) => setManualData({...manualData, taskId: e.target.value})} className="w-full bg-brand-bg border-2 border-brand-text-s/10 rounded-xl px-4 py-3 focus:ring-4 focus:ring-brand-primary/20 focus:border-brand-primary text-[11px] font-black transition-all text-brand-text-p outline-none appearance-none">
                     <option value="">{t('নির্বাচন করো', 'Select Task')}</option>
-                    {/* Safe Array Handling for manual dailyTasks mapping */}
                     {Array.isArray(dailyTasks) && dailyTasks.length > 0 ? dailyTasks.map(task => (
                       <option key={task.id} value={task.id}>{task.name}</option>
                     )) : null}
                  </select>
               </div>
-              <button type="submit" className="w-full bg-brand-primary hover:scale-[1.01] active:scale-95 text-white font-black py-5 rounded-[2rem] shadow-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+              <button type="submit" className="w-full bg-brand-primary hover:scale-[1.01] active:scale-95 text-white font-black py-4 rounded-2xl shadow-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2">
                 <CheckCircle2 size={16} /> {t('সেভ করো', 'Save Log Entry')}
               </button>
            </form>

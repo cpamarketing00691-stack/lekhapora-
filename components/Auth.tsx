@@ -37,6 +37,7 @@ const retryWithDelay = async (
 const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
 
@@ -61,12 +62,15 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   }
 
   // Sign-Up Function
-  async function signUpUser(email: string, password: string) {
+  async function signUpUser(email: string, password: string, fullName: string) {
     const { data, error } = await retryWithDelay(() => supabase.auth.signUp({ 
       email, 
       password,
       options: {
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: window.location.origin,
+        data: {
+          full_name: fullName
+        }
       }
     }));
 
@@ -93,7 +97,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         const result = await signInUser(email, password);
         if (result) onAuthSuccess();
       } else {
-        await signUpUser(email, password);
+        await signUpUser(email, password, name);
       }
     } catch (err: any) {
       alert("An unexpected error occurred: " + err.message);
@@ -113,6 +117,23 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
+          {mode === 'signup' && (
+            <div className="space-y-1 animate-in slide-in-from-top-2 duration-300">
+              <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Name</label>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
+                <input 
+                  type="text" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your Full Name" 
+                  required={mode === 'signup'}
+                  className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
+                />
+              </div>
+            </div>
+          )}
+          
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Email</label>
             <div className="relative">

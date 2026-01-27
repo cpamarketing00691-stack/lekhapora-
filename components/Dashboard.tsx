@@ -1,8 +1,8 @@
 
 import React, { useMemo, useState } from 'react';
-import { UserState, Subject, CollegeExam, Task, TaskSource } from '../types';
+import { UserState, Subject, CollegeExam, Task, TaskSource, StudySession } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3 } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -263,6 +263,33 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       </header>
 
+      {/* Active Session Sync Card */}
+      {userState.activeTimer && (
+        <div className="bg-brand-primary text-white p-6 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 animate-in slide-in-from-top-4 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/10">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+              <PlayCircle size={32} className="animate-pulse" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-70 mb-1">{t('বর্তমানে পড়ছো', 'Current Study Session')}</p>
+              <h3 className="text-xl font-black">{getSubjectName(userState.activeTimer.subjectId)}</h3>
+              <p className="text-xs font-bold opacity-80">{userState.activeTimer.isRevision ? t('রিভিশন সেশন', 'Revision Mode') : t('পড়াশোনা সেশন', 'Study Mode')}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-8">
+            <div className="text-center">
+              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{t('পড়ার সময়', 'Study Time')}</p>
+              <p className="text-2xl font-black tabular-nums">{formatDuration(userState.activeTimer.accumulatedFocusSeconds)}</p>
+            </div>
+            <div className="h-10 w-px bg-white/20"></div>
+            <div className="text-center">
+              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{t('ব্রেক', 'Break')}</p>
+              <p className="text-2xl font-black tabular-nums">{formatDuration(userState.activeTimer.accumulatedBreakSeconds)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
         {userState.profile?.targetExamDate && (
           <div className="bg-brand-primary text-white p-5 rounded-[2rem] shadow-lg border border-white/10 flex flex-col justify-between min-w-[180px] snap-center shrink-0">
@@ -290,15 +317,20 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                   setExamFilter(null);
                 }
               }}
-              className={`p-5 rounded-[2rem] shadow-sm border transition-all flex flex-col justify-between min-w-[180px] snap-center shrink-0 text-left ${isActive ? 'bg-brand-secondary text-white border-brand-secondary shadow-brand-secondary/30' : 'bg-brand-surface text-brand-text-p border-brand-text-s/10 hover:border-brand-primary/50'}`}
+              className={`p-5 rounded-[2rem] shadow-sm border transition-all flex flex-col justify-between min-w-[220px] snap-center shrink-0 text-left group/card ${isActive ? 'bg-brand-secondary text-white border-brand-secondary shadow-brand-secondary/30' : 'bg-brand-surface text-brand-text-p border-brand-text-s/10 hover:border-brand-primary/50'}`}
             >
                <div className="flex justify-between items-start">
                  {exam.type === 'college' ? <GraduationCap size={18} className={isActive ? 'opacity-100' : 'opacity-40'} /> : <Clock size={18} className={isActive ? 'opacity-100' : 'opacity-40'} />}
                  <span className="text-[9px] font-black uppercase tracking-widest text-right truncate ml-2">{exam.name}</span>
                </div>
-               <div className="mt-4">
-                  <h4 className="text-3xl font-black tracking-tighter tabular-nums leading-none">{getCountdown(exam.date)}</h4>
-                  <p className="text-[8px] font-bold opacity-60 uppercase mt-1">{exam.type === 'college' ? t('কলেজ পরীক্ষা', 'COLLEGE EXAM') : t('বোর্ড পরীক্ষা', 'BOARD EXAM')}</p>
+               <div className="mt-4 flex justify-between items-end">
+                  <div>
+                    <h4 className="text-3xl font-black tracking-tighter tabular-nums leading-none">{getCountdown(exam.date)}</h4>
+                    <p className="text-[8px] font-bold opacity-60 uppercase mt-1">{exam.type === 'college' ? t('কলেজ পরীক্ষা', 'COLLEGE EXAM') : t('বোর্ড পরীক্ষা', 'BOARD EXAM')}</p>
+                  </div>
+                  <div className="opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/20 p-2 rounded-xl">
+                    <PlayCircle size={20} />
+                  </div>
                </div>
             </button>
           );
@@ -339,11 +371,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                         {task.subjectId && (
                            <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded border border-brand-primary/20">
                              <BookCheck size={8} /> {getSubjectName(task.subjectId)}
-                           </span>
-                        )}
-                        {(task.chapterId || task.customChapterName) && (
-                           <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${task.chapterId ? 'text-brand-secondary bg-brand-secondary/10 border-brand-secondary/20' : 'text-orange-500 bg-orange-50 dark:bg-orange-950/20 border-orange-200'}`}>
-                             <Sparkles size={8} /> {task.chapterId ? t('সিলেবাস লিঙ্কড', 'Linked') : t('ম্যানুয়াল টপিক', 'Manual Topic')}
                            </span>
                         )}
                       </div>
@@ -395,40 +422,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                           <option value="">{t('নির্বাচন করো', 'Select')}</option>
                           {Array.isArray(userState.subjects) && userState.subjects.length > 0 ? userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>) : null}
                         </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between ml-1 mb-1">
-                          <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">{t('চ্যাপ্টার / টপিক', 'Chapter / Topic')}</label>
-                          <button 
-                            disabled={!newTask.subjectId}
-                            onClick={() => setIsManualChapterMode(!isManualChapterMode)}
-                            className="text-[9px] font-black text-brand-primary uppercase tracking-widest flex items-center gap-1 hover:underline disabled:opacity-30"
-                          >
-                            {isManualChapterMode ? <ListTodo size={10} /> : <Edit3 size={10} />}
-                            {isManualChapterMode ? t('সিলেবাস থেকে নাও', 'Pick from Syllabus') : t('ম্যানুয়াল এন্ট্রি', 'Manual Entry')}
-                          </button>
-                        </div>
-                        
-                        {!isManualChapterMode ? (
-                          <select 
-                            disabled={!newTask.subjectId}
-                            value={newTask.chapterId} 
-                            onChange={e => setNewTask({...newTask, chapterId: e.target.value, customChapterName: ''})}
-                            className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs disabled:opacity-30"
-                          >
-                            <option value="">{t('নির্বাচন করো', 'Select from list')}</option>
-                            {Array.isArray(selectedSubject?.chapters) && selectedSubject.chapters.length > 0 ? selectedSubject.chapters.map(c => <option key={c.id} value={c.id}>{c.name}</option>) : null}
-                          </select>
-                        ) : (
-                          <input 
-                            type="text" 
-                            value={newTask.customChapterName}
-                            onChange={e => setNewTask({...newTask, customChapterName: e.target.value, chapterId: ''})}
-                            placeholder={t("টপিক বা চ্যাপ্টারের নাম লেখো", "Enter custom chapter/topic")}
-                            className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
-                          />
-                        )}
                       </div>
                    </div>
 
@@ -582,11 +575,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                        <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-text-s flex items-center gap-1 leading-none">
                          {session.isRevision ? t('রিভিশন', 'Revision') : t('পড়াশোনা', 'Study')}
                        </p>
-                       {session.taskId && (
-                          <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-brand-primary flex items-center gap-1 leading-none border-l border-brand-text-s/20 pl-2">
-                            {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.find(t => t.id === session.taskId)?.name : null}
-                          </p>
-                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black text-brand-primary bg-brand-primary/10 px-1.5 py-0.5 rounded-full">

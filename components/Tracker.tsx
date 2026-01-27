@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserState, StudySession, Mood, ActiveTimerState, Task } from '../types';
 import { Play, Pause, Square, Zap, RefreshCcw, History, Clock, Calendar as CalIcon, CheckCircle2, Smile, Zap as FocusIcon, Coffee, Frown, Flame, GraduationCap, ListTodo, Sparkles, Brain, Battery, Wind, AlertCircle } from 'lucide-react';
 
@@ -11,6 +11,7 @@ interface TrackerProps {
 const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [activeSubjectId, setActiveSubjectId] = useState<string>(userState.activeTimer?.subjectId || '');
   const [activeTaskId, setActiveTaskId] = useState<string>(userState.activeTimer?.taskId || '');
+  const [activeExamId, setActiveExamId] = useState<string>(userState.activeTimer?.examId || '');
   const [isRevision, setIsRevision] = useState(userState.activeTimer?.isRevision || false);
   const [showManual, setShowManual] = useState(false);
   const [currentMood, setCurrentMood] = useState<Mood>(userState.currentMood || 'Focused');
@@ -35,6 +36,17 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const timer = userState.activeTimer;
 
+  const upcomingExams = useMemo(() => {
+    const collegeExams = Array.isArray(userState.profile?.collegeExams) ? userState.profile!.collegeExams : [];
+    const rawSubjects = Array.isArray(userState.subjects) ? userState.subjects : [];
+    const subjectExams = rawSubjects.filter(s => !!s.examDate).map(s => ({
+      id: s.id,
+      name: `${s.name} (P${s.paper})`,
+      type: 'subject'
+    }));
+    return [...collegeExams.map(ex => ({ id: ex.id, name: ex.name, type: 'college' })), ...subjectExams];
+  }, [userState.profile?.collegeExams, userState.subjects]);
+
   const handleStartResume = () => {
     if (!activeSubjectId) return;
     onUpdateState(prev => {
@@ -45,6 +57,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           activeTimer: {
             subjectId: activeSubjectId,
             taskId: activeTaskId || undefined,
+            examId: activeExamId || undefined,
             isFocusActive: true,
             isRevision,
             accumulatedFocusSeconds: 0,
@@ -78,6 +91,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       id: `timer-${Date.now()}`,
       subjectId: timer.subjectId,
       taskId: timer.taskId,
+      examId: timer.examId,
       startTime: timer.sessionStartTime,
       endTime: Date.now(),
       durationSeconds: timer.accumulatedFocusSeconds,
@@ -222,15 +236,15 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('টাস্ক (ঐচ্ছিক)', 'Focus Task (Optional)')}</label>
+                <label className="block text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('পরীক্ষা (ঐচ্ছিক)', 'Linked Exam (Optional)')}</label>
                 <select 
                   disabled={!!timer} 
-                  value={activeTaskId} 
-                  onChange={(e) => setActiveTaskId(e.target.value)} 
+                  value={activeExamId} 
+                  onChange={(e) => setActiveExamId(e.target.value)} 
                   className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-4 py-4 text-xs font-bold appearance-none outline-none transition-all"
                 >
-                  <option value="">{t('টাস্ক বেছে নাও', 'Choose Task')}</option>
-                  {filteredTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
+                  <option value="">{t('পরীক্ষা বেছে নাও', 'Choose Exam')}</option>
+                  {upcomingExams.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                 </select>
               </div>
             </div>
@@ -257,7 +271,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
 
           <div className="flex flex-col items-center gap-8 mt-10">
-            {/* Mood Selector (Only visible or active when timer exists) */}
             <div className={`flex gap-3 p-2 bg-brand-bg rounded-3xl transition-all ${!timer ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
               {moods.map(m => (
                 <button

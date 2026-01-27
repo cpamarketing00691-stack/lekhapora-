@@ -183,10 +183,11 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     }));
   };
 
-  const difficultyMeta: Record<Difficulty, { color: string, label: { bn: string, en: string } }> = {
-    'Easy': { color: 'emerald', label: { bn: 'সহজ', en: 'Easy' } },
-    'Medium': { color: 'amber', label: { bn: 'মাঝারি', en: 'Medium' } },
-    'Hard': { color: 'rose', label: { bn: 'কঠিন', en: 'Hard' } }
+  // Fix: Explicitly define full Tailwind class names to avoid dynamic class generation issues.
+  const difficultyMeta: Record<Difficulty, { bgColorClass: string, textColorClass: string, label: { bn: string, en: string } }> = {
+    'Easy': { bgColorClass: 'bg-emerald-500', textColorClass: 'text-emerald-500', label: { bn: 'সহজ', en: 'Easy' } },
+    'Medium': { bgColorClass: 'bg-amber-500', textColorClass: 'text-amber-500', label: { bn: 'মাঝারি', en: 'Medium' } },
+    'Hard': { bgColorClass: 'bg-rose-500', textColorClass: 'text-rose-500', label: { bn: 'কঠিন', en: 'Hard' } }
   };
 
   const subjects = Array.isArray(userState.subjects) ? userState.subjects : [];
@@ -475,9 +476,10 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                               <button
                                 key={level}
                                 onClick={() => updateDifficulty(sub.id, ch.id, level)}
+                                // Fix: Use pre-defined class names from difficultyMeta
                                 className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                                   ch.difficulty === level 
-                                    ? `bg-${difficultyMeta[level].color}-500 text-white shadow-md scale-110` 
+                                    ? `${difficultyMeta[level].bgColorClass} text-white shadow-md scale-110` 
                                     : 'bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-slate-500'
                                 }`}
                                 title={t(difficultyMeta[level].label.bn, difficultyMeta[level].label.en)}
@@ -487,7 +489,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                             ))}
                          </div>
                          {ch.difficulty && (
-                           <span className={`text-[8px] font-black uppercase tracking-widest text-${difficultyMeta[ch.difficulty].color}-500`}>
+                           <span className={`text-[8px] font-black uppercase tracking-widest ${difficultyMeta[ch.difficulty].textColorClass}`}>
                              {t(difficultyMeta[ch.difficulty].label.bn, difficultyMeta[ch.difficulty].label.en)}
                            </span>
                          )}

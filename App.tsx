@@ -32,7 +32,30 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return { ...DEFAULT_STATE, ...parsed };
+        const state = { ...DEFAULT_STATE, ...parsed };
+        
+        // RECONCILIATION: On app load, catch up on time elapsed since the last save.
+        // This ensures the timer remains accurate across page refreshes and browser closes.
+        if (state.activeTimer) {
+          const now = Date.now();
+          const elapsedMs = now - state.activeTimer.lastTimestamp;
+          const deltaSeconds = Math.floor(elapsedMs / 1000);
+          
+          if (deltaSeconds > 0) {
+            const isFocus = state.activeTimer.isFocusActive;
+            state.activeTimer = {
+              ...state.activeTimer,
+              lastTimestamp: state.activeTimer.lastTimestamp + (deltaSeconds * 1000),
+              accumulatedFocusSeconds: isFocus 
+                ? state.activeTimer.accumulatedFocusSeconds + deltaSeconds 
+                : state.activeTimer.accumulatedFocusSeconds,
+              accumulatedBreakSeconds: !isFocus 
+                ? state.activeTimer.accumulatedBreakSeconds + deltaSeconds 
+                : state.activeTimer.accumulatedBreakSeconds
+            };
+          }
+        }
+        return state;
       } catch (e) {
         console.error("Local storage corrupt:", e);
       }
@@ -83,7 +106,21 @@ const App: React.FC = () => {
     try {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
-        setUserState(prev => ({ ...prev, ...data.state, isAuthenticated: true }));
+        setUserState(prev => {
+          const newState = { ...prev, ...data.state, isAuthenticated: true };
+          // Re-reconcile after cloud sync to ensure no gap exists
+          if (newState.activeTimer) {
+             const now = Date.now();
+             const elapsedMs = now - newState.activeTimer.lastTimestamp;
+             const deltaSeconds = Math.floor(elapsedMs / 1000);
+             if (deltaSeconds > 0) {
+               newState.activeTimer.accumulatedFocusSeconds += newState.activeTimer.isFocusActive ? deltaSeconds : 0;
+               newState.activeTimer.accumulatedBreakSeconds += !newState.activeTimer.isFocusActive ? deltaSeconds : 0;
+               newState.activeTimer.lastTimestamp += (deltaSeconds * 1000);
+             }
+          }
+          return newState;
+        });
       }
     } catch (e) { console.warn("Sync failed"); }
   };
@@ -109,7 +146,8 @@ const App: React.FC = () => {
     }
   }, [userState]);
 
-  // Optimized Global Timer logic with partial second preservation
+  // BACKGROUND-SAFE TIMER: Relies on timestamps (Date.now()) instead of reliable setInterval ticks.
+  // This allows the timer to accurately bridge gaps when the browser throttles background tabs.
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
@@ -126,8 +164,7 @@ const App: React.FC = () => {
             const isFocus = prev.activeTimer.isFocusActive;
             const updatedTimer = {
               ...prev.activeTimer,
-              // Move timestamp forward by exactly the number of seconds processed
-              // This preserves the millisecond remainder for the next tick
+              // Move the timestamp forward by full seconds. Remaining milliseconds are preserved for the next tick.
               lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? prev.activeTimer.accumulatedFocusSeconds + deltaSeconds 
@@ -147,8 +184,6 @@ const App: React.FC = () => {
         timerIntervalRef.current = null;
       }
     }
-    // CRITICAL FIX: Ensure the ref is nulled on cleanup so that mode transitions (which re-run the effect)
-    // can successfully restart the interval.
     return () => { 
       if (timerIntervalRef.current) {
         window.clearInterval(timerIntervalRef.current);

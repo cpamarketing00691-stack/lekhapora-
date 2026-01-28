@@ -36,6 +36,13 @@ export interface CollegeExam {
   date: string; // ISO YYYY-MM-DD
 }
 
+export interface Reminder {
+  id: string;
+  title: string;
+  time: number; // Timestamp
+  isTriggered: boolean;
+}
+
 export interface Task {
   id: string;
   name: string;
@@ -117,4 +124,6 @@ export interface UserState {
   currentMood: Mood;
   language: Language;
   activeTimer: ActiveTimerState | null;
+  reminders?: Reminder[];
+  notificationsEnabled?: boolean;
 }

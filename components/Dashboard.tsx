@@ -1,8 +1,8 @@
 
 import React, { useMemo, useState } from 'react';
-import { UserState, Subject, CollegeExam, Task, TaskSource, StudySession } from '../types';
+import { UserState, Subject, CollegeExam, Task, TaskSource, StudySession, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle, Flame, Battery, Wind, AlertCircle, Brain } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle, Flame, Battery, Wind, AlertCircle, Brain, Bell } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -13,6 +13,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [reminderModalTask, setReminderModalTask] = useState<Task | null>(null);
+  const [reminderTime, setReminderTime] = useState('');
+  
   const [newTask, setNewTask] = useState({ 
     name: '', 
     source: TaskSource.PERSONAL,
@@ -72,7 +75,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     if (subjectFilter) filteredSessions = filteredSessions.filter(s => s.subjectId === subjectFilter);
     if (examFilter) filteredSessions = filteredSessions.filter(s => s.examId === examFilter);
 
-    // Sync metrics: Only include active timer stats if they match the current filters
     const timerMatchesFilters = (!subjectFilter || userState.activeTimer?.subjectId === subjectFilter) &&
                                 (!examFilter || userState.activeTimer?.examId === examFilter);
 
@@ -202,6 +204,28 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     setIsTaskModalOpen(false);
   };
 
+  const setReminder = () => {
+    if (!reminderModalTask || !reminderTime) return;
+    const time = new Date(reminderTime).getTime();
+    if (isNaN(time)) return;
+
+    const newReminder: Reminder = {
+      id: `reminder-${Date.now()}`,
+      title: `Reminder for: ${reminderModalTask.name}`,
+      time,
+      isTriggered: false
+    };
+
+    onUpdateState(prev => ({
+      ...prev,
+      reminders: [...(prev.reminders || []), newReminder]
+    }));
+
+    setReminderModalTask(null);
+    setReminderTime('');
+    alert(t("রিমাইন্ডার সেট করা হয়েছে!", "Reminder scheduled!"));
+  };
+
   const toggleTask = (id: string) => {
     onUpdateState(prev => ({
       ...prev,
@@ -239,7 +263,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       </header>
 
-      {/* Active Session Sync Card */}
       {userState.activeTimer && (
         <div className="bg-brand-primary text-white p-6 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 animate-in slide-in-from-top-4 flex flex-col md:flex-row items-center justify-between gap-6 border border-white/10 relative overflow-hidden">
           <Sparkles className="absolute -right-10 -bottom-10 opacity-10" size={150} />
@@ -279,7 +302,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       )}
 
-      {/* Main Stats Summary Cards */}
       <section className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
         {userState.profile?.targetExamDate && (
           <div className="bg-brand-primary text-white p-5 rounded-[2.25rem] shadow-lg border border-white/10 flex flex-col justify-between min-w-[160px] snap-center shrink-0">
@@ -328,9 +350,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Readiness and Activity History */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Readiness Card */}
           <section className="bg-brand-surface p-6 sm:p-8 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 relative z-10 gap-4">
               <div>
@@ -368,7 +388,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
             </div>
           </section>
 
-          {/* Activity Log - RECENT SESSIONS */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
                <div className="flex items-center gap-3">
@@ -429,7 +448,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           </section>
         </div>
 
-        {/* Right Column: Totals and Tasks */}
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-6">
             <div className="bg-brand-primary text-white p-6 sm:p-8 rounded-[2.5rem] shadow-2xl shadow-brand-primary/20 relative overflow-hidden group flex flex-col justify-center">
@@ -449,7 +467,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
             </div>
           </div>
 
-          {/* Homework Section */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -476,9 +493,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       <p className={`text-[11px] font-bold leading-tight transition-all truncate ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
                       <p className="text-[8px] font-black uppercase text-brand-text-s mt-1 tracking-widest">{task.source}</p>
                    </div>
-                   <button onClick={() => deleteTask(task.id)} className="p-1 text-brand-text-s hover:text-red-500 transition-all active:scale-90 md:opacity-0 group-hover:opacity-100">
-                      <Trash2 size={12} />
-                   </button>
+                   <div className="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button onClick={() => setReminderModalTask(task)} className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90">
+                        <Bell size={12} />
+                     </button>
+                     <button onClick={() => deleteTask(task.id)} className="p-1 text-brand-text-s hover:text-red-500 transition-all active:scale-90">
+                        <Trash2 size={12} />
+                     </button>
+                   </div>
                 </div>
               )) : (
                 <div className="py-6 text-center space-y-2 opacity-20">
@@ -491,7 +513,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         </div>
       </div>
       
-      {/* Task Modal Recovery */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
              <div className="w-full max-w-md bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10 max-h-[90vh] overflow-y-auto">
@@ -510,7 +531,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                         className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary"
                       />
                    </div>
-
                    <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় (ঐচ্ছিক)', 'Subject (Optional)')}</label>
                       <select 
@@ -522,7 +542,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                         {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
                       </select>
                    </div>
-
                    <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('উৎস (Source)', 'Source')}</label>
                       <div className="flex flex-wrap gap-2">
@@ -537,12 +556,40 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                         ))}
                       </div>
                    </div>
-
                    <button 
                     onClick={addTask}
                     className="w-full py-4 mt-2 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
                    >
                      {t('অ্যাড হোমওয়ার্ক', 'Add Homework')}
+                   </button>
+                </div>
+             </div>
+          </div>
+      )}
+
+      {reminderModalTask && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+             <div className="w-full max-w-sm bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
+                <div className="flex items-center justify-between mb-6">
+                  <h4 className="font-black text-brand-text-p uppercase tracking-widest">{t('রিমাইন্ডার সেট করো', 'Set Reminder')}</h4>
+                  <button onClick={() => setReminderModalTask(null)} className="text-brand-text-s hover:text-brand-text-p"><X size={20} /></button>
+                </div>
+                <div className="space-y-5">
+                   <p className="text-xs font-bold text-brand-text-s">{t('টাস্ক:', 'Task:')} {reminderModalTask.name}</p>
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('রিমাইন্ডার সময়', 'Reminder Time')}</label>
+                      <input 
+                        type="datetime-local" 
+                        value={reminderTime}
+                        onChange={e => setReminderTime(e.target.value)}
+                        className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
+                      />
+                   </div>
+                   <button 
+                    onClick={setReminder}
+                    className="w-full py-4 mt-2 bg-brand-secondary text-white font-black rounded-2xl shadow-xl shadow-brand-secondary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                   >
+                     {t('রিমাইন্ডার সেভ করো', 'Save Reminder')}
                    </button>
                 </div>
              </div>

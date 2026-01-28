@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession } from './types';
+import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession, Reminder } from './types';
 import { CHAPTER_LISTS } from './constants';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
@@ -23,7 +23,9 @@ const DEFAULT_STATE: UserState = {
   badges: [],
   currentMood: 'Great',
   language: 'bn',
-  activeTimer: null
+  activeTimer: null,
+  reminders: [],
+  notificationsEnabled: false
 };
 
 const App: React.FC = () => {
@@ -35,7 +37,6 @@ const App: React.FC = () => {
         const state = { ...DEFAULT_STATE, ...parsed };
         
         // RECONCILIATION: Immediate catch-up on mount.
-        // We use Date.now() to calculate exactly how many seconds passed while the app was closed.
         if (state.activeTimer) {
           const now = Date.now();
           const elapsedMs = now - state.activeTimer.lastTimestamp;
@@ -45,7 +46,6 @@ const App: React.FC = () => {
             const isFocus = state.activeTimer.isFocusActive;
             state.activeTimer = {
               ...state.activeTimer,
-              // Move the anchor forward by exact seconds used
               lastTimestamp: state.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? state.activeTimer.accumulatedFocusSeconds + deltaSeconds 
@@ -67,6 +67,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number | null>(null);
+  const reminderIntervalRef = useRef<number | null>(null);
   const lastCloudSaveRef = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -109,19 +110,13 @@ const App: React.FC = () => {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
         setUserState(prev => {
-          // PROTECT LOCAL TIMER: If a timer is currently running locally, do not overwrite it with cloud data
-          // unless the cloud data also has a timer and it's specifically newer (larger timestamp).
           if (prev.activeTimer) {
             const cloudTimer = data.state.activeTimer;
             if (!cloudTimer || cloudTimer.lastTimestamp < prev.activeTimer.lastTimestamp) {
-              // Merging cloud data but keeping local timer progress
               return { ...prev, ...data.state, activeTimer: prev.activeTimer, isAuthenticated: true };
             }
           }
-
           const newState = { ...prev, ...data.state, isAuthenticated: true };
-          
-          // RE-RECONCILE after sync: Ensures the cloud timestamp is brought up to the current browser time.
           if (newState.activeTimer) {
              const now = Date.now();
              const elapsedMs = now - newState.activeTimer.lastTimestamp;
@@ -152,15 +147,11 @@ const App: React.FC = () => {
     } catch (e) { }
   };
 
-  // PERSISTENCE EFFECT: Syncs userState to LocalStorage immediately and to Cloud periodically.
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
-    
     if (userState.isAuthenticated) {
       const timeSinceLastSave = Date.now() - lastCloudSaveRef.current;
       const isTimerRunning = !!userState.activeTimer;
-      
-      // If a timer is running, force cloud save every 30s to minimize data loss on browser crash.
       if (isTimerRunning && timeSinceLastSave > 30000) {
         saveUserData(userState);
       } else {
@@ -170,25 +161,55 @@ const App: React.FC = () => {
     }
   }, [userState]);
 
-  // BACKGROUND-SAFE INTERVAL: Advances the state every second using Date.now() deltas.
-  // This allows the timer to accurately bridge gaps when the browser throttles background tabs.
+  // REMINDER & NOTIFICATION SYSTEM
+  useEffect(() => {
+    if (userState.notificationsEnabled && !reminderIntervalRef.current) {
+      reminderIntervalRef.current = window.setInterval(() => {
+        const now = Date.now();
+        const updatedReminders: Reminder[] = [];
+        let stateChanged = false;
+
+        const reminders = userState.reminders || [];
+        reminders.forEach(reminder => {
+          if (!reminder.isTriggered && reminder.time <= now) {
+            new Notification("HSC Study Tracker", {
+              body: reminder.title,
+              icon: '/icon.png'
+            });
+            updatedReminders.push({ ...reminder, isTriggered: true });
+            stateChanged = true;
+          } else {
+            updatedReminders.push(reminder);
+          }
+        });
+
+        if (stateChanged) {
+          setUserState(prev => ({ ...prev, reminders: updatedReminders }));
+        }
+      }, 30000); // Check every 30 seconds
+    }
+
+    return () => {
+      if (reminderIntervalRef.current) {
+        clearInterval(reminderIntervalRef.current);
+        reminderIntervalRef.current = null;
+      }
+    };
+  }, [userState.notificationsEnabled, userState.reminders]);
+
   useEffect(() => {
     if (userState.activeTimer) {
       if (!timerIntervalRef.current) {
         timerIntervalRef.current = window.setInterval(() => {
           setUserState(prev => {
             if (!prev.activeTimer) return prev;
-            
             const now = Date.now();
             const elapsedMs = now - prev.activeTimer.lastTimestamp;
             const deltaSeconds = Math.floor(elapsedMs / 1000);
-            
             if (deltaSeconds < 1) return prev;
-
             const isFocus = prev.activeTimer.isFocusActive;
             const updatedTimer = {
               ...prev.activeTimer,
-              // Exact second increment to keep sync between current time and accumulated counts
               lastTimestamp: prev.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? prev.activeTimer.accumulatedFocusSeconds + deltaSeconds 
@@ -197,7 +218,6 @@ const App: React.FC = () => {
                 ? prev.activeTimer.accumulatedBreakSeconds + deltaSeconds 
                 : prev.activeTimer.accumulatedBreakSeconds
             };
-
             return { ...prev, activeTimer: updatedTimer };
           });
         }, 1000);
@@ -219,7 +239,6 @@ const App: React.FC = () => {
   const handleProfileComplete = (onboardingData: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profile } = onboardingData;
     const finalSubjects: Subject[] = [];
-    
     selectedSubjectNames.forEach((name, idx) => {
       [1, 2].forEach(paperNum => {
         const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
@@ -227,15 +246,9 @@ const App: React.FC = () => {
           name: ch,
           isCompleted: false
         }));
-        finalSubjects.push({ 
-          id: `sub-${idx}-${paperNum}-${Date.now()}`, 
-          name, 
-          paper: paperNum as 1 | 2, 
-          chapters 
-        });
+        finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
       });
     });
-
     setUserState(prev => ({ ...prev, profile, subjects: finalSubjects }));
   };
 

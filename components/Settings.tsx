@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { UserState, UserProfile, Religion, Medium, Group, CollegeExam } from '../types';
-import { User, LogOut, Languages, Palette, ShieldCheck, Calendar, School, Plus, Trash2, GraduationCap } from 'lucide-react';
+import { User, LogOut, Languages, Palette, ShieldCheck, Calendar, School, Plus, Trash2, GraduationCap, Bell, BellOff } from 'lucide-react';
 import { BOARDS, YEARS } from '../constants';
 
 interface SettingsProps {
@@ -19,6 +19,19 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
       ...prev,
       profile: prev.profile ? { ...prev.profile, ...updates } : null
     }));
+  };
+
+  const toggleNotifications = async () => {
+    if (!userState.notificationsEnabled) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        onUpdateState(prev => ({ ...prev, notificationsEnabled: true }));
+      } else {
+        alert(t("দয়া করে ব্রাউজার সেটিং থেকে নোটিফিকেশন পারমিশন দাও।", "Please allow notifications in your browser settings."));
+      }
+    } else {
+      onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
+    }
   };
 
   const addExam = () => {
@@ -132,6 +145,7 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
               <Languages className="text-brand-secondary" size={20} />
               <h3 className="font-bold text-lg">{t('পছন্দসমূহ', 'Preferences')}</h3>
             </div>
+            
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-bold text-sm">{t('ভাষা', 'Language')}</p>
@@ -141,6 +155,20 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
                 <button onClick={() => onUpdateState(prev => ({ ...prev, language: 'bn' }))} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${userState.language === 'bn' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-s'}`}>বাংলা</button>
                 <button onClick={() => onUpdateState(prev => ({ ...prev, language: 'en' }))} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${userState.language === 'en' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-s'}`}>English</button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-brand-text-s/10">
+              <div>
+                <p className="font-bold text-sm">{t('নোটিফিকেশন', 'Notifications')}</p>
+                <p className="text-xs text-brand-text-s">{t('রিমাইন্ডার এবং পরীক্ষার অ্যালার্ট', 'Reminders & Exam Alerts')}</p>
+              </div>
+              <button 
+                onClick={toggleNotifications}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${userState.notificationsEnabled ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20' : 'bg-brand-bg text-brand-text-s'}`}
+              >
+                {userState.notificationsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+                {userState.notificationsEnabled ? t('চালু', 'ON') : t('বন্ধ', 'OFF')}
+              </button>
             </div>
           </section>
 

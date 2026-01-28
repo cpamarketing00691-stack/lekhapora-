@@ -47,7 +47,8 @@ export default async function handler(req: Request): Promise<Response> {
     geminiContents.push({ role: 'user', parts: [{ text: message }] });
 
     const generateContentParams: GenerateContentParameters = {
-      model: "gemini-3-flash-preview", 
+      model: "gemini-2.5-flash"
+", 
       contents: geminiContents,
       config: {
         systemInstruction: systemInstruction || undefined,

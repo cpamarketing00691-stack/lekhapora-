@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
 import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Lightbulb } from 'lucide-react';
-// Fix: Import supabase to fetch userId
 import { supabase } from '../lib/supabase';
 
 interface AISidebarProps {
@@ -11,107 +10,87 @@ interface AISidebarProps {
 
 const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
   const [messages, setMessages] = useState<{role: 'ai' | 'user', text: string}[]>([
-    { role: 'ai', text: `কিরে ${userState.profile?.fullName}! কেমন আছো? আজ কি পড়ার প্ল্যান তোমার?` }
+    { role: 'ai', text: `কিরে দোস্ত! আমি তোর পড়াশোনার সাথী 'Lekhapora Bot'। আজ পড়াশোনা কেমন হচ্ছে?` }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages or when loading status changes
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
 
-  /**
-   * Handles sending messages to the /api/chat endpoint.
-   */
   const handleSend = async (customText?: string) => {
     const textToSend = customText || input;
     if (!textToSend.trim() || isLoading) return;
     
-    // UI Setup
     if (!customText) setInput('');
     setError(null);
     
-    // Add user message to local state
     const userMessage = { role: 'user' as const, text: textToSend };
     setMessages(prev => [...prev, userMessage]);
-    
-    // Show loading state
     setIsLoading(true);
 
     try {
-      // Create system instruction for context
-      const systemInstruction = `You are a supportive, human-like study buddy for a Bangladesh HSC student named ${userState.profile?.fullName}. 
-      Your name is ${userState.profile?.aiName}. Use a friendly "big brother/sister" tone in conversational Bangla/Banglish.`;
+      const systemInstruction = `You are "Lekhapora Bot", a supportive, casual study friend for ${userState.profile?.fullName}. Tone: casual Bengali.`;
 
-      // Filter out system messages and map to a format expected by the API if necessary,
-      // though the current api/chat.ts handles raw history.
       const chatHistoryForAPI = messages.map(msg => ({
-        role: msg.role === 'ai' ? 'ai' : 'user', // Ensure roles are 'ai' or 'user' for history
-        text: msg.text
+        role: msg.role === 'ai' ? 'assistant' : 'user',
+        content: msg.text
       }));
 
-      // Fix: Get userId from Supabase auth directly as UserProfile does not contain an 'id'
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id;
 
-      // Fetch from backend
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: textToSend,
-          history: chatHistoryForAPI, // Send existing messages as history
+          history: chatHistoryForAPI,
           systemInstruction: systemInstruction,
-          // Fix: Use the userId obtained directly from Supabase
-          userId: userId // Include userId for logging
+          userId: userId
         })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response from AI server');
+        throw new Error('Failed to get response');
       }
 
       const data = await response.json();
       
-      // Add AI reply to UI
       setMessages(prev => [...prev, { 
         role: 'ai', 
-        text: data.reply || "দুঃখিত, আমি তোমার কথা বুঝতে পারিনি।" 
+        text: data.reply || "দুঃখিত দোস্ত, আমি ঠিক বুঝতে পারিনি।" 
       }]);
     } catch (err: any) {
-      console.error("Chat API Error:", err);
-      setError("সার্ভারের সাথে যোগাযোগ করতে সমস্যা হয়েছে।");
+      setError("সার্ভারে সমস্যা হয়েছে।");
       setMessages(prev => [...prev, { 
         role: 'ai', 
-        text: "দুঃখিত, আমার সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করো।" 
+        text: "দুঃখিত দোস্ত, সার্ভারের সাথে যোগাযোগ করতে পারছি না। আবার চেষ্টা কর।" 
       }]);
     } finally {
-      // Hide loading state
       setIsLoading(false);
     }
   };
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-brand-surface rounded-[2rem] overflow-hidden border border-brand-text-s/10 shadow-sm">
-      {/* Buddy Header */}
       <div className="p-5 bg-brand-primary text-white flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm border border-white/30">
             <Bot size={22} />
           </div>
           <div>
-            <h3 className="font-black text-sm tracking-tight">{userState.profile?.aiName}</h3>
-            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Study Buddy Active</p>
+            <h3 className="font-black text-sm tracking-tight">Lekhapora Bot</h3>
+            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Online & Ready</p>
           </div>
         </div>
       </div>
 
-      {/* Message List */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-brand-bg/30 dark:bg-brand-bg/10">
         {messages.map((m, idx) => (
           <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2 animate-in fade-in slide-in-from-bottom-2`}>
@@ -135,7 +114,6 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </div>
         ))}
         
-        {/* Loading Indicator */}
         {isLoading && (
           <div className="flex justify-start items-center gap-2 animate-pulse">
             <div className="w-6 h-6 rounded-full bg-brand-primary/10 flex items-center justify-center">
@@ -147,7 +125,6 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </div>
         )}
         
-        {/* Error State */}
         {error && (
           <div className="flex justify-center">
             <div className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-500 text-[10px] font-black uppercase tracking-widest rounded-full border border-red-100 dark:border-red-800">
@@ -158,20 +135,18 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
         )}
       </div>
 
-      {/* Footer / Input Area */}
       <div className="p-4 bg-white dark:bg-brand-surface border-t border-brand-text-s/10 space-y-3">
-        {/* Quick Action Suggestions */}
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button 
-            onClick={() => handleSend("আমাকে পড়ার জন্য কিছু টিপস দাও")}
+            onClick={() => handleSend("আমাকে পড়ার কিছু টিপস দাও")}
             disabled={isLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-secondary/10 text-brand-secondary rounded-full border border-brand-secondary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-secondary/20 transition-all shrink-0 disabled:opacity-50"
           >
             <Lightbulb size={12} />
-            Study Advice
+            Study Tips
           </button>
           <button 
-            onClick={() => handleSend("আমার জন্য একটা রুটিন বানিয়ে দাও")}
+            onClick={() => handleSend("আজকের পড়ার রুটিন কী হবে?")}
             disabled={isLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary/10 text-brand-primary rounded-full border border-brand-primary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-primary/20 transition-all shrink-0 disabled:opacity-50"
           >
@@ -180,14 +155,13 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </button>
         </div>
 
-        {/* Input Control */}
         <div className="flex gap-2 items-center bg-brand-bg dark:bg-brand-bg/50 p-2 rounded-2xl border border-brand-text-s/10 focus-within:border-brand-primary transition-all">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="কিছু জানতে চাও?"
+            placeholder="কিছু বলবি দোস্ত?"
             className="flex-1 bg-transparent border-0 px-3 py-2 text-sm focus:ring-0 placeholder:text-brand-text-s/50"
           />
           <button 

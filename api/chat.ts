@@ -52,15 +52,15 @@ export default async function handler(req: Request): Promise<Response> {
 
     /**
      * 2. CONSTRUCT MESSAGE HISTORY
-     * Mapping frontend history to DeepSeek's OpenAI-compatible format
+     * Mapping history from the frontend to DeepSeek's OpenAI-compatible format.
      */
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
     
     if (history && Array.isArray(history)) {
       history.forEach((msg: any) => {
         messages.push({
-          role: msg.role === 'ai' ? 'assistant' : 'user',
-          content: msg.text
+          role: msg.role === 'ai' || msg.role === 'assistant' ? 'assistant' : 'user',
+          content: msg.text || msg.content
         });
       });
     }
@@ -72,7 +72,7 @@ export default async function handler(req: Request): Promise<Response> {
      * 3. CALL DEEPSEEK API
      * Standard fetch implementation (OpenAI compatible)
      */
-    const aiResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const aiResponse = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -87,11 +87,17 @@ export default async function handler(req: Request): Promise<Response> {
     });
 
     if (!aiResponse.ok) {
-      const errorData = await aiResponse.json();
-      throw new Error(errorData.error?.message || 'DeepSeek API Error');
+      const errorText = await aiResponse.text();
+      console.error("DeepSeek API Response Error:", errorText);
+      throw new Error(`DeepSeek API Error: ${aiResponse.status} ${aiResponse.statusText}`);
     }
 
     const completion = await aiResponse.json();
+    
+    if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+      throw new Error('Unexpected response format from DeepSeek API');
+    }
+
     const rawContent = completion.choices[0].message.content.trim();
 
     /**
@@ -100,6 +106,7 @@ export default async function handler(req: Request): Promise<Response> {
      */
     let finalReply = rawContent;
     
+    // Check if response looks like JSON
     if (rawContent.startsWith('{') && rawContent.endsWith('}')) {
       try {
         const actionObj = JSON.parse(rawContent);
@@ -132,13 +139,13 @@ export default async function handler(req: Request): Promise<Response> {
         finalReply = reply || "কাজটি সফলভাবে সেভ করা হয়েছে!";
       } catch (parseErr) {
         console.warn("JSON Detection failed, treating as normal text:", parseErr);
-        // If it looks like JSON but fails parsing, just return the text as is
+        // Fallback: finalReply is already rawContent
       }
     }
 
     /**
      * 5. LOGGING
-     * Save the interaction to the ai_logs table for analytics
+     * Save the interaction to the ai_logs table for audit/debugging
      */
     try {
       await supabaseAdmin.from('ai_logs').insert({
@@ -152,13 +159,19 @@ export default async function handler(req: Request): Promise<Response> {
       console.error("Non-fatal logging error:", logErr);
     }
 
-    return new Response(JSON.stringify({ reply: finalReply }), { status: 200 });
+    return new Response(JSON.stringify({ reply: finalReply }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
 
   } catch (error: any) {
     console.error("DeepSeek API Handler Error:", error);
     return new Response(JSON.stringify({ 
       error: 'Internal Server Error',
       reply: "দুঃখিত, আমার সার্ভারে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করো।" 
-    }), { status: 500 });
+    }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }

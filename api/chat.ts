@@ -1,20 +1,16 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
 
 /**
  * PRODUCTION-READY LEKHAPORA BOT BACKEND
- * Optimized for Vercel Serverless Functions (Node.js Runtime)
+ * Powered by Google Gemini API
  */
 
 // 1. Initialize Supabase Admin with Service Role Key
 const supabaseUrl = process.env.SUPABASE_URL || 'https://uycxbrcbweeuvizrgpnw.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''; 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
 
 /**
  * Standard Node.js Request Handler for Vercel
@@ -24,22 +20,25 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.API_KEY;
   
-  if (!deepseekApiKey) {
-    console.error("CONFIGURATION ERROR: DEEPSEEK_API_KEY is missing.");
+  if (!apiKey) {
+    console.error("CONFIGURATION ERROR: API_KEY is missing in environment variables.");
     return res.status(500).json({ 
       error: 'Missing Configuration', 
-      reply: 'দুঃখিত দোস্ত, আমার এআই চাবি (API Key) কাজ করছে না। দয়া করে ড্যাশবোর্ডে এনভায়রনমেন্ট ভেরিয়েবল চেক করো।' 
+      reply: 'দুঃখিত দোস্ত, আমার এআই চাবি (API Key) পাওয়া যাচ্ছে না। দয়া করে এনভায়রনমেন্ট ভেরিয়েবল চেক করো।' 
     });
   }
 
   try {
-    const { message, history, userId, systemInstruction } = req.body;
+    const { message, history, userId, systemInstruction: frontendSystemInstruction } = req.body;
 
     if (!message || !userId) {
       return res.status(400).json({ error: 'Message and User ID are required.' });
     }
+
+    // Initialize Gemini API
+    const ai = new GoogleGenAI({ apiKey });
 
     /**
      * DYNAMIC SYSTEM PROMPT: LEKHAPORA BOT
@@ -53,60 +52,57 @@ export default async function handler(req: any, res: any) {
     3. Use simple, natural Bengali/Banglish.
     
     SPECIAL ACTIONS (Automation):
-    If the student wants to add a task, routine, or syllabus chapter, respond ONLY with a valid JSON object:
+    If the student wants to add a task, routine, or syllabus chapter, you MUST respond ONLY with a valid JSON object. Do not wrap it in markdown blocks unless necessary.
+    
+    JSON SCHEMA:
     - Task: {"action": "add_task", "data": {"title": "Subject", "duration": "1h", "date": "YYYY-MM-DD"}, "reply": "Confirm in friendly Bengali"}
     - Routine: {"action": "add_routine", "data": {"subject": "Math", "time": "7am", "day": "Today"}, "reply": "Confirm in friendly Bengali"}
     - Syllabus: {"action": "add_syllabus", "data": {"subject": "Physics", "chapter": "Vector"}, "reply": "Confirm in friendly Bengali"}
     
     Otherwise, respond with warm, helpful Bengali text.`;
 
-    const finalSystemPrompt = systemInstruction ? `${baseSystemPrompt}\n\nAdditional Context: ${systemInstruction}` : baseSystemPrompt;
+    const finalSystemPrompt = frontendSystemInstruction 
+      ? `${baseSystemPrompt}\n\nAdditional User Context: ${frontendSystemInstruction}` 
+      : baseSystemPrompt;
 
-    const messages: ChatMessage[] = [{ role: 'system', content: finalSystemPrompt }];
+    /**
+     * CONSTRUCT CONTENTS FOR GEMINI
+     * Gemini roles are 'user' and 'model'.
+     */
+    const contents: any[] = [];
     
     if (history && Array.isArray(history)) {
       history.forEach((msg: any) => {
-        messages.push({
-          role: (msg.role === 'ai' || msg.role === 'assistant') ? 'assistant' : 'user',
-          content: msg.text || msg.content
+        contents.push({
+          role: (msg.role === 'ai' || msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user',
+          parts: [{ text: msg.text || msg.content }]
         });
       });
     }
     
-    messages.push({ role: 'user', content: message });
+    // Add current user message
+    contents.push({ role: 'user', parts: [{ text: message }] });
 
-    const aiResponse = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${deepseekApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
+    // Generate Content using Gemini 3
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: contents,
+      config: {
+        systemInstruction: finalSystemPrompt,
         temperature: 0.7,
-        max_tokens: 500,
-        stream: false
-      })
+        maxOutputTokens: 800,
+      },
     });
 
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return res.status(200).json({ 
-          reply: "দোস্ত, এখন অনেক স্টুডেন্ট একসাথে পড়াশোনা করছে। আমার ব্রেইন একটু জ্যাম হয়ে গেছে। ৫ মিনিট পর আবার নক দাও!" 
-        });
-      }
-      throw new Error(`Upstream API failed with status ${aiResponse.status}`);
-    }
+    const rawContent = response.text || "দুঃখিত দোস্ত, আমি ঠিক বুঝতে পারিনি।";
+    const cleanedContent = rawContent.trim();
 
-    const completion: any = await aiResponse.json();
-    const rawContent = completion.choices[0].message.content.trim();
-
-    let finalReply = rawContent;
+    let finalReply = cleanedContent;
     
-    if (rawContent.startsWith('{') && rawContent.endsWith('}')) {
+    // Detect and execute automation actions if AI returns JSON
+    if (cleanedContent.startsWith('{') && cleanedContent.endsWith('}')) {
       try {
-        const parsed = JSON.parse(rawContent);
+        const parsed = JSON.parse(cleanedContent);
         const { action, data, reply } = parsed;
 
         if (action === 'add_task') {
@@ -133,24 +129,29 @@ export default async function handler(req: any, res: any) {
         
         finalReply = reply || "কাজটি হয়ে গেছে দোস্ত!";
       } catch (e) {
-        console.warn("JSON error, using raw content.");
+        console.warn("Gemini returned JSON-like content that failed parsing:", e);
       }
     }
 
+    // Log the interaction to Supabase for analytics
     try {
       await supabaseAdmin.from('ai_logs').insert({
         user_id: userId,
         prompt: message,
         response: finalReply,
-        model: 'deepseek-chat',
+        model: 'gemini-3-flash-preview',
         created_at: new Date().toISOString()
       });
-    } catch (logErr) {}
+    } catch (logErr) {
+      console.error("Non-critical logging error:", logErr);
+    }
 
     return res.status(200).json({ reply: finalReply });
 
   } catch (error: any) {
-    console.error("BACKEND ERROR:", error);
+    console.error("GEMINI API ERROR:", error);
+    
+    // Friendly error handling for the student
     return res.status(200).json({ 
       reply: "দুঃখিত দোস্ত, সার্ভারের সাথে যোগাযোগ করতে পারছি না। আবার চেষ্টা কর।" 
     });

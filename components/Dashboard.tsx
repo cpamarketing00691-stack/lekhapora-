@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, CollegeExam, Task, TaskSource, StudySession, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle, Flame, Battery, Wind, AlertCircle, Brain, Bell } from 'lucide-react';
+import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, BookOpen, Clock, Coffee, ArrowRight, Calendar, Filter, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Tag, Sparkles, BookCheck, Edit3, PlayCircle, Flame, Battery, Wind, AlertCircle, Brain, Bell, ExternalLink } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -13,7 +13,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [reminderModalTask, setReminderModalTask] = useState<Task | null>(null);
+  const [reminderModalTarget, setReminderModalTarget] = useState<{id: string, name: string} | null>(null);
   const [reminderTime, setReminderTime] = useState('');
   
   const [newTask, setNewTask] = useState({ 
@@ -205,13 +205,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
   };
 
   const setReminder = () => {
-    if (!reminderModalTask || !reminderTime) return;
+    if (!reminderModalTarget || !reminderTime) return;
     const time = new Date(reminderTime).getTime();
     if (isNaN(time)) return;
 
     const newReminder: Reminder = {
       id: `reminder-${Date.now()}`,
-      title: `Reminder for: ${reminderModalTask.name}`,
+      title: `${t('রিমাইন্ডার:', 'Reminder:')} ${reminderModalTarget.name}`,
       time,
       isTriggered: false
     };
@@ -221,9 +221,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
       reminders: [...(prev.reminders || []), newReminder]
     }));
 
-    setReminderModalTask(null);
+    setReminderModalTarget(null);
     setReminderTime('');
     alert(t("রিমাইন্ডার সেট করা হয়েছে!", "Reminder scheduled!"));
+  };
+
+  const removeReminder = (id: string) => {
+    onUpdateState(prev => ({
+      ...prev,
+      reminders: (prev.reminders || []).filter(r => r.id !== id)
+    }));
   };
 
   const toggleTask = (id: string) => {
@@ -240,6 +247,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     }));
   };
 
+  const getGoogleCalendarLink = (title: string, dateStr?: string) => {
+    const base = "https://www.google.com/calendar/render?action=TEMPLATE";
+    const text = encodeURIComponent(title);
+    let dates = "";
+    
+    if (dateStr) {
+      // For exams, set as an all-day event
+      const date = new Date(dateStr);
+      const start = date.toISOString().replace(/-|:|\.\d\d\d/g, "").split("T")[0];
+      dates = `${start}/${start}`;
+    } else {
+      // For general tasks, set for today+1 hour
+      const now = new Date();
+      const start = now.toISOString().replace(/-|:|\.\d\d\d/g, "");
+      const end = new Date(now.getTime() + 3600000).toISOString().replace(/-|:|\.\d\d\d/g, "");
+      dates = `${start}/${end}`;
+    }
+    
+    return `${base}&text=${text}&dates=${dates}&details=${encodeURIComponent("Scheduled via HSC Study Tracker")}`;
+  };
+
   const moodIcons: Record<string, React.ReactNode> = {
     'Great': <Flame size={14} className="text-orange-500" />,
     'Focused': <Brain size={14} className="text-brand-primary" />,
@@ -247,6 +275,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
     'Stressed': <AlertCircle size={14} className="text-rose-500" />,
     'Burnt Out': <Wind size={14} className="text-slate-400" />
   };
+
+  const activeReminders = (userState.reminders || []).filter(r => !r.isTriggered && r.time > Date.now());
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-12">
@@ -318,33 +348,51 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
         {upcomingExams.map(exam => {
           const isActive = (exam.type === 'college' && examFilter === exam.id) || (exam.type === 'subject' && subjectFilter === exam.id);
           return (
-            <button 
+            <div 
               key={exam.id}
-              onClick={() => {
-                if (exam.type === 'college') {
-                  setExamFilter(examFilter === exam.id ? null : exam.id);
-                  setSubjectFilter(null);
-                } else {
-                  setSubjectFilter(subjectFilter === exam.id ? null : exam.id);
-                  setExamFilter(null);
-                }
-              }}
               className={`p-5 rounded-[2.25rem] shadow-sm border transition-all flex flex-col justify-between min-w-[200px] snap-center shrink-0 text-left group/card ${isActive ? 'bg-brand-secondary text-white border-brand-secondary shadow-brand-secondary/30' : 'bg-brand-surface text-brand-text-p border-brand-text-s/10 hover:border-brand-primary/50'}`}
             >
                <div className="flex justify-between items-start">
-                 {exam.type === 'college' ? <GraduationCap size={18} className={isActive ? 'opacity-100' : 'opacity-40'} /> : <Clock size={18} className={isActive ? 'opacity-100' : 'opacity-40'} />}
-                 <span className="text-[9px] font-black uppercase tracking-widest text-right truncate ml-2">{exam.name}</span>
+                 <button onClick={() => {
+                   if (exam.type === 'college') {
+                     setExamFilter(examFilter === exam.id ? null : exam.id);
+                     setSubjectFilter(null);
+                   } else {
+                     setSubjectFilter(subjectFilter === exam.id ? null : exam.id);
+                     setExamFilter(null);
+                   }
+                 }}>
+                  {exam.type === 'college' ? <GraduationCap size={18} className={isActive ? 'opacity-100' : 'opacity-40'} /> : <Clock size={18} className={isActive ? 'opacity-100' : 'opacity-40'} />}
+                 </button>
+                 <div className="flex gap-1">
+                   <button 
+                    onClick={() => setReminderModalTarget({ id: exam.id, name: exam.name })}
+                    className={`p-1.5 rounded-lg transition-all ${isActive ? 'hover:bg-white/20' : 'hover:bg-brand-bg'} text-brand-text-s group-hover/card:text-brand-primary`}
+                    title={t("রিমাইন্ডার সেট করো", "Set Reminder")}
+                   >
+                     <Bell size={14} className={isActive ? 'text-white' : ''} />
+                   </button>
+                   <a 
+                    href={getGoogleCalendarLink(exam.name, exam.date)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`p-1.5 rounded-lg transition-all ${isActive ? 'hover:bg-white/20' : 'hover:bg-brand-bg'} text-brand-text-s group-hover/card:text-brand-primary`}
+                    title={t("ক্যালেন্ডারে যোগ করো", "Add to Calendar")}
+                   >
+                     <ExternalLink size={14} className={isActive ? 'text-white' : ''} />
+                   </a>
+                 </div>
                </div>
                <div className="mt-4 flex justify-between items-end">
                   <div>
                     <h4 className="text-3xl font-black tracking-tighter tabular-nums leading-none">{getCountdown(exam.date)}</h4>
                     <p className="text-[8px] font-bold opacity-60 uppercase mt-1">{exam.type === 'college' ? t('কলেজ পরীক্ষা', 'COLLEGE EXAM') : t('বোর্ড পরীক্ষা', 'BOARD EXAM')}</p>
                   </div>
-                  <div className="opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/10 p-2 rounded-xl">
-                    <PlayCircle size={18} />
+                  <div className="text-[10px] font-black opacity-40 group-hover/card:opacity-100 transition-opacity">
+                    {exam.name}
                   </div>
                </div>
-            </button>
+            </div>
           );
         })}
       </section>
@@ -494,9 +542,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       <p className="text-[8px] font-black uppercase text-brand-text-s mt-1 tracking-widest">{task.source}</p>
                    </div>
                    <div className="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                     <button onClick={() => setReminderModalTask(task)} className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90">
+                     <button onClick={() => setReminderModalTarget({id: task.id, name: task.name})} className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90">
                         <Bell size={12} />
                      </button>
+                     <a 
+                      href={getGoogleCalendarLink(task.name)} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90"
+                     >
+                        <ExternalLink size={12} />
+                     </a>
                      <button onClick={() => deleteTask(task.id)} className="p-1 text-brand-text-s hover:text-red-500 transition-all active:scale-90">
                         <Trash2 size={12} />
                      </button>
@@ -510,6 +566,32 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
               )}
             </div>
           </section>
+
+          {activeReminders.length > 0 && (
+            <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-orange-100 rounded-xl text-orange-500 shrink-0">
+                  <Bell size={18} />
+                </div>
+                <h3 className="text-sm font-black text-brand-text-p uppercase tracking-widest">{t('রিমাইন্ডার লিস্ট', 'Reminders')}</h3>
+              </div>
+              <div className="space-y-2">
+                {activeReminders.map(rem => (
+                  <div key={rem.id} className="flex items-center justify-between p-3 bg-brand-bg rounded-xl border border-brand-text-s/5 group">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold text-brand-text-p truncate">{rem.title}</p>
+                      <p className="text-[8px] font-black text-brand-text-s uppercase tracking-widest mt-0.5">
+                        {new Date(rem.time).toLocaleString(userState.language === 'bn' ? 'bn-BD' : 'en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <button onClick={() => removeReminder(rem.id)} className="p-1.5 text-brand-text-s hover:text-red-500 transition-all">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </div>
       
@@ -567,15 +649,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           </div>
       )}
 
-      {reminderModalTask && (
+      {reminderModalTarget && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
              <div className="w-full max-w-sm bg-brand-surface p-6 sm:p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
                 <div className="flex items-center justify-between mb-6">
                   <h4 className="font-black text-brand-text-p uppercase tracking-widest">{t('রিমাইন্ডার সেট করো', 'Set Reminder')}</h4>
-                  <button onClick={() => setReminderModalTask(null)} className="text-brand-text-s hover:text-brand-text-p"><X size={20} /></button>
+                  <button onClick={() => setReminderModalTarget(null)} className="text-brand-text-s hover:text-brand-text-p"><X size={20} /></button>
                 </div>
                 <div className="space-y-5">
-                   <p className="text-xs font-bold text-brand-text-s">{t('টাস্ক:', 'Task:')} {reminderModalTask.name}</p>
+                   <p className="text-xs font-bold text-brand-text-s">{t('বিষয়:', 'Subject:')} {reminderModalTarget.name}</p>
                    <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('রিমাইন্ডার সময়', 'Reminder Time')}</label>
                       <input 
@@ -585,12 +667,23 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                         className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
                       />
                    </div>
-                   <button 
-                    onClick={setReminder}
-                    className="w-full py-4 mt-2 bg-brand-secondary text-white font-black rounded-2xl shadow-xl shadow-brand-secondary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
-                   >
-                     {t('রিমাইন্ডার সেভ করো', 'Save Reminder')}
-                   </button>
+                   <div className="flex flex-col gap-3">
+                    <button 
+                      onClick={setReminder}
+                      className="w-full py-4 bg-brand-secondary text-white font-black rounded-2xl shadow-xl shadow-brand-secondary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
+                    >
+                      {t('রিমাইন্ডার সেভ করো', 'Save Reminder')}
+                    </button>
+                    <a 
+                      href={getGoogleCalendarLink(reminderModalTarget.name)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-4 bg-brand-bg border-2 border-brand-text-s/10 text-brand-text-p font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] active:scale-95 transition-all hover:bg-brand-surface"
+                    >
+                      <ExternalLink size={16} />
+                      {t('গুগল ক্যালেন্ডারে যোগ করো', 'Add to Google Calendar')}
+                    </a>
+                   </div>
                 </div>
              </div>
           </div>

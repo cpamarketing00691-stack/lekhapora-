@@ -163,30 +163,39 @@ const App: React.FC = () => {
 
   // REMINDER & NOTIFICATION SYSTEM
   useEffect(() => {
-    if (userState.notificationsEnabled && !reminderIntervalRef.current) {
-      reminderIntervalRef.current = window.setInterval(() => {
-        const now = Date.now();
-        const updatedReminders: Reminder[] = [];
-        let stateChanged = false;
+    if (userState.notificationsEnabled) {
+      if (!reminderIntervalRef.current) {
+        reminderIntervalRef.current = window.setInterval(() => {
+          const now = Date.now();
+          const reminders = userState.reminders || [];
+          const triggeringReminders = reminders.filter(r => !r.isTriggered && r.time <= now);
 
-        const reminders = userState.reminders || [];
-        reminders.forEach(reminder => {
-          if (!reminder.isTriggered && reminder.time <= now) {
-            new Notification("HSC Study Tracker", {
-              body: reminder.title,
-              icon: '/icon.png'
+          if (triggeringReminders.length > 0) {
+            triggeringReminders.forEach(reminder => {
+              if (Notification.permission === 'granted') {
+                new Notification("HSC Study Tracker", {
+                  body: reminder.title,
+                  icon: '/favicon.ico'
+                });
+              } else {
+                console.log(`[App Reminder] ${reminder.title}`);
+              }
             });
-            updatedReminders.push({ ...reminder, isTriggered: true });
-            stateChanged = true;
-          } else {
-            updatedReminders.push(reminder);
-          }
-        });
 
-        if (stateChanged) {
-          setUserState(prev => ({ ...prev, reminders: updatedReminders }));
-        }
-      }, 30000); // Check every 30 seconds
+            setUserState(prev => ({
+              ...prev,
+              reminders: (prev.reminders || []).map(r => 
+                r.time <= now ? { ...r, isTriggered: true } : r
+              )
+            }));
+          }
+        }, 15000); // Check every 15 seconds
+      }
+    } else {
+      if (reminderIntervalRef.current) {
+        clearInterval(reminderIntervalRef.current);
+        reminderIntervalRef.current = null;
+      }
     }
 
     return () => {

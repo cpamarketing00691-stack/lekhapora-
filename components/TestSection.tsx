@@ -30,36 +30,54 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
   const timerRef = useRef<number | null>(null);
 
-  // Normalization utility for robust matching
+  /**
+   * AGGRESSIVE NORMALIZATION
+   * 1. Lowercase & Trim
+   * 2. Normalize Bangla/English numerals to a single form
+   * 3. Remove punctuation for fuzzy/logical matching
+   * 4. Consolidate whitespace
+   */
   const normalize = (str: any): string => {
     if (!str) return '';
-    const banglaNums = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-    return String(str)
-      .toLowerCase()
-      .trim()
-      .replace(/[০-৯]/g, (d) => banglaNums.indexOf(d).toString())
-      .replace(/\s+/g, ' ');
+    const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    let result = String(str).toLowerCase().trim();
+    
+    // Equate numerals
+    for (let i = 0; i < 10; i++) {
+      result = result.split(bn[i]).join(en[i]);
+    }
+    
+    // Punctuation & symbols removal for fuzzy match
+    // Removes: : . , - ( ) [ ] { } / _
+    return result
+      .replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
   };
 
   useEffect(() => {
     if (initialContext) {
       setSelectedSubjectId(initialContext.subjectId);
       setSelectedChapterId(initialContext.chapterId);
-      startExam();
+      startExam(initialContext.subjectId, initialContext.chapterId);
       clearContext();
     }
   }, [initialContext]);
 
-  const startExam = async () => {
-    if (!selectedSubjectId || !selectedChapterId) return;
+  const startExam = async (subjIdArg?: string, chapIdArg?: string) => {
+    const sId = subjIdArg || selectedSubjectId;
+    const cId = chapIdArg || selectedChapterId;
+    
+    if (!sId || !cId) return;
     setIsLoading(true);
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const currentSubject = userState.subjects.find(s => s.id === selectedSubjectId);
-      const currentChapter = currentSubject?.chapters.find(c => c.id === selectedChapterId);
+      const currentSubject = userState.subjects.find(s => s.id === sId);
+      const currentChapter = currentSubject?.chapters.find(c => c.id === cId);
 
       if (!currentSubject || !currentChapter) {
         throw new Error("Subject or Chapter not found in state");
@@ -68,50 +86,63 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       const targetSubjectNorm = normalize(currentSubject.name);
       const targetChapterNorm = normalize(currentChapter.name);
 
-      // 1. Fetch Question Bank using Normalized Matching
-      // We fetch questions for the subject and then filter by normalized chapter name
-      // This bypasses strict ID matching issues and handles naming variations
-      let { data: allChapterMcqs, error: fetchError } = await supabase
+      /**
+       * FETCH LOGIC (NORMALIZED & FUZZY)
+       * Fetch all MCQs for the subject using ilike for the name or ID matching.
+       * We perform the fuzzy filtering locally for maximum precision.
+       */
+      let { data: allSubjectMcqs, error: fetchError } = await supabase
         .from('mcqs')
         .select('*')
-        .or(`subject_name.ilike.%${currentSubject.name}%,subject_id.eq.${selectedSubjectId}`);
+        .or(`subject_name.ilike.%${currentSubject.name}%,subject_id.eq.${sId}`);
 
       if (fetchError) throw fetchError;
 
-      // Filter MCQs based on normalized chapter matching (includes sub-chapter fallback)
-      let filteredMcqs = (allChapterMcqs || []).filter(q => {
-        const qChapterNorm = normalize(q.chapter_name || q.chapter_id);
-        const qSubChapterNorm = normalize(q.sub_chapter_name || q.sub_chapter);
+      // Local Filter with Normalized Fallback
+      let filteredMcqs = (allSubjectMcqs || []).filter(q => {
+        const qChapterNameNorm = normalize(q.chapter_name);
+        const qChapterIdNorm = normalize(q.chapter_id);
+        const qSubChapterNameNorm = normalize(q.sub_chapter_name);
+        const qSubChapterIdNorm = normalize(q.sub_chapter);
+
+        // Core logic: If it matches chapter name, id, or sub-chapter info
+        const matchesChapter = qChapterNameNorm.includes(targetChapterNorm) || 
+                              targetChapterNorm.includes(qChapterNameNorm) ||
+                              qChapterIdNorm === targetChapterNorm;
         
-        // Match if chapter matches, or if it's a sub-chapter of the target chapter
-        return qChapterNorm.includes(targetChapterNorm) || 
-               targetChapterNorm.includes(qChapterNorm) ||
-               qSubChapterNorm.includes(targetChapterNorm);
+        const matchesSubChapter = qSubChapterNameNorm.includes(targetChapterNorm) ||
+                                 qSubChapterIdNorm === targetChapterNorm;
+
+        return matchesChapter || matchesSubChapter;
       });
 
-      // 2. Anti-Repetition Logic
+      // Repetition filtering (Optional: Priority to unseen)
       const { data: seenLogs } = await supabase
         .from('test_attempts')
         .select('questions')
         .eq('user_id', user.id)
-        .eq('chapter_id', selectedChapterId);
+        .eq('chapter_id', cId);
 
-      const seenIds = new Set((seenLogs || []).flatMap(log => log.questions.map((q: any) => q.id)));
+      const seenIds = new Set((seenLogs || []).flatMap(log => {
+        const qList = Array.isArray(log.questions) ? log.questions : [];
+        return qList.map((q: any) => q.id);
+      }));
       
       let unseenQuestions = filteredMcqs.filter(q => !seenIds.has(q.id));
       
-      // 3. Select final set (fallback to seen if unseen is insufficient)
-      let finalQuestions = unseenQuestions.length >= 30 
+      // Fallback to seen if not enough unseen
+      let finalQuestions = unseenQuestions.length >= 10 
         ? unseenQuestions 
         : filteredMcqs;
 
+      // Strict requirement: Start if logical data exists
       if (!finalQuestions || finalQuestions.length === 0) {
-        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "No questions available for this chapter in the database."));
+        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "No questions found for this chapter. Please contact support."));
         setIsLoading(false);
         return;
       }
 
-      // Shuffle and pick 30
+      // Shuffle and pick up to 30
       const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, 30);
 
       setCurrentQuestions(shuffled);
@@ -127,7 +158,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     }
   };
 
-  // Timer logic
+  // Timer logic with Auto-Submit
   useEffect(() => {
     if (view === 'exam' && timeLeft > 0) {
       timerRef.current = window.setInterval(() => {
@@ -176,7 +207,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       } : s)
     }));
 
-    // Async save to Supabase
+    // Async save to Cloud
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -261,7 +292,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
                 <button 
                   disabled={!selectedSubjectId || !selectedChapterId || isLoading}
-                  onClick={startExam}
+                  onClick={() => startExam()}
                   className="w-full mt-4 py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[11px] disabled:opacity-30 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   {isLoading ? <Loader2 className="animate-spin" size={18} /> : <GraduationCap size={18} />}

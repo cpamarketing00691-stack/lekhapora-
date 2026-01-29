@@ -99,15 +99,23 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       const tableName = getTableName(currentSubject.name, currentSubject.paper);
       const targetChapterNorm = normalize(currentChapter.name);
 
-      console.log(`Resolving table: ${tableName} for ${currentSubject.name} P${currentSubject.paper}`);
+      // INTERNAL LOGGING
+      console.log(`[Exam Initialization] Table: ${tableName}, Chapter: ${currentChapter.name}`);
 
       // ATTEMPT 1: Specific Table Fetch
       const { data: tableData, error: tableError } = await supabase.from(tableName).select('*');
 
-      // Check for actual connection/auth errors
-      if (tableError && (tableError.code === 'PGRST116' || tableError.message.includes('fetch') || tableError.code?.startsWith('5'))) {
-         console.warn("Potential connection/network error detected:", tableError);
-         throw tableError; 
+      // VERIFY CONNECTION: Check if it's a genuine database/network failure
+      const isConnectionError = tableError && (
+        tableError.message.toLowerCase().includes('failed to fetch') || 
+        tableError.code === 'PGRST116' || 
+        tableError.code === '500' ||
+        tableError.code === 'ECONNREFUSED'
+      );
+
+      if (isConnectionError) {
+        console.error("Supabase Connection Error:", tableError);
+        throw tableError; 
       }
 
       if (!tableError && tableData && tableData.length > 0) {
@@ -119,14 +127,14 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       }
 
       // ATTEMPT 2: Fallback to Global 'mcqs' table
-      console.log("Attempting fallback to 'mcqs' table...");
+      console.log("[Exam Initialization] Falling back to 'mcqs' table...");
       const { data: globalData, error: globalError } = await supabase
         .from('mcqs')
         .select('*')
         .ilike('subject_name', `%${currentSubject.name}%`);
 
-      if (globalError) {
-         if (globalError.message.includes('fetch')) throw globalError;
+      if (globalError && globalError.message.toLowerCase().includes('failed to fetch')) {
+        throw globalError;
       }
 
       if (globalData && globalData.length > 0) {
@@ -137,12 +145,13 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         }
       }
 
-      // If we reach here, no data found but connection is fine
+      // NO RESULTS BUT CONNECTED: Treat as logic/filtering issue, not connection issue
+      console.warn(`[Exam Initialization] No questions found for normalized chapter: ${targetChapterNorm}`);
       alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে খুঁজে পাওয়া যায়নি।", "No questions found for this chapter in the database."));
 
     } catch (err: any) {
       console.error("Exam Initialization Critical Error:", err);
-      // Only show connection error for network/auth failures
+      // Only show connection error for confirmed network/auth/db failures
       alert(t("সার্ভারের সাথে যোগাযোগ করা যাচ্ছে না। দয়া করে ইন্টারনেট কানেকশন চেক করো।", "Could not connect to the server. Please check your internet connection."));
     } finally {
       setIsLoading(false);
@@ -162,7 +171,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
     // Stage 2: Relaxed Filter (If specific match fails, try broader subject pool)
     if (filteredMcqs.length === 0) {
-      console.log("No specific chapter match. Trying broader subject pool fallback.");
+      console.log("[MCQ Processing] No specific chapter match. Using broader subject pool.");
       filteredMcqs = rawMcqs; 
     }
 
@@ -192,7 +201,8 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       setView('exam');
       return true;
     } catch (e) {
-      // If history check fails, proceed with the full pool anyway
+      // SAFE READ MODE: If history check fails, proceed with the full pool anyway
+      console.warn("[MCQ Processing] History check failed, proceeding in safe read mode.");
       const finalSet = shuffledPool.slice(0, 30);
       setCurrentQuestions(finalSet);
       setUserAnswers(new Array(finalSet.length).fill(-1));

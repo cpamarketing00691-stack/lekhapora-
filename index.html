@@ -31,16 +31,26 @@
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-          appId: "60485ed0-3b0d-4d73-ba7f-a152676d14d2",
-          safari_web_id: "web.onesignal.auto.108d8132-70b8-4c60-a549-b58607a7ec41",
-          notifyButton: {
-            enable: false,
-          },
-          allowLocalhostAsSecureOrigin: true,
+      // Only initialize OneSignal if on the allowed production domain or if explicitly enabled for local development
+      // This prevents "Can only be used on: lekhapora-beta.vercel.app" error in preview environments
+      const isAllowedDomain = window.location.hostname === 'lekhapora-beta.vercel.app' || window.location.hostname === 'localhost';
+      
+      if (isAllowedDomain) {
+        OneSignalDeferred.push(async function(OneSignal) {
+          try {
+            await OneSignal.init({
+              appId: "60485ed0-3b0d-4d73-ba7f-a152676d14d2",
+              safari_web_id: "web.onesignal.auto.108d8132-70b8-4c60-a549-b58607a7ec41",
+              notifyButton: {
+                enable: false,
+              },
+              allowLocalhostAsSecureOrigin: true,
+            });
+          } catch (e) {
+            console.warn("OneSignal initialization failed:", e.message);
+          }
         });
-      });
+      }
     </script>
 
     <style>
@@ -62,7 +72,7 @@
           --brand-bg: 14 22 36;
           --brand-primary: 95 179 162;
           --brand-secondary: 139 156 242;
-          --brand-surface: 27 38 54;
+          --brand-surface: 233 237 240;
           --brand-text-p: 227 232 239;
           --brand-text-s: 138 148 166;
         }

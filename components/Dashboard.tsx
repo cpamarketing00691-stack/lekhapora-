@@ -110,40 +110,68 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   };
 
   const addReminder = async () => {
+    // 1. Basic Validation
     if (!newReminder.title.trim() || !newReminder.time || isAddingReminder) return;
+    
+    // 2. Start Loading State
     setIsAddingReminder(true);
     
     try {
-      // 1. Request Push Notifications Permission if not granted
-      const permission = await checkNotificationPermission();
-      if (permission !== 'granted') {
-        const confirmSub = confirm(t("রিমাইন্ডার নোটিফিকেশন পেতে চান? তাহলে নোটিফিকেশন অ্যালাউ করুন।", "Would you like to receive push notifications for your reminders? Please allow notifications."));
-        if (confirmSub) {
-          await subscribeToPush();
-        }
-      } else {
-        // Ensure subscription is synced
-        await subscribeToPush();
+      // 3. Environment Checks
+      if (!('serviceWorker' in navigator)) {
+        throw new Error(t("আপনার ব্রাউজারে সার্ভিস ওয়ার্কার সাপোর্ট করে না।", "Your browser does not support service workers."));
       }
 
+      // 4. Notification Permission Handling
+      let permission = await checkNotificationPermission();
+      
+      if (permission === 'default') {
+        const userAgreed = confirm(t("রিমাইন্ডার পেতে নোটিফিকেশন অ্যালাউ করা জরুরি। আপনি কি রাজি?", "Notification permission is required to send reminders. Do you agree?"));
+        if (!userAgreed) {
+          throw new Error(t("নোটিফিকেশন পারমিশন ছাড়া রিমাইন্ডার সেট করা সম্ভব নয়।", "Cannot set reminder without notification permission."));
+        }
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission !== 'granted') {
+        throw new Error(t("ব্রাউজার সেটিং থেকে নোটিফিকেশন অন করে আবার চেষ্টা করুন।", "Please enable notifications in your browser settings and try again."));
+      }
+
+      // 5. Service Worker Readiness (with Timeout to prevent infinite loading)
+      const swReady = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(t("সার্ভিস ওয়ার্কার প্রস্তুত হতে অনেক সময় নিচ্ছে। পেজ রিফ্রেশ দিন।", "Service worker timed out. Please refresh the page."))), 5000))
+      ]);
+
+      if (!swReady) {
+        throw new Error(t("সার্ভিস ওয়ার্কার সক্রিয় নয়।", "Service worker is not active."));
+      }
+
+      // 6. Push Subscription Sync
+      try {
+        await subscribeToPush();
+      } catch (pushErr) {
+        console.warn("Push subscription sync failed, proceeding to database save anyway:", pushErr);
+      }
+
+      // 7. Database Persistence
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Auth required");
+      if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি। দয়া করে আবার লগইন করুন।", "Session not found. Please login again."));
 
       const datetime = new Date(newReminder.time).toISOString();
       
-      // Save to persistent Supabase table for polling
-      const { error } = await supabase.from('reminders').insert({
+      const { error: dbError } = await supabase.from('reminders').insert({
         user_id: user.id,
         title: newReminder.title.trim(),
         reminder_datetime: datetime,
         is_done: false,
-        is_triggered: false, // Explicitly track trigger state
+        is_triggered: false,
         repeat_type: newReminder.repeatType
       });
 
-      if (error) throw error;
+      if (dbError) throw dbError;
 
-      // Update local state for immediate UI feedback
+      // 8. Update Local UI State
       const reminder: Reminder = {
         id: `rem-${Date.now()}`,
         title: newReminder.title.trim(),
@@ -153,12 +181,23 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         repeatType: newReminder.repeatType
       };
       
-      onUpdateState(prev => ({ ...prev, reminders: [...(prev.reminders || []), reminder] }));
+      onUpdateState(prev => ({ 
+        ...prev, 
+        reminders: [...(prev.reminders || []), reminder] 
+      }));
+
+      // 9. Reset Modal and State
       setNewReminder({ title: '', time: '', repeatType: 'none' });
       setIsReminderModalOpen(false);
-    } catch (err) {
-      alert("Failed to add reminder. Please try again.");
+      
+      alert(t("রিমাইন্ডার সফলভাবে সেট করা হয়েছে!", "Reminder set successfully!"));
+
+    } catch (err: any) {
+      console.error("Reminder Save Error:", err);
+      // Ensure specific error messages are shown to the user
+      alert(err.message || t("রিমাইন্ডার সেট করা সম্ভব হয়নি। আবার চেষ্টা করুন।", "Failed to set reminder. Please try again."));
     } finally {
+      // 10. CRITICAL: Always end loading state regardless of outcome
       setIsAddingReminder(false);
     }
   };

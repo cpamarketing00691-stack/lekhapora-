@@ -25,8 +25,14 @@ export async function subscribeToPush() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.ready;
+    // Add a safety timeout to avoid hanging forever if serviceWorker.ready doesn't settle
+    const registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Service Worker readiness timeout")), 10000))
+    ]) as ServiceWorkerRegistration;
     
+    if (!registration) throw new Error("Service Worker registration unavailable.");
+
     // Check for existing subscription
     let subscription = await registration.pushManager.getSubscription();
     
@@ -41,11 +47,12 @@ export async function subscribeToPush() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user && subscription) {
       // Store subscription in Supabase push_subscriptions table
-      // You should create this table with columns: id (uuid), user_id (uuid), subscription (jsonb)
-      await supabase.from('push_subscriptions').upsert({
+      const { error } = await supabase.from('push_subscriptions').upsert({
         user_id: user.id,
         subscription: subscription.toJSON(),
       }, { onConflict: 'user_id' });
+      
+      if (error) console.error("Failed to save push subscription to DB:", error);
     }
 
     return subscription;

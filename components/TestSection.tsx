@@ -31,42 +31,17 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   const timerRef = useRef<number | null>(null);
 
   /**
-   * AGGRESSIVE NORMALIZATION (Logical Matching)
-   * 1. Lowercase & Trim
-   * 2. Normalize Bangla/English numerals to a single form
-   * 3. Remove punctuation for fuzzy/logical matching
-   * 4. Consolidate whitespace
+   * Logical Normalization for Chapter Matching
    */
   const normalize = (str: any): string => {
     if (!str) return '';
     const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
     const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     let result = String(str).toLowerCase().trim();
-    
     for (let i = 0; i < 10; i++) {
       result = result.split(bn[i]).join(en[i]);
     }
-    
-    return result
-      .replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-
-  /**
-   * DYNAMIC TABLE SELECTION
-   * Maps subject name and paper to specific Supabase table names.
-   */
-  const getTableName = (subjectName: string, paper: number): string => {
-    const cleanName = subjectName.toLowerCase()
-      .replace(/[^a-z0-9]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '');
-      
-    if (cleanName === 'ict') return 'ict_mcq';
-    
-    const suffix = paper === 1 ? '1st' : '2nd';
-    return `${cleanName}_${suffix}_mcq`;
+    return result.replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '').replace(/\s+/g, ' ').trim();
   };
 
   useEffect(() => {
@@ -93,123 +68,65 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       const currentChapter = currentSubject?.chapters.find(c => c.id === cId);
 
       if (!currentSubject || !currentChapter) {
-        throw new Error("Subject or Chapter not found in state");
+        throw new Error("Selection Invalid");
       }
 
-      const tableName = getTableName(currentSubject.name, currentSubject.paper);
-      const targetChapterNorm = normalize(currentChapter.name);
-
-      // INTERNAL LOGGING
-      console.log(`[Exam Initialization] Table: ${tableName}, Chapter: ${currentChapter.name}`);
-
-      // ATTEMPT 1: Specific Table Fetch
-      const { data: tableData, error: tableError } = await supabase.from(tableName).select('*');
-
-      // VERIFY CONNECTION: Check if it's a genuine database/network failure
-      const isConnectionError = tableError && (
-        tableError.message.toLowerCase().includes('failed to fetch') || 
-        tableError.code === 'PGRST116' || 
-        tableError.code === '500' ||
-        tableError.code === 'ECONNREFUSED'
-      );
-
-      if (isConnectionError) {
-        console.error("Supabase Connection Error:", tableError);
-        throw tableError; 
-      }
-
-      if (!tableError && tableData && tableData.length > 0) {
-        const started = await processMcqs(tableData, targetChapterNorm, user.id, cId);
-        if (started) {
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // ATTEMPT 2: Fallback to Global 'mcqs' table
-      console.log("[Exam Initialization] Falling back to 'mcqs' table...");
-      const { data: globalData, error: globalError } = await supabase
+      // 1. Fetch from Unified Table 'mcqs'
+      // Scalability Note: We filter by subject and paper first. 
+      // For 1M rows, this index-backed filter is extremely fast.
+      const { data: rawData, error } = await supabase
         .from('mcqs')
         .select('*')
-        .ilike('subject_name', `%${currentSubject.name}%`);
+        .eq('subject', currentSubject.name)
+        .eq('paper', currentSubject.paper);
 
-      if (globalError && globalError.message.toLowerCase().includes('failed to fetch')) {
-        throw globalError;
+      if (error) {
+        console.error("Database fetch failed:", error);
+        throw error;
       }
 
-      if (globalData && globalData.length > 0) {
-        const started = await processMcqs(globalData, targetChapterNorm, user.id, cId);
-        if (started) {
-          setIsLoading(false);
-          return;
-        }
+      const targetChapterNorm = normalize(currentChapter.name);
+
+      // 2. Logical Filter for Chapter Matching
+      let filtered = (rawData || []).filter(q => {
+        const qChap = normalize(q.chapter);
+        const qTopic = normalize(q.topic);
+        return qChap.includes(targetChapterNorm) || 
+               targetChapterNorm.includes(qChap) ||
+               qTopic.includes(targetChapterNorm);
+      });
+
+      // 3. Fallback: If no match in specific chapter, try matching by chapter_id if it exists in data
+      if (filtered.length === 0) {
+        filtered = (rawData || []).filter(q => q.chapter === currentChapter.name);
       }
 
-      // NO RESULTS BUT CONNECTED: Treat as logic/filtering issue, not connection issue
-      console.warn(`[Exam Initialization] No questions found for normalized chapter: ${targetChapterNorm}`);
-      alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে খুঁজে পাওয়া যায়নি।", "No questions found for this chapter in the database."));
+      if (filtered.length === 0) {
+        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন নেই।", "No questions found in database for this chapter."));
+        setIsLoading(false);
+        return;
+      }
+
+      // 4. Map DB Columns to Frontend Type and Shuffle
+      const mappedQuestions: MCQ[] = filtered.map(q => ({
+        id: q.id,
+        question: q.question,
+        options: [q.option_a, q.option_b, q.option_c, q.option_d],
+        correct_index: q.correct_option,
+        explanation: q.explanation
+      })).sort(() => Math.random() - 0.5).slice(0, 30);
+
+      setCurrentQuestions(mappedQuestions);
+      setUserAnswers(new Array(mappedQuestions.length).fill(-1));
+      setCurrentIndex(0);
+      setTimeLeft(1800);
+      setView('exam');
 
     } catch (err: any) {
-      console.error("Exam Initialization Critical Error:", err);
-      // Only show connection error for confirmed network/auth/db failures
-      alert(t("সার্ভারের সাথে যোগাযোগ করা যাচ্ছে না। দয়া করে ইন্টারনেট কানেকশন চেক করো।", "Could not connect to the server. Please check your internet connection."));
+      console.error("Critical Exam Start Error:", err);
+      alert(t("সার্ভার ত্রুটি। আবার চেষ্টা করো।", "Server error. Please try again."));
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const processMcqs = async (rawMcqs: any[], targetChapterNorm: string, userId: string, chapterId: string): Promise<boolean> => {
-    // Stage 1: Logical Filter (Matches Chapter or Sub-Chapter)
-    let filteredMcqs = rawMcqs.filter(q => {
-      const qChapterNorm = normalize(q.chapter_name || q.chapter_id);
-      const qSubChapterNorm = normalize(q.sub_chapter_name || q.sub_chapter);
-
-      return qChapterNorm.includes(targetChapterNorm) || 
-             targetChapterNorm.includes(qChapterNorm) ||
-             qSubChapterNorm.includes(targetChapterNorm);
-    });
-
-    // Stage 2: Relaxed Filter (If specific match fails, try broader subject pool)
-    if (filteredMcqs.length === 0) {
-      console.log("[MCQ Processing] No specific chapter match. Using broader subject pool.");
-      filteredMcqs = rawMcqs; 
-    }
-
-    if (filteredMcqs.length === 0) return false;
-
-    // Randomization
-    const shuffledPool = [...filteredMcqs].sort(() => Math.random() - 0.5);
-
-    // Repetition priority (Try to use unseen, but use all if pool is small)
-    try {
-      const { data: seenLogs } = await supabase
-        .from('test_attempts')
-        .select('questions')
-        .eq('user_id', userId)
-        .eq('chapter_id', chapterId);
-
-      const seenIds = new Set((seenLogs || []).flatMap(log => (Array.isArray(log.questions) ? log.questions : []).map((q: any) => q.id)));
-      const unseen = shuffledPool.filter(q => !seenIds.has(q.id));
-      
-      const finalSelection = unseen.length >= 5 ? unseen : shuffledPool;
-      const finalSet = finalSelection.slice(0, 30);
-
-      setCurrentQuestions(finalSet);
-      setUserAnswers(new Array(finalSet.length).fill(-1));
-      setCurrentIndex(0);
-      setTimeLeft(1800);
-      setView('exam');
-      return true;
-    } catch (e) {
-      // SAFE READ MODE: If history check fails, proceed with the full pool anyway
-      console.warn("[MCQ Processing] History check failed, proceeding in safe read mode.");
-      const finalSet = shuffledPool.slice(0, 30);
-      setCurrentQuestions(finalSet);
-      setUserAnswers(new Array(finalSet.length).fill(-1));
-      setCurrentIndex(0);
-      setTimeLeft(1800);
-      setView('exam');
-      return true;
     }
   };
 
@@ -275,7 +192,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
           user_answers: userAnswers
         });
       }
-    } catch (e) { console.error("Cloud save failed", e); }
+    } catch (e) { console.error("History log failed", e); }
 
     setView('result');
   };

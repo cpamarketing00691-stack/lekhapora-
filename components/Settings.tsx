@@ -14,10 +14,11 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
   const [newExam, setNewExam] = useState({ name: '', date: '' });
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  // Sync state with actual browser permission on mount
+  // Sync state with OneSignal status on mount
   useEffect(() => {
-    if ("Notification" in window) {
-      if (Notification.permission !== 'granted' && userState.notificationsEnabled) {
+    const OneSignal = (window as any).OneSignal;
+    if (OneSignal && userState.notificationsEnabled) {
+      if (!OneSignal.Notifications.permission) {
         onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
       }
     }
@@ -31,23 +32,29 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
   };
 
   const toggleNotifications = async () => {
-    if (!("Notification" in window)) {
-      alert(t("তোমার ব্রাউজার নোটিফিকেশন সাপোর্ট করে না।", "Your browser does not support notifications."));
+    const OneSignal = (window as any).OneSignal;
+    if (!OneSignal) {
+      alert(t("পুষ নোটিফিকেশন সিস্টেম লোড হচ্ছে, দয়া করে একটু অপেক্ষা করো।", "Notification system is loading, please wait a moment."));
       return;
     }
 
     if (!userState.notificationsEnabled) {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        onUpdateState(prev => ({ ...prev, notificationsEnabled: true }));
-        new Notification(t("নোটিফিকেশন চালু হয়েছে!", "Success!"), {
-          body: t("এখন থেকে তুমি নিয়মিত রিমাইন্ডার পাবে।", "Reminders are now active."),
-          icon: '/favicon.ico'
-        });
-      } else {
-        alert(t("দয়া করে ব্রাউজার সেটিংস থেকে নোটিফিকেশন অ্যালাউ করো।", "Please allow notifications in your browser settings to use this feature."));
+      try {
+        await OneSignal.Notifications.requestPermission();
+        // v16 permission is true if accepted
+        if (OneSignal.Notifications.permission) {
+          onUpdateState(prev => ({ ...prev, notificationsEnabled: true }));
+          // Send a test notification via SDK
+          console.log("Push enabled successfully.");
+        } else {
+          alert(t("দয়া করে ব্রাউজার সেটিংস থেকে নোটিফিকেশন অ্যালাউ করো।", "Please allow notifications in your browser settings to use this feature."));
+        }
+      } catch (err) {
+        console.error("OneSignal permission error:", err);
       }
     } else {
+      // In v16 we don't necessarily "unsubscribe" via JS easy-toggle usually, 
+      // but we update local state to stop the heartbeat reminders.
       onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
     }
   };

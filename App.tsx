@@ -13,7 +13,7 @@ import { Layout } from './components/Layout';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
-// VAPID Public Key for Web Push
+// VAPID Public Key for Web Push (Your provided certificate)
 const VAPID_PUBLIC_KEY = "BOQS5jGeY1uyMDkK7BocruEAkQVcWx3sSPe7VBVvoj_UpNT5FZmr52hu9izrT9i6M5J2ScIJhOd6AYhzWHRiAyI";
 
 const DEFAULT_STATE: UserState = {
@@ -85,6 +85,12 @@ const App: React.FC = () => {
         if (data?.session) {
           setUserState(prev => ({ ...prev, isAuthenticated: true }));
           await backgroundSync(data.session.user.id);
+          
+          // OneSignal User Login
+          const OneSignal = (window as any).OneSignal;
+          if (OneSignal) {
+            OneSignal.login(data.session.user.id);
+          }
         }
       } catch (error) {
         console.error("Auth init failed:", error);
@@ -100,9 +106,21 @@ const App: React.FC = () => {
       if (session) {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
         backgroundSync(session.user.id);
+        
+        // Ensure OneSignal login on state change
+        const OneSignal = (window as any).OneSignal;
+        if (OneSignal) {
+          OneSignal.login(session.user.id);
+        }
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         localStorage.removeItem('hsc_study_tracker_state');
+        
+        // Logout from OneSignal
+        const OneSignal = (window as any).OneSignal;
+        if (OneSignal) {
+          OneSignal.logout();
+        }
       }
     });
 
@@ -135,14 +153,13 @@ const App: React.FC = () => {
               new Notification('HSC Study Tracker', {
                 body: `Study Time: ${rem.title}`,
                 icon: '/favicon.ico',
-                tag: rem.id, // Prevent duplicate alerts for the same reminder ID
-                requireInteraction: true // Keep notification until user dismisses
+                tag: rem.id, 
+                requireInteraction: true 
               });
             } else {
               alert(`Study Reminder: ${rem.title}`);
             }
 
-            // Immediately mark as done in DB
             await supabase
               .from('reminders')
               .update({ is_done: true })
@@ -156,9 +173,8 @@ const App: React.FC = () => {
       }
     };
 
-    // Poll every 30 seconds for maximum reliability without draining battery
     reminderIntervalRef.current = window.setInterval(pollReminders, 30000); 
-    pollReminders(); // Immediate check on mount/state change
+    pollReminders(); 
 
     return () => { if (reminderIntervalRef.current) clearInterval(reminderIntervalRef.current); };
   }, [userState.isAuthenticated, userState.notificationsEnabled]);

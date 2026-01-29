@@ -43,12 +43,10 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     let result = String(str).toLowerCase().trim();
     
-    // Equate numerals (১ = 1, etc.)
     for (let i = 0; i < 10; i++) {
       result = result.split(bn[i]).join(en[i]);
     }
     
-    // Punctuation & symbols removal for logical fuzzy match
     return result
       .replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '')
       .replace(/\s+/g, ' ')
@@ -58,7 +56,6 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   /**
    * DYNAMIC TABLE SELECTION
    * Maps subject name and paper to specific Supabase table names.
-   * Convention: lowercase_subject_1st_mcq or lowercase_subject_mcq
    */
   const getTableName = (subjectName: string, paper: number): string => {
     const cleanName = subjectName.toLowerCase()
@@ -102,37 +99,58 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       const tableName = getTableName(currentSubject.name, currentSubject.paper);
       const targetChapterNorm = normalize(currentChapter.name);
 
-      /**
-       * FETCH LOGIC (DYNAMIC TABLE + NORMALIZED MATCHING)
-       * We fetch questions from the subject-specific table and filter logically.
-       */
-      const { data: allTableMcqs, error: fetchError } = await supabase
-        .from(tableName)
-        .select('*');
+      console.log(`Resolving table: ${tableName} for ${currentSubject.name} P${currentSubject.paper}`);
 
-      if (fetchError) {
-        console.warn(`Table ${tableName} fetch error, falling back to global 'mcqs' table...`);
-        // Fallback for robustness if subject-specific table doesn't exist yet
-        const { data: globalMcqs, error: globalError } = await supabase
-          .from('mcqs')
-          .select('*')
-          .ilike('subject_name', `%${currentSubject.name}%`);
-        
-        if (globalError) throw globalError;
-        processMcqs(globalMcqs || [], targetChapterNorm, user.id, cId);
-      } else {
-        processMcqs(allTableMcqs || [], targetChapterNorm, user.id, cId);
+      // ATTEMPT 1: Specific Table Fetch
+      const { data: tableData, error: tableError } = await supabase.from(tableName).select('*');
+
+      // Check for actual connection/auth errors
+      if (tableError && (tableError.code === 'PGRST116' || tableError.message.includes('fetch') || tableError.code?.startsWith('5'))) {
+         console.warn("Potential connection/network error detected:", tableError);
+         throw tableError; 
       }
-    } catch (err) {
-      console.error("Exam Initialization Error:", err);
-      alert(t("পরীক্ষা শুরু করতে সমস্যা হয়েছে। দয়া করে ডেটাবেজ কানেকশন চেক করো।", "Failed to start exam. Please check database connection."));
+
+      if (!tableError && tableData && tableData.length > 0) {
+        const started = await processMcqs(tableData, targetChapterNorm, user.id, cId);
+        if (started) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // ATTEMPT 2: Fallback to Global 'mcqs' table
+      console.log("Attempting fallback to 'mcqs' table...");
+      const { data: globalData, error: globalError } = await supabase
+        .from('mcqs')
+        .select('*')
+        .ilike('subject_name', `%${currentSubject.name}%`);
+
+      if (globalError) {
+         if (globalError.message.includes('fetch')) throw globalError;
+      }
+
+      if (globalData && globalData.length > 0) {
+        const started = await processMcqs(globalData, targetChapterNorm, user.id, cId);
+        if (started) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // If we reach here, no data found but connection is fine
+      alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে খুঁজে পাওয়া যায়নি।", "No questions found for this chapter in the database."));
+
+    } catch (err: any) {
+      console.error("Exam Initialization Critical Error:", err);
+      // Only show connection error for network/auth failures
+      alert(t("সার্ভারের সাথে যোগাযোগ করা যাচ্ছে না। দয়া করে ইন্টারনেট কানেকশন চেক করো।", "Could not connect to the server. Please check your internet connection."));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const processMcqs = async (rawMcqs: any[], targetChapterNorm: string, userId: string, chapterId: string) => {
-    // Logical Filter: Matches Chapter or Sub-Chapter
+  const processMcqs = async (rawMcqs: any[], targetChapterNorm: string, userId: string, chapterId: string): Promise<boolean> => {
+    // Stage 1: Logical Filter (Matches Chapter or Sub-Chapter)
     let filteredMcqs = rawMcqs.filter(q => {
       const qChapterNorm = normalize(q.chapter_name || q.chapter_id);
       const qSubChapterNorm = normalize(q.sub_chapter_name || q.sub_chapter);
@@ -142,37 +160,49 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
              qSubChapterNorm.includes(targetChapterNorm);
     });
 
-    // Randomization: Shuffle questions on every start
-    const shuffledPool = [...filteredMcqs].sort(() => Math.random() - 0.5);
-
-    if (shuffledPool.length === 0) {
-      alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "Insufficient questions found for this chapter in the selected table."));
-      setIsLoading(false);
-      return;
+    // Stage 2: Relaxed Filter (If specific match fails, try broader subject pool)
+    if (filteredMcqs.length === 0) {
+      console.log("No specific chapter match. Trying broader subject pool fallback.");
+      filteredMcqs = rawMcqs; 
     }
 
-    // Repetition check (Priority to unseen, but never block if pool exists)
-    const { data: seenLogs } = await supabase
-      .from('test_attempts')
-      .select('questions')
-      .eq('user_id', userId)
-      .eq('chapter_id', chapterId);
+    if (filteredMcqs.length === 0) return false;
 
-    const seenIds = new Set((seenLogs || []).flatMap(log => (Array.isArray(log.questions) ? log.questions : []).map((q: any) => q.id)));
-    const unseen = shuffledPool.filter(q => !seenIds.has(q.id));
-    
-    // Always start if pool exists, use unseen if possible
-    const finalSelection = unseen.length >= 10 ? unseen : shuffledPool;
-    const finalSet = finalSelection.slice(0, 30);
+    // Randomization
+    const shuffledPool = [...filteredMcqs].sort(() => Math.random() - 0.5);
 
-    setCurrentQuestions(finalSet);
-    setUserAnswers(new Array(finalSet.length).fill(-1));
-    setCurrentIndex(0);
-    setTimeLeft(1800);
-    setView('exam');
+    // Repetition priority (Try to use unseen, but use all if pool is small)
+    try {
+      const { data: seenLogs } = await supabase
+        .from('test_attempts')
+        .select('questions')
+        .eq('user_id', userId)
+        .eq('chapter_id', chapterId);
+
+      const seenIds = new Set((seenLogs || []).flatMap(log => (Array.isArray(log.questions) ? log.questions : []).map((q: any) => q.id)));
+      const unseen = shuffledPool.filter(q => !seenIds.has(q.id));
+      
+      const finalSelection = unseen.length >= 5 ? unseen : shuffledPool;
+      const finalSet = finalSelection.slice(0, 30);
+
+      setCurrentQuestions(finalSet);
+      setUserAnswers(new Array(finalSet.length).fill(-1));
+      setCurrentIndex(0);
+      setTimeLeft(1800);
+      setView('exam');
+      return true;
+    } catch (e) {
+      // If history check fails, proceed with the full pool anyway
+      const finalSet = shuffledPool.slice(0, 30);
+      setCurrentQuestions(finalSet);
+      setUserAnswers(new Array(finalSet.length).fill(-1));
+      setCurrentIndex(0);
+      setTimeLeft(1800);
+      setView('exam');
+      return true;
+    }
   };
 
-  // Timer logic with Auto-Submit
   useEffect(() => {
     if (view === 'exam' && timeLeft > 0) {
       timerRef.current = window.setInterval(() => {
@@ -221,7 +251,6 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       } : s)
     }));
 
-    // Async save to Cloud
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {

@@ -107,53 +107,72 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 2. Global Reminder Heartbeat (Polling Supabase/State every 30s)
+  /**
+   * FIX: Global Reminder Heartbeat
+   * Polling Supabase 'reminders' table directly every 30s.
+   * Ensures persistence and prevents double notifications.
+   */
   useEffect(() => {
-    const checkReminders = () => {
-      const now = Date.now();
-      let hasTriggeredAny = false;
+    const pollReminders = async () => {
+      if (!userState.isAuthenticated) return;
+      
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      setUserState(prev => {
-        const updatedReminders = (prev.reminders || []).map(rem => {
-          // Check: Is it time? Is it not done? Has it not been triggered in this specific instance?
-          if (!rem.isDone && !rem.isTriggered && rem.time <= now) {
-            hasTriggeredAny = true;
-            
-            // FIRE NOTIFICATION
+        const now = new Date().toISOString();
+        
+        // Query persistent 'reminders' table for due, unfinished tasks
+        const { data: dueReminders, error } = await supabase
+          .from('reminders')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_done', false)
+          .lte('reminder_datetime', now);
+
+        if (error) throw error;
+
+        if (dueReminders && dueReminders.length > 0) {
+          for (const rem of dueReminders) {
+            // 1. Trigger System Notification
             if (Notification.permission === 'granted') {
               try {
-                new Notification('HSC Study Reminder', {
+                new Notification('HSC Tracker Reminder', {
                   body: rem.title,
                   icon: '/favicon.ico',
-                  tag: rem.id // Prevent duplicate notifications for same ID
+                  tag: rem.id // Prevent spam if multiple tabs are open
                 });
               } catch (e) {
-                console.warn("Notification failed, falling back to alert");
-                alert(`Study Reminder: ${rem.title}`);
+                alert(`Reminder: ${rem.title}`);
               }
             } else {
-              // Fallback for browsers with blocked notifications or no support
-              alert(`Study Reminder: ${rem.title}`);
+              // 2. Fallback to Alert if permission missing
+              alert(`Reminder: ${rem.title}`);
             }
 
-            // CRITICAL: Mark as triggered AND done immediately to satisfy "Triggers Only Once"
-            return { ...rem, isTriggered: true, isDone: true };
+            // 3. Update persistent DB immediately to prevent duplicate triggers
+            await supabase
+              .from('reminders')
+              .update({ is_done: true })
+              .eq('id', rem.id);
           }
-          return rem;
-        });
-
-        // Only update state if something actually changed to avoid unnecessary re-renders
-        if (hasTriggeredAny) {
-          return { ...prev, reminders: updatedReminders };
+          
+          // 4. Force a local state refresh to clear UI list
+          await backgroundSync(user.id);
         }
-        return prev;
-      });
+      } catch (err) {
+        console.warn("Silent Reminder Error:", err);
+      }
     };
 
-    // Poll every 30 seconds as requested
-    reminderIntervalRef.current = window.setInterval(checkReminders, 30000); 
+    // Execute polling every 30 seconds
+    reminderIntervalRef.current = window.setInterval(pollReminders, 30000); 
+    
+    // Immediate initial check
+    pollReminders();
+
     return () => { if (reminderIntervalRef.current) clearInterval(reminderIntervalRef.current); };
-  }, [userState.notificationsEnabled]);
+  }, [userState.isAuthenticated, userState.notificationsEnabled]);
 
   // 3. Streak Calculation
   useEffect(() => {

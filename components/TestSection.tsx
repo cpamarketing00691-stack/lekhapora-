@@ -31,7 +31,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   const timerRef = useRef<number | null>(null);
 
   /**
-   * AGGRESSIVE NORMALIZATION
+   * AGGRESSIVE NORMALIZATION (Logical Matching)
    * 1. Lowercase & Trim
    * 2. Normalize Bangla/English numerals to a single form
    * 3. Remove punctuation for fuzzy/logical matching
@@ -43,17 +43,33 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     let result = String(str).toLowerCase().trim();
     
-    // Equate numerals
+    // Equate numerals (১ = 1, etc.)
     for (let i = 0; i < 10; i++) {
       result = result.split(bn[i]).join(en[i]);
     }
     
-    // Punctuation & symbols removal for fuzzy match
-    // Removes: : . , - ( ) [ ] { } / _
+    // Punctuation & symbols removal for logical fuzzy match
     return result
       .replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
+  };
+
+  /**
+   * DYNAMIC TABLE SELECTION
+   * Maps subject name and paper to specific Supabase table names.
+   * Convention: lowercase_subject_1st_mcq or lowercase_subject_mcq
+   */
+  const getTableName = (subjectName: string, paper: number): string => {
+    const cleanName = subjectName.toLowerCase()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
+      
+    if (cleanName === 'ict') return 'ict_mcq';
+    
+    const suffix = paper === 1 ? '1st' : '2nd';
+    return `${cleanName}_${suffix}_mcq`;
   };
 
   useEffect(() => {
@@ -83,79 +99,77 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         throw new Error("Subject or Chapter not found in state");
       }
 
-      const targetSubjectNorm = normalize(currentSubject.name);
+      const tableName = getTableName(currentSubject.name, currentSubject.paper);
       const targetChapterNorm = normalize(currentChapter.name);
 
       /**
-       * FETCH LOGIC (NORMALIZED & FUZZY)
-       * Fetch all MCQs for the subject using ilike for the name or ID matching.
-       * We perform the fuzzy filtering locally for maximum precision.
+       * FETCH LOGIC (DYNAMIC TABLE + NORMALIZED MATCHING)
+       * We fetch questions from the subject-specific table and filter logically.
        */
-      let { data: allSubjectMcqs, error: fetchError } = await supabase
-        .from('mcqs')
-        .select('*')
-        .or(`subject_name.ilike.%${currentSubject.name}%,subject_id.eq.${sId}`);
+      const { data: allTableMcqs, error: fetchError } = await supabase
+        .from(tableName)
+        .select('*');
 
-      if (fetchError) throw fetchError;
-
-      // Local Filter with Normalized Fallback
-      let filteredMcqs = (allSubjectMcqs || []).filter(q => {
-        const qChapterNameNorm = normalize(q.chapter_name);
-        const qChapterIdNorm = normalize(q.chapter_id);
-        const qSubChapterNameNorm = normalize(q.sub_chapter_name);
-        const qSubChapterIdNorm = normalize(q.sub_chapter);
-
-        // Core logic: If it matches chapter name, id, or sub-chapter info
-        const matchesChapter = qChapterNameNorm.includes(targetChapterNorm) || 
-                              targetChapterNorm.includes(qChapterNameNorm) ||
-                              qChapterIdNorm === targetChapterNorm;
+      if (fetchError) {
+        console.warn(`Table ${tableName} fetch error, falling back to global 'mcqs' table...`);
+        // Fallback for robustness if subject-specific table doesn't exist yet
+        const { data: globalMcqs, error: globalError } = await supabase
+          .from('mcqs')
+          .select('*')
+          .ilike('subject_name', `%${currentSubject.name}%`);
         
-        const matchesSubChapter = qSubChapterNameNorm.includes(targetChapterNorm) ||
-                                 qSubChapterIdNorm === targetChapterNorm;
-
-        return matchesChapter || matchesSubChapter;
-      });
-
-      // Repetition filtering (Optional: Priority to unseen)
-      const { data: seenLogs } = await supabase
-        .from('test_attempts')
-        .select('questions')
-        .eq('user_id', user.id)
-        .eq('chapter_id', cId);
-
-      const seenIds = new Set((seenLogs || []).flatMap(log => {
-        const qList = Array.isArray(log.questions) ? log.questions : [];
-        return qList.map((q: any) => q.id);
-      }));
-      
-      let unseenQuestions = filteredMcqs.filter(q => !seenIds.has(q.id));
-      
-      // Fallback to seen if not enough unseen
-      let finalQuestions = unseenQuestions.length >= 10 
-        ? unseenQuestions 
-        : filteredMcqs;
-
-      // Strict requirement: Start if logical data exists
-      if (!finalQuestions || finalQuestions.length === 0) {
-        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "No questions found for this chapter. Please contact support."));
-        setIsLoading(false);
-        return;
+        if (globalError) throw globalError;
+        processMcqs(globalMcqs || [], targetChapterNorm, user.id, cId);
+      } else {
+        processMcqs(allTableMcqs || [], targetChapterNorm, user.id, cId);
       }
-
-      // Shuffle and pick up to 30
-      const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, 30);
-
-      setCurrentQuestions(shuffled);
-      setUserAnswers(new Array(shuffled.length).fill(-1));
-      setCurrentIndex(0);
-      setTimeLeft(1800);
-      setView('exam');
     } catch (err) {
-      console.error("Test Start Error:", err);
-      alert(t("টেস্ট শুরু করতে সমস্যা হয়েছে। আবার চেষ্টা করো।", "Failed to start test. Please try again."));
+      console.error("Exam Initialization Error:", err);
+      alert(t("পরীক্ষা শুরু করতে সমস্যা হয়েছে। দয়া করে ডেটাবেজ কানেকশন চেক করো।", "Failed to start exam. Please check database connection."));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const processMcqs = async (rawMcqs: any[], targetChapterNorm: string, userId: string, chapterId: string) => {
+    // Logical Filter: Matches Chapter or Sub-Chapter
+    let filteredMcqs = rawMcqs.filter(q => {
+      const qChapterNorm = normalize(q.chapter_name || q.chapter_id);
+      const qSubChapterNorm = normalize(q.sub_chapter_name || q.sub_chapter);
+
+      return qChapterNorm.includes(targetChapterNorm) || 
+             targetChapterNorm.includes(qChapterNorm) ||
+             qSubChapterNorm.includes(targetChapterNorm);
+    });
+
+    // Randomization: Shuffle questions on every start
+    const shuffledPool = [...filteredMcqs].sort(() => Math.random() - 0.5);
+
+    if (shuffledPool.length === 0) {
+      alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "Insufficient questions found for this chapter in the selected table."));
+      setIsLoading(false);
+      return;
+    }
+
+    // Repetition check (Priority to unseen, but never block if pool exists)
+    const { data: seenLogs } = await supabase
+      .from('test_attempts')
+      .select('questions')
+      .eq('user_id', userId)
+      .eq('chapter_id', chapterId);
+
+    const seenIds = new Set((seenLogs || []).flatMap(log => (Array.isArray(log.questions) ? log.questions : []).map((q: any) => q.id)));
+    const unseen = shuffledPool.filter(q => !seenIds.has(q.id));
+    
+    // Always start if pool exists, use unseen if possible
+    const finalSelection = unseen.length >= 10 ? unseen : shuffledPool;
+    const finalSet = finalSelection.slice(0, 30);
+
+    setCurrentQuestions(finalSet);
+    setUserAnswers(new Array(finalSet.length).fill(-1));
+    setCurrentIndex(0);
+    setTimeLeft(1800);
+    setView('exam');
   };
 
   // Timer logic with Auto-Submit

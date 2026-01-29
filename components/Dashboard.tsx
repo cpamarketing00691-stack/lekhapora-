@@ -7,9 +7,10 @@ import { TrendingUp, Activity, RefreshCcw, BarChart3, Info, Target, History, Boo
 interface DashboardProps {
   userState: UserState;
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
+  onTriggerTest: (subjectId: string, chapterId: string) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
+const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTriggerTest }) => {
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
   const [examFilter, setExamFilter] = useState<string | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -287,9 +288,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           </h1>
           <p className="text-brand-text-s font-medium text-[10px] sm:text-xs mt-1 leading-tight">{t('তোমার প্রস্তুতির বর্তমান চিত্র।', 'Your academic progress overview.')}</p>
         </div>
-        <div className={`px-4 py-2 rounded-2xl flex items-center gap-3 border border-brand-text-s/10 shadow-sm bg-brand-surface self-start md:self-center`}>
-          <Activity size={16} className="text-brand-primary animate-pulse" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-brand-text-p leading-none">{t('মেজাজ', 'Mood')}: {userState.currentMood}</span>
+        <div className="flex flex-wrap gap-2 self-start md:self-center">
+          {/* PROMINENT STREAK BADGE */}
+          <div className="px-4 py-2 rounded-2xl flex items-center gap-2 border border-orange-500/20 shadow-sm bg-orange-500/10 text-orange-600 animate-in zoom-in-95 duration-500">
+            <Flame size={18} fill="currentColor" className="animate-bounce" />
+            <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+              {userState.streaks} {t('দিনের স্ট্রিক', 'Day Streak')}
+            </span>
+          </div>
+          <div className={`px-4 py-2 rounded-2xl flex items-center gap-3 border border-brand-text-s/10 shadow-sm bg-brand-surface`}>
+            <Activity size={16} className="text-brand-primary animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-brand-text-p leading-none">{t('মেজাজ', 'Mood')}: {userState.currentMood}</span>
+          </div>
         </div>
       </header>
 
@@ -518,7 +528,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                 <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary shrink-0">
+                 <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary leading-tight">
                    <ListTodo size={20} />
                  </div>
                  <h3 className="text-lg font-black text-brand-text-p leading-tight">{t('লক্ষ্য / টাস্ক', 'Focus Tasks')}</h3>
@@ -533,30 +543,42 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
 
             <div className="space-y-3">
               {Array.isArray(userState.dailyTasks) && userState.dailyTasks.length > 0 ? userState.dailyTasks.slice(0, 5).map(task => (
-                <div key={task.id} className={`group flex items-start gap-3 p-3 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary'}`}>
-                   <button onClick={() => toggleTask(task.id)} className={`mt-0.5 shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-500' : 'text-brand-text-s'}`}>
-                      {task.isCompleted ? <CheckCircle size={16} /> : <Circle size={16} />}
-                   </button>
-                   <div className="min-w-0 flex-1">
-                      <p className={`text-[11px] font-bold leading-tight transition-all truncate ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
-                      <p className="text-[8px] font-black uppercase text-brand-text-s mt-1 tracking-widest">{task.source}</p>
-                   </div>
-                   <div className="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                     <button onClick={() => setReminderModalTarget({id: task.id, name: task.name})} className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90">
-                        <Bell size={12} />
+                <div key={task.id} className={`group flex flex-col gap-3 p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-50/30 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-800' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary'}`}>
+                   <div className="flex items-start gap-3">
+                     <button onClick={() => toggleTask(task.id)} className={`mt-0.5 shrink-0 transition-colors ${task.isCompleted ? 'text-emerald-500' : 'text-brand-text-s'}`}>
+                        {task.isCompleted ? <CheckCircle size={16} /> : <Circle size={16} />}
                      </button>
-                     <a 
-                      href={getGoogleCalendarLink(task.name)} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90"
+                     <div className="min-w-0 flex-1">
+                        <p className={`text-[11px] font-bold leading-tight transition-all truncate ${task.isCompleted ? 'text-emerald-700 dark:text-emerald-400 line-through opacity-60' : 'text-brand-text-p'}`}>{task.name}</p>
+                        <p className="text-[8px] font-black uppercase text-brand-text-s mt-1 tracking-widest">{task.source}</p>
+                     </div>
+                     <div className="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                       <button onClick={() => setReminderModalTarget({id: task.id, name: task.name})} className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90">
+                          <Bell size={12} />
+                       </button>
+                       <a 
+                        href={getGoogleCalendarLink(task.name)} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="p-1 text-brand-text-s hover:text-brand-primary transition-all active:scale-90"
+                       >
+                          <ExternalLink size={12} />
+                       </a>
+                       <button onClick={() => deleteTask(task.id)} className="p-1 text-brand-text-s hover:text-red-500 transition-all active:scale-90">
+                          <Trash2 size={12} />
+                       </button>
+                     </div>
+                   </div>
+
+                   {task.isCompleted && task.subjectId && task.chapterId && (
+                     <button 
+                       onClick={() => onTriggerTest(task.subjectId!, task.chapterId!)}
+                       className="w-full py-2 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all animate-in fade-in slide-in-from-top-2"
                      >
-                        <ExternalLink size={12} />
-                     </a>
-                     <button onClick={() => deleteTask(task.id)} className="p-1 text-brand-text-s hover:text-red-500 transition-all active:scale-90">
-                        <Trash2 size={12} />
+                       <GraduationCap size={14} />
+                       {t('চলো তোমার পড়া চেক করো', 'Check Study')}
                      </button>
-                   </div>
+                   )}
                 </div>
               )) : (
                 <div className="py-6 text-center space-y-2 opacity-20">
@@ -614,15 +636,30 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       />
                    </div>
                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় (ঐচ্ছিক)', 'Subject (Optional)')}</label>
+                      <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('বিষয় ও চ্যাপ্টার লিঙ্ক', 'Link Subject & Chapter')}</label>
                       <select 
                         value={newTask.subjectId} 
-                        onChange={e => setNewTask({...newTask, subjectId: e.target.value})}
-                        className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs"
+                        onChange={e => {
+                          const subId = e.target.value;
+                          setNewTask({...newTask, subjectId: subId, chapterId: ''});
+                        }}
+                        className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs mb-2"
                       >
-                        <option value="">{t('নির্বাচন করো', 'Select')}</option>
+                        <option value="">{t('বিষয় নির্বাচন করো', 'Select Subject')}</option>
                         {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
                       </select>
+                      {newTask.subjectId && (
+                        <select 
+                          value={newTask.chapterId} 
+                          onChange={e => setNewTask({...newTask, chapterId: e.target.value})}
+                          className="w-full px-4 py-3 bg-brand-bg border-2 border-brand-text-s/10 rounded-xl font-bold outline-none focus:border-brand-primary text-xs animate-in slide-in-from-top-1"
+                        >
+                          <option value="">{t('চ্যাপ্টার নির্বাচন করো', 'Select Chapter')}</option>
+                          {userState.subjects.find(s => s.id === newTask.subjectId)?.chapters.map(ch => (
+                            <option key={ch.id} value={ch.id}>{ch.name}</option>
+                          ))}
+                        </select>
+                      )}
                    </div>
                    <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-brand-text-s uppercase tracking-widest ml-1">{t('উৎস (Source)', 'Source')}</label>
@@ -675,7 +712,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState }) => {
                       {t('রিমাইন্ডার সেভ করো', 'Save Reminder')}
                     </button>
                     <a 
-                      href={getGoogleCalendarLink(reminderModalTarget.name)}
+                      href={getGoogleCalendarLink(reminderModalTarget.name, undefined)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-4 bg-brand-bg border-2 border-brand-text-s/10 text-brand-text-p font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] active:scale-95 transition-all hover:bg-brand-surface"

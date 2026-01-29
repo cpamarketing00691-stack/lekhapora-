@@ -94,7 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     const task: Task = {
       id: `task-${Date.now()}`,
       name: newTask.name.trim(),
-      source: newTask.source,
+      source: TaskSource.PERSONAL,
       isCompleted: false,
       subjectId: newTask.subjectId || undefined,
       chapterId: newTask.chapterId || undefined,
@@ -284,7 +284,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
             
             <div className="space-y-3">
-              {userState.reminders?.filter(r => !r.isDone).length > 0 ? userState.reminders.filter(r => !r.isDone).sort((a,b) => a.time - b.time).map(rem => (
+              {(userState.reminders || []).filter(r => !r.isDone).length > 0 ? (userState.reminders || []).filter(r => !r.isDone).sort((a,b) => a.time - b.time).map(rem => (
                 <div key={rem.id} className="p-4 bg-white rounded-2xl border border-brand-text-s/10 flex items-center justify-between group">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-brand-text-p truncate">{rem.title}</p>

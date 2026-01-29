@@ -1,8 +1,6 @@
-
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-// Added Loader2 to the lucide-react imports
 import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -36,6 +34,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     const date = new Date(timestamp);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
+
+  const activeReminders = useMemo(() => {
+    const rems = userState.reminders ?? [];
+    return rems.filter(r => !r.isDone).sort((a, b) => a.time - b.time);
+  }, [userState.reminders]);
 
   const stats = useMemo(() => {
     const today = getLocalDateString(Date.now());
@@ -284,7 +287,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
             
             <div className="space-y-3">
-              {(userState.reminders || []).filter(r => !r.isDone).length > 0 ? (userState.reminders || []).filter(r => !r.isDone).sort((a,b) => a.time - b.time).map(rem => (
+              {activeReminders.length > 0 ? activeReminders.map(rem => (
                 <div key={rem.id} className="p-4 bg-white rounded-2xl border border-brand-text-s/10 flex items-center justify-between group">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-brand-text-p truncate">{rem.title}</p>
@@ -292,7 +295,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                       <Clock size={10} className="text-brand-text-s" />
                       <span className="text-[9px] font-black text-brand-text-s uppercase">
                         {new Date(rem.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(rem.time).toLocaleDateString([], { day: 'numeric', month: 'short' })}
-                        {rem.repeatType !== 'none' && <span className="ml-2 inline-flex items-center gap-1"><RefreshCw size={8} /> {rem.repeatType}</span>}
+                        {rem.repeatType && rem.repeatType !== 'none' && <span className="ml-2 inline-flex items-center gap-1"><RefreshCw size={8} /> {rem.repeatType}</span>}
                       </span>
                     </div>
                   </div>
@@ -320,7 +323,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       </div>
 
-      {/* Task Modal - Preserved */}
+      {/* Task Modal */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">

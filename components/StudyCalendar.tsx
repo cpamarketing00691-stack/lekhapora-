@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, 
   Download, Share2, Plus, Clock, BookOpen, 
   CheckCircle2, AlertCircle, Sparkles, X, 
-  Target, Zap, Flame
+  Target, Zap, Flame, Layout
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -65,29 +65,9 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const handleExportICS = () => {
-    let icsContent = "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//HSC Study Tracker//NCTB//EN\n";
-    
-    userState.studyHistory.forEach(session => {
-      const start = new Date(session.startTime).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-      const end = new Date(session.endTime || session.startTime + 3600000).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-      const subject = userState.subjects.find(s => s.id === session.subjectId)?.name || "Study Session";
-      
-      icsContent += "BEGIN:VEVENT\n";
-      icsContent += `SUMMARY:HSC Study: ${subject}\n`;
-      icsContent += `DTSTART:${start}\n`;
-      icsContent += `DTEND:${end}\n`;
-      icsContent += `DESCRIPTION:Duration: ${formatDuration(session.durationSeconds)}. Mood: ${session.mood}\n`;
-      icsContent += "END:VEVENT\n";
-    });
-
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', `study_schedule_${month + 1}_${year}.ics`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleAddWidget = () => {
+    // Provide a helpful prompt to encourage PWA installation for widgets
+    alert(t("তোমার ফোনের হোম স্ক্রিনে পড়াশোনার উইজেট পেতে অ্যাপটি 'Add to Home Screen' করো।", "To use the study widget on your phone's home screen, please select 'Add to Home Screen' from your browser menu."));
   };
 
   const getGoogleCalLink = () => {
@@ -277,15 +257,15 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
 
               <div className="space-y-4">
                 <button 
-                  onClick={handleExportICS}
+                  onClick={handleAddWidget}
                   className="w-full p-6 bg-brand-bg rounded-[2rem] border border-brand-text-s/10 flex items-center gap-5 hover:border-brand-primary transition-all group"
                 >
                    <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary group-hover:scale-110 transition-transform">
-                      <Download size={24} />
+                      <Layout size={24} />
                    </div>
                    <div className="text-left">
-                      <p className="font-black text-sm text-brand-text-p">{t('iCal / Outlook এক্সপোর্ট', 'iCal Export')}</p>
-                      <p className="text-[10px] font-bold text-brand-text-s uppercase">{t('.ics ফাইল ডাউনলোড করো', 'Download .ics file')}</p>
+                      <p className="font-black text-sm text-brand-text-p">{t('হোম স্ক্রিন উইজেট', 'Home Screen Widget')}</p>
+                      <p className="text-[10px] font-bold text-brand-text-s uppercase">{t('সরাসরি অ্যাড করো', 'Add to Home Screen')}</p>
                    </div>
                 </button>
 

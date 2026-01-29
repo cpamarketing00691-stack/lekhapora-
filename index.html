@@ -20,6 +20,9 @@
                   'text-p': 'rgb(var(--brand-text-p) / <alpha-value>)',
                   'text-s': 'rgb(var(--brand-text-s) / <alpha-value>)',
                 }
+              },
+              animation: {
+                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               }
             }
           }
@@ -31,8 +34,6 @@
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
       window.OneSignalDeferred = window.OneSignalDeferred || [];
-      // Only initialize OneSignal if on the allowed production domain or if explicitly enabled for local development
-      // This prevents "Can only be used on: lekhapora-beta.vercel.app" error in preview environments
       const isAllowedDomain = window.location.hostname === 'lekhapora-beta.vercel.app' || window.location.hostname === 'localhost';
       
       if (isAllowedDomain) {
@@ -41,9 +42,7 @@
             await OneSignal.init({
               appId: "60485ed0-3b0d-4d73-ba7f-a152676d14d2",
               safari_web_id: "web.onesignal.auto.108d8132-70b8-4c60-a549-b58607a7ec41",
-              notifyButton: {
-                enable: false,
-              },
+              notifyButton: { enable: false },
               allowLocalhostAsSecureOrigin: true,
             });
           } catch (e) {
@@ -54,11 +53,7 @@
     </script>
 
     <style>
-        * {
-          box-sizing: border-box;
-          -webkit-tap-highlight-color: transparent;
-        }
-        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         :root {
           --brand-bg: 246 248 245;
           --brand-primary: 91 125 190;
@@ -67,7 +62,6 @@
           --brand-text-p: 47 52 55;
           --brand-text-s: 107 114 128;
         }
-
         .dark {
           --brand-bg: 14 22 36;
           --brand-primary: 95 179 162;
@@ -76,55 +70,13 @@
           --brand-text-p: 227 232 239;
           --brand-text-s: 138 148 166;
         }
-
-        html, body {
-          width: 100%;
-          height: 100%;
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-          background: var(--brand-bg);
-          font-family: 'Inter', sans-serif;
-        }
-
-        #root {
-          height: 100dvh;
-          display: flex;
-          flex-direction: column;
-        }
-
+        html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--brand-bg); font-family: 'Inter', sans-serif; }
+        #root { height: 100dvh; display: flex; flex-direction: column; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        
         .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-
-        @media (max-width: 640px) {
-          .max-w-xl { max-width: 100% !important; }
-          .p-10 { padding: 1.5rem !important; }
-          .p-8 { padding: 1.25rem !important; }
-          .p-6 { padding: 1rem !important; }
-          .text-5xl { font-size: 2.5rem !important; }
-          .text-4xl { font-size: 2rem !important; }
-        }
-
-        main {
-          padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
-        }
-
-        @media (min-width: 768px) {
-          main {
-            padding-bottom: 2rem !important;
-          }
-        }
-
-        .recharts-responsive-container {
-          min-width: 0 !important;
-        }
-
-        .modal-content {
-          max-height: calc(100dvh - 4rem);
-          overflow-y: auto;
-        }
+        main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; }
+        @media (min-width: 768px) { main { padding-bottom: 2rem !important; } }
     </style>
 <script type="importmap">
 {
@@ -135,6 +87,7 @@
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
     "lucide-react": "https://esm.sh/lucide-react@0.475.0?external=react",
     "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
+    "framer-motion": "https://esm.sh/framer-motion@11.11.11?external=react,react-dom",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
     "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
   }

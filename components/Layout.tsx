@@ -1,7 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { UserProfile, Language } from '../types';
-import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap } from 'lucide-react';
+import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -37,6 +37,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
 
   const navItems = [
     { id: 'dashboard', icon: <Home size={20} />, label: t('হোম', 'Home') },
+    { id: 'calendar', icon: <CalendarDays size={20} />, label: t('ক্যালেন্ডার', 'Calendar') },
     { id: 'tracker', icon: <Timer size={20} />, label: t('ফোকাস', 'Focus') },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus') },
     { id: 'test', icon: <GraduationCap size={20} />, label: t('টেস্ট', 'Practice') },

@@ -4,5 +4,11 @@
   "requestFramePermissions": [
     "microphone",
     "camera"
+  ],
+  "nativePermissions": [
+    "INTERNET",
+    "RECEIVE_BOOT_COMPLETED",
+    "WAKE_LOCK",
+    "FOREGROUND_SERVICE"
   ]
 }

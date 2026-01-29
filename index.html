@@ -103,11 +103,38 @@
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
     <script>
+      // Service Worker Registration with enhanced origin safety and graceful failure for sandboxed previews
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.ts');
+          // Use URL constructor to ensure absolute resolution relative to the app origin
+          const swUrl = new URL('/service-worker.ts', window.location.origin + window.location.pathname).href;
+          
+          // Safety check: only register if origins match and context is secure (required by SW spec)
+          const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          
+          if (isSecure) {
+            try {
+              navigator.serviceWorker.register(swUrl)
+                .then(registration => {
+                  console.debug('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(error => {
+                  // In some preview environments (like Google AI Studio), SW registration is blocked by SecurityPolicy
+                  if (error.name === 'SecurityError' || error.message.includes('origin')) {
+                    console.debug('Service Worker registration skipped: environment restriction (Origin Mismatch/Sandbox).');
+                  } else {
+                    console.warn('Service Worker registration failed:', error);
+                  }
+                });
+            } catch (e) {
+              console.debug('Service Worker not supported or blocked in this environment.');
+            }
+          }
         });
       }
+      
+      // Native Bridge Injection Point
+      // The native wrapper will inject NativeBridge.js here automatically.
     </script>
 </body>
 </html>

@@ -62,6 +62,7 @@ export interface Reminder {
   time: number; // Timestamp
   isTriggered: boolean;
   isDone?: boolean;
+  repeatType?: 'none' | 'daily' | 'weekly';
 }
 
 export interface Task {

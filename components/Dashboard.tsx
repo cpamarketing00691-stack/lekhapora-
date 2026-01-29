@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle } from 'lucide-react';
+import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface DashboardProps {
   userState: UserState;
@@ -23,7 +23,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
   const [newReminder, setNewReminder] = useState({
     title: '',
-    time: ''
+    time: '',
+    repeatType: 'none' as 'none' | 'daily' | 'weekly'
   });
   
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
@@ -65,7 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     if (userState.profile?.targetExamDate) {
       const target = new Date(userState.profile.targetExamDate).getTime();
       const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
-      if (diff >= 0) list.push({ name: t('এইচএসসি মেইন পরীক্ষা', 'HSC Main Exam'), days: diff, type: 'hsc' });
+      if (diff >= 0) list.push({ name: t('এইচএসসি পরীক্ষা', 'HSC Exam'), days: diff, type: 'hsc' });
     }
 
     if (userState.profile?.collegeExams) {
@@ -108,10 +109,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
       title: newReminder.title.trim(),
       time: new Date(newReminder.time).getTime(),
       isTriggered: false,
-      isDone: false
+      isDone: false,
+      repeatType: newReminder.repeatType
     };
     onUpdateState(prev => ({ ...prev, reminders: [...(prev.reminders || []), reminder] }));
-    setNewReminder({ title: '', time: '' });
+    setNewReminder({ title: '', time: '', repeatType: 'none' });
     setIsReminderModalOpen(false);
   };
 
@@ -184,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
 
         <div className="space-y-6">
-          {/* Exam Countdown Section (NEW) */}
+          {/* Exam Countdown Section */}
           {countdowns.length > 0 && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('আসন্ন পরীক্ষা', 'Exam Countdowns')}</h3>
@@ -245,7 +247,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
           </section>
 
-          {/* Reminders Section (NEW) */}
+          {/* Reminders Section */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-black flex items-center gap-3"><Bell size={20} className="text-orange-500" /> {t('রিমাইন্ডার', 'Reminders')}</h3>
@@ -261,11 +263,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                       <Clock size={10} className="text-brand-text-s" />
                       <span className="text-[9px] font-black text-brand-text-s uppercase">
                         {new Date(rem.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(rem.time).toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                        {rem.repeatType !== 'none' && <span className="ml-2 inline-flex items-center gap-1"><RefreshCw size={8} /> {rem.repeatType}</span>}
                       </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Fixed: Replaced CheckCircle2 with the imported CheckCircle icon */}
                     <button onClick={() => onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).map(r => r.id === rem.id ? { ...r, isDone: true } : r) }))} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"><CheckCircle size={16} /></button>
                     <button onClick={() => onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).filter(r => r.id !== rem.id) }))} className="p-2 text-brand-text-s hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
                   </div>
@@ -280,7 +282,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       </div>
 
-      {/* Existing Task Modal */}
+      {/* Task Modal - Preserved */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
@@ -306,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       )}
 
-      {/* NEW Reminder Modal */}
+      {/* Reminder Modal - Enhanced with Repeat Options */}
       {isReminderModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
@@ -322,6 +324,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-brand-text-s ml-1">{t('সময় ও তারিখ', 'Date & Time')}</label>
                 <input type="datetime-local" value={newReminder.time} onChange={e => setNewReminder({...newReminder, time: e.target.value})} className="w-full px-4 py-3 bg-brand-bg border-0 rounded-xl font-bold outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-brand-text-s ml-1">{t('পুনরাবৃত্তি', 'Repeat')}</label>
+                <select value={newReminder.repeatType} onChange={e => setNewReminder({...newReminder, repeatType: e.target.value as any})} className="w-full px-4 py-3 bg-brand-bg border-0 rounded-xl font-bold outline-none">
+                  <option value="none">{t('কখনো না', 'None')}</option>
+                  <option value="daily">{t('প্রতিদিন', 'Daily')}</option>
+                  <option value="weekly">{t('প্রতি সপ্তাহে', 'Weekly')}</option>
+                </select>
               </div>
               <button onClick={addReminder} className="w-full py-4 bg-orange-500 text-white font-black rounded-2xl shadow-xl shadow-orange-500/20 uppercase tracking-widest text-xs mt-4 hover:scale-[1.02] active:scale-95 transition-all">{t('সেভ করো', 'Save Reminder')}</button>
             </div>

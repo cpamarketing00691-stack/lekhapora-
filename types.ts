@@ -30,6 +30,26 @@ export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
 export type Language = 'bn' | 'en';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 
+export interface MCQ {
+  id: string;
+  question: string;
+  options: string[];
+  correct_index: number;
+  explanation?: string;
+}
+
+export interface TestAttempt {
+  id: string;
+  subjectId: string;
+  chapterId: string;
+  score: number;
+  total: number;
+  timeTakenSeconds: number;
+  date: number;
+  questions: MCQ[];
+  userAnswers: number[];
+}
+
 export interface CollegeExam {
   id: string;
   name: string;
@@ -70,7 +90,7 @@ export interface Chapter {
   id: string;
   name: string;
   isCompleted: boolean;
-  testScore?: number; // 0-30 MCQ score
+  testScore?: number; // Highest 0-30 MCQ score
   difficulty?: Difficulty;
 }
 
@@ -116,6 +136,7 @@ export interface UserState {
   isAuthenticated: boolean;
   profile: UserProfile | null;
   studyHistory: StudySession[];
+  testHistory: TestAttempt[];
   subjects: Subject[];
   dailyTasks: Task[]; // Homework / Today's Focus tasks
   streaks: number;

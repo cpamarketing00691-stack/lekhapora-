@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession, Reminder } from './types';
+import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession, Reminder, TestAttempt } from './types';
 import { CHAPTER_LISTS } from './constants';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
@@ -8,6 +8,7 @@ import Tracker from './components/Tracker';
 import Auth from './components/Auth';
 import Settings from './components/Settings';
 import SyllabusManager from './components/SyllabusManager';
+import TestSection from './components/TestSection';
 import { Layout } from './components/Layout';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -16,6 +17,7 @@ const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
   profile: null,
   studyHistory: [],
+  testHistory: [],
   subjects: [],
   dailyTasks: [],
   streaks: 0,
@@ -63,7 +65,8 @@ const App: React.FC = () => {
     return DEFAULT_STATE;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'test' | 'settings'>('dashboard');
+  const [testContext, setTestContext] = useState<{ subjectId: string; chapterId: string } | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number | null>(null);
   const reminderIntervalRef = useRef<number | null>(null);
@@ -260,6 +263,11 @@ const App: React.FC = () => {
     setUserState(prev => ({ ...prev, profile, subjects: finalSubjects }));
   };
 
+  const handleTriggerTest = (subjectId: string, chapterId: string) => {
+    setTestContext({ subjectId, chapterId });
+    setActiveTab('test');
+  };
+
   if (isInitialLoading) {
     return (
       <div className="h-full w-full bg-brand-bg flex flex-col items-center justify-center gap-4">
@@ -276,7 +284,8 @@ const App: React.FC = () => {
     <Layout userProfile={userState.profile} activeTab={activeTab} onTabChange={setActiveTab} language={userState.language}>
       {activeTab === 'dashboard' && <Dashboard userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
-      {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} />}
+      {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
+      {activeTab === 'test' && <TestSection userState={userState} onUpdateState={setUserState} initialContext={testContext} clearContext={() => setTestContext(null)} />}
       {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={() => setUserState(DEFAULT_STATE)} />}
     </Layout>
   );

@@ -1,10 +1,13 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from '@google/genai';
 
 /**
- * PRODUCTION-READY LEKHAPORA BOT BACKEND
- * Powered by Google Gemini API
+ * LEKHAPORA BOT - ROBUST DEEPSEEK BACKEND
+ * Features:
+ * 1. Exponential Backoff for 429 (Rate Limit) errors.
+ * 2. Automated Task/Syllabus/Routine tracking via JSON detection.
+ * 3. DeepSeek-Chat model integration.
+ * 4. Audit logging to Supabase.
  */
 
 // 1. Initialize Supabase Admin with Service Role Key
@@ -13,97 +16,137 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
- * Standard Node.js Request Handler for Vercel
+ * Robust Fetch Wrapper with Exponential Backoff
+ * Handles HTTP 429 (Too Many Requests) by retrying with increasing delays.
  */
+async function fetchWithRetry(url: string, options: any, maxRetries = 3, initialDelay = 1000): Promise<Response> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        // Exponential backoff: 1s, 2s, 4s...
+        const delay = initialDelay * Math.pow(2, attempt - 1);
+        console.warn(`[LekhaporaBot] Rate limit hit (429). Retry attempt ${attempt}/${maxRetries} in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const response = await fetch(url, options);
+
+      // If status is 429 (Rate Limit), retry if we haven't exhausted attempts
+      if (response.status === 429 && attempt < maxRetries) {
+        continue;
+      }
+
+      return response;
+    } catch (err) {
+      lastError = err;
+      // Network errors or other exceptions: retry
+      if (attempt < maxRetries) continue;
+      throw err;
+    }
+  }
+  throw lastError || new Error('Maximum retries exceeded');
+}
+
 export default async function handler(req: any, res: any) {
+  // 2. Validate Request Method
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const apiKey = process.env.API_KEY;
+  // 3. Resolve API Key
+  // Prioritize DEEPSEEK_API_KEY, fallback to generic API_KEY if available
+  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.API_KEY;
   
   if (!apiKey) {
-    console.error("CONFIGURATION ERROR: API_KEY is missing in environment variables.");
+    console.error("CRITICAL: DeepSeek API Key is missing in environment variables.");
     return res.status(500).json({ 
-      error: 'Missing Configuration', 
-      reply: 'দুঃখিত দোস্ত, আমার এআই চাবি (API Key) পাওয়া যাচ্ছে না। দয়া করে এনভায়রনমেন্ট ভেরিয়েবল চেক করো।' 
+      reply: 'দুঃখিত দোস্ত, আমার এআই চাবি (API Key) কাজ করছে না। দয়া করে অ্যাডমিনকে জানাও।' 
     });
   }
 
   try {
-    const { message, history, userId, systemInstruction: frontendSystemInstruction } = req.body;
+    const { message, history, userId, systemInstruction: frontendContext } = req.body;
 
     if (!message || !userId) {
       return res.status(400).json({ error: 'Message and User ID are required.' });
     }
 
-    // Initialize Gemini API
-    const ai = new GoogleGenAI({ apiKey });
-
     /**
      * DYNAMIC SYSTEM PROMPT: LEKHAPORA BOT
      */
-    const baseSystemPrompt = `You are "Lekhapora Bot", a friendly, casual AI study assistant for Bangladesh HSC students. 
-    Task: Help with studies, motivation, and task tracking.
-    Tone: Friendly, casual Bengali (like a close friend or "bondhu"). 
-    Rules: 
-    1. Keep responses short (1-3 sentences). 
-    2. Be encouraging and polite. 
-    3. Use simple, natural Bengali/Banglish.
+    const baseSystemPrompt = `You are "Lekhapora Bot", a supportive, casual study friend for a Bangladesh HSC student.
     
-    SPECIAL ACTIONS (Automation):
-    If the student wants to add a task, routine, or syllabus chapter, you MUST respond ONLY with a valid JSON object. Do not wrap it in markdown blocks unless necessary.
+    TONE & LANGUAGE:
+    - Casual, friendly Bengali (Bondhu tone).
+    - Responses must be SHORT (1-3 sentences max).
+    - Be encouraging and positive.
+    
+    SPECIAL ACTIONS (AUTOMATION):
+    If the user wants to add a task, routine, or syllabus chapter, respond ONLY with a valid JSON object.
     
     JSON SCHEMA:
-    - Task: {"action": "add_task", "data": {"title": "Subject", "duration": "1h", "date": "YYYY-MM-DD"}, "reply": "Confirm in friendly Bengali"}
-    - Routine: {"action": "add_routine", "data": {"subject": "Math", "time": "7am", "day": "Today"}, "reply": "Confirm in friendly Bengali"}
-    - Syllabus: {"action": "add_syllabus", "data": {"subject": "Physics", "chapter": "Vector"}, "reply": "Confirm in friendly Bengali"}
+    - Task: {"action": "add_task", "data": {"title": "Title", "duration": "1h", "date": "YYYY-MM-DD"}, "reply": "Confirmation in Bengali"}
+    - Routine: {"action": "add_routine", "data": {"subject": "Sub", "time": "8pm", "day": "Today"}, "reply": "Confirmation in Bengali"}
+    - Syllabus: {"action": "add_syllabus", "data": {"subject": "Sub", "chapter": "Ch"}, "reply": "Confirmation in Bengali"}
     
-    Otherwise, respond with warm, helpful Bengali text.`;
+    Respond in normal text for everything else.`;
 
-    const finalSystemPrompt = frontendSystemInstruction 
-      ? `${baseSystemPrompt}\n\nAdditional User Context: ${frontendSystemInstruction}` 
+    const finalSystemPrompt = frontendContext 
+      ? `${baseSystemPrompt}\n\nAdditional Context: ${frontendContext}` 
       : baseSystemPrompt;
 
-    /**
-     * CONSTRUCT CONTENTS FOR GEMINI
-     * Gemini roles are 'user' and 'model'.
-     */
-    const contents: any[] = [];
+    // 4. Construct Message History
+    const messages = [{ role: 'system', content: finalSystemPrompt }];
     
     if (history && Array.isArray(history)) {
       history.forEach((msg: any) => {
-        contents.push({
-          role: (msg.role === 'ai' || msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user',
-          parts: [{ text: msg.text || msg.content }]
+        messages.push({
+          role: (msg.role === 'ai' || msg.role === 'assistant' || msg.role === 'model') ? 'assistant' : 'user',
+          content: msg.text || msg.content || ''
         });
       });
     }
     
-    // Add current user message
-    contents.push({ role: 'user', parts: [{ text: message }] });
+    messages.push({ role: 'user', content: message });
 
-    // Generate Content using Gemini 3
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: contents,
-      config: {
-        systemInstruction: finalSystemPrompt,
-        temperature: 0.7,
-        maxOutputTokens: 800,
+    // 5. Call DeepSeek with Robust Error Handling
+    const aiResponse = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
       },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 600,
+        stream: false
+      })
     });
 
-    const rawContent = response.text || "দুঃখিত দোস্ত, আমি ঠিক বুঝতে পারিনি।";
-    const cleanedContent = rawContent.trim();
+    if (!aiResponse.ok) {
+      if (aiResponse.status === 429) {
+        return res.status(200).json({ 
+          reply: "দুঃখিত দোস্ত, এখন অনেক স্টুডেন্ট একসাথে পড়াশোনা করছে। আমার ব্রেইন একটু জ্যাম হয়ে গেছে। ৫ মিনিট পর আবার নক দাও!" 
+        });
+      }
+      const errorText = await aiResponse.text();
+      throw new Error(`Upstream API failed (${aiResponse.status}): ${errorText}`);
+    }
 
-    let finalReply = cleanedContent;
-    
-    // Detect and execute automation actions if AI returns JSON
-    if (cleanedContent.startsWith('{') && cleanedContent.endsWith('}')) {
+    const completion: any = await aiResponse.json();
+    const rawContent = completion.choices[0].message.content.trim();
+    let finalReply = rawContent;
+
+    // 6. Action Detection & Database Integration
+    const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
       try {
-        const parsed = JSON.parse(cleanedContent);
-        const { action, data, reply } = parsed;
+        const actionObj = JSON.parse(jsonMatch[0]);
+        const { action, data, reply } = actionObj;
 
         if (action === 'add_task') {
           await supabaseAdmin.from('tasks').insert({
@@ -128,30 +171,28 @@ export default async function handler(req: any, res: any) {
         }
         
         finalReply = reply || "কাজটি হয়ে গেছে দোস্ত!";
-      } catch (e) {
-        console.warn("Gemini returned JSON-like content that failed parsing:", e);
+      } catch (parseError) {
+        console.warn("JSON block detected but could not be parsed.");
       }
     }
 
-    // Log the interaction to Supabase for analytics
+    // 7. Audit Logging
     try {
       await supabaseAdmin.from('ai_logs').insert({
         user_id: userId,
         prompt: message,
         response: finalReply,
-        model: 'gemini-3-flash-preview',
+        model: 'deepseek-chat',
         created_at: new Date().toISOString()
       });
     } catch (logErr) {
-      console.error("Non-critical logging error:", logErr);
+      console.error("Non-critical logging failure.");
     }
 
     return res.status(200).json({ reply: finalReply });
 
   } catch (error: any) {
-    console.error("GEMINI API ERROR:", error);
-    
-    // Friendly error handling for the student
+    console.error("LEKHAPORA BOT CRITICAL ERROR:", error);
     return res.status(200).json({ 
       reply: "দুঃখিত দোস্ত, সার্ভারের সাথে যোগাযোগ করতে পারছি না। আবার চেষ্টা কর।" 
     });

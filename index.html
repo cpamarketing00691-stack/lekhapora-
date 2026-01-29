@@ -71,19 +71,15 @@
         
         .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 
-        /* Mobile specific responsiveness */
         @media (max-width: 640px) {
           .max-w-xl { max-width: 100% !important; }
           .p-10 { padding: 1.5rem !important; }
           .p-8 { padding: 1.25rem !important; }
           .p-6 { padding: 1rem !important; }
-          
-          /* Handle very small screens */
           .text-5xl { font-size: 2.5rem !important; }
           .text-4xl { font-size: 2rem !important; }
         }
 
-        /* Safe Area Padding for mobile browsers */
         main {
           padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
         }
@@ -94,12 +90,10 @@
           }
         }
 
-        /* Fix Recharts in flex containers */
         .recharts-responsive-container {
           min-width: 0 !important;
         }
 
-        /* Better Modal Sizing */
         .modal-content {
           max-height: calc(100dvh - 4rem);
           overflow-y: auto;
@@ -114,8 +108,7 @@
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
     "lucide-react": "https://esm.sh/lucide-react@0.475.0?external=react",
     "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
-    "@google/genai": "https://esm.sh/@google/genai@0.2.1"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1"
   }
 }
 </script>

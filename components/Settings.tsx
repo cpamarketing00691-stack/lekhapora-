@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserState, UserProfile, Religion, Medium, Group, CollegeExam } from '../types';
 import { User, LogOut, Languages, Palette, ShieldCheck, Calendar, School, Plus, Trash2, GraduationCap, Bell, BellOff } from 'lucide-react';
 import { BOARDS, YEARS } from '../constants';
@@ -14,6 +14,13 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
   const [newExam, setNewExam] = useState({ name: '', date: '' });
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
+  // Verify permission status on mount
+  useEffect(() => {
+    if (userState.notificationsEnabled && Notification.permission === 'denied') {
+      onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
+    }
+  }, []);
+
   const updateProfile = (updates: Partial<UserProfile>) => {
     onUpdateState(prev => ({
       ...prev,
@@ -23,9 +30,19 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
 
   const toggleNotifications = async () => {
     if (!userState.notificationsEnabled) {
+      // Logic for requesting permission
+      if (!("Notification" in window)) {
+        alert(t("তোমার ব্রাউজার নোটিফিকেশন সাপোর্ট করে না।", "Your browser does not support notifications."));
+        return;
+      }
+
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         onUpdateState(prev => ({ ...prev, notificationsEnabled: true }));
+        new Notification(t("নোটিফিকেশন চালু হয়েছে!", "Notifications Enabled!"), {
+          body: t("এখন থেকে তুমি নিয়মিত রিমাইন্ডার পাবে।", "You will now receive regular reminders."),
+          icon: '/favicon.ico'
+        });
       } else {
         alert(t("দয়া করে ব্রাউজার সেটিং থেকে নোটিফিকেশন পারমিশন দাও।", "Please allow notifications in your browser settings."));
       }

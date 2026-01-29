@@ -71,6 +71,7 @@ const App: React.FC = () => {
   const reminderIntervalRef = useRef<number>(null);
   const lastCloudSaveRef = useRef<number>(Date.now());
 
+  // 1. Auth Initialization
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
       if (isInitialLoading) setIsInitialLoading(false);
@@ -106,47 +107,55 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Global Reminder Checker with Recurrence Logic
+  // 2. Global Reminder Heartbeat (Polling Supabase/State every 30s)
   useEffect(() => {
     const checkReminders = () => {
       const now = Date.now();
-      let changed = false;
-      const updatedReminders = (userState.reminders || []).map(rem => {
-        if (!rem.isDone && !rem.isTriggered && rem.time <= now) {
-          if (Notification.permission === 'granted') {
-            new Notification('HSC Tracker Reminder', {
-              body: rem.title,
-              icon: '/favicon.ico'
-            });
-          } else if (userState.notificationsEnabled) {
-            alert(`Reminder: ${rem.title}`);
-          }
-          
-          changed = true;
+      let hasTriggeredAny = false;
 
-          // If it's a recurring reminder, create the next instance
-          if (rem.repeatType === 'daily' || rem.repeatType === 'weekly') {
-            const nextTime = rem.time + (rem.repeatType === 'daily' ? 86400000 : 604800000);
-            return { ...rem, isTriggered: true, isDone: true }; // Mark current as done and we'd usually spawn a new one
-            // Note: In this simple state implementation, we mark as triggered. 
-            // Real production would spawn a new reminder object here.
-          }
+      setUserState(prev => {
+        const updatedReminders = (prev.reminders || []).map(rem => {
+          // Check: Is it time? Is it not done? Has it not been triggered in this specific instance?
+          if (!rem.isDone && !rem.isTriggered && rem.time <= now) {
+            hasTriggeredAny = true;
+            
+            // FIRE NOTIFICATION
+            if (Notification.permission === 'granted') {
+              try {
+                new Notification('HSC Study Reminder', {
+                  body: rem.title,
+                  icon: '/favicon.ico',
+                  tag: rem.id // Prevent duplicate notifications for same ID
+                });
+              } catch (e) {
+                console.warn("Notification failed, falling back to alert");
+                alert(`Study Reminder: ${rem.title}`);
+              }
+            } else {
+              // Fallback for browsers with blocked notifications or no support
+              alert(`Study Reminder: ${rem.title}`);
+            }
 
-          return { ...rem, isTriggered: true };
+            // CRITICAL: Mark as triggered AND done immediately to satisfy "Triggers Only Once"
+            return { ...rem, isTriggered: true, isDone: true };
+          }
+          return rem;
+        });
+
+        // Only update state if something actually changed to avoid unnecessary re-renders
+        if (hasTriggeredAny) {
+          return { ...prev, reminders: updatedReminders };
         }
-        return rem;
+        return prev;
       });
-
-      if (changed) {
-        setUserState(prev => ({ ...prev, reminders: updatedReminders }));
-      }
     };
 
-    reminderIntervalRef.current = window.setInterval(checkReminders, 10000); 
+    // Poll every 30 seconds as requested
+    reminderIntervalRef.current = window.setInterval(checkReminders, 30000); 
     return () => { if (reminderIntervalRef.current) clearInterval(reminderIntervalRef.current); };
-  }, [userState.reminders, userState.notificationsEnabled]);
+  }, [userState.notificationsEnabled]);
 
-  // STREAK CALCULATION LOGIC
+  // 3. Streak Calculation
   useEffect(() => {
     if (!userState.isAuthenticated || !userState.studyHistory.length) return;
 

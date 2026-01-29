@@ -61,6 +61,7 @@ export interface Reminder {
   title: string;
   time: number; // Timestamp
   isTriggered: boolean;
+  isDone?: boolean;
 }
 
 export interface Task {
@@ -68,9 +69,9 @@ export interface Task {
   name: string;
   source: TaskSource;
   isCompleted: boolean;
-  subjectId?: string; // Linked subject
-  chapterId?: string; // Linked chapter ID (if matched in syllabus)
-  customChapterName?: string; // Manual chapter name entered by user
+  subjectId?: string;
+  chapterId?: string;
+  customChapterName?: string;
   createdAt: number;
 }
 
@@ -83,14 +84,14 @@ export interface UserProfile {
   targetYear: string;
   religion: Religion;
   targetExamDate?: string; // Main HSC Start Date
-  collegeExams?: CollegeExam[]; // Multiple college-specific exams
+  collegeExams?: CollegeExam[];
 }
 
 export interface Chapter {
   id: string;
   name: string;
   isCompleted: boolean;
-  testScore?: number; // Highest 0-30 MCQ score
+  testScore?: number;
   difficulty?: Difficulty;
 }
 
@@ -99,21 +100,21 @@ export interface Subject {
   name: string;
   paper: 1 | 2;
   chapters: Chapter[];
-  examDate?: string; // ISO string
+  examDate?: string;
 }
 
 export interface StudySession {
   id: string;
   subjectId: string;
   examId?: string; 
-  taskId?: string; // Link session to a specific focus task
-  chapterId?: string; // Explicitly track which chapter was studied
+  taskId?: string;
+  chapterId?: string;
   startTime: number;
   endTime?: number;
   durationSeconds: number;
   breakSeconds: number;
   numBreaks: number;
-  focusLevel: number; // 1-10
+  focusLevel: number;
   mood: Mood;
   isRevision: boolean;
 }
@@ -138,7 +139,7 @@ export interface UserState {
   studyHistory: StudySession[];
   testHistory: TestAttempt[];
   subjects: Subject[];
-  dailyTasks: Task[]; // Homework / Today's Focus tasks
+  dailyTasks: Task[];
   streaks: number;
   badges: string[];
   currentMood: Mood;

@@ -37,7 +37,6 @@ const App: React.FC = () => {
         const parsed = JSON.parse(saved);
         const state = { ...DEFAULT_STATE, ...parsed };
         
-        // RECONCILIATION: Immediate catch-up on mount.
         if (state.activeTimer) {
           const now = Date.now();
           const elapsedMs = now - state.activeTimer.lastTimestamp;
@@ -68,8 +67,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'test' | 'settings'>('dashboard');
   const [testContext, setTestContext] = useState<{ subjectId: string; chapterId: string } | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const timerIntervalRef = useRef<number | null>(null);
-  const reminderIntervalRef = useRef<number | null>(null);
+  const timerIntervalRef = useRef<number>(null);
+  const reminderIntervalRef = useRef<number>(null);
   const lastCloudSaveRef = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -107,6 +106,35 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Global Reminder Checker
+  useEffect(() => {
+    const checkReminders = () => {
+      const now = Date.now();
+      const updatedReminders = (userState.reminders || []).map(rem => {
+        if (!rem.isDone && !rem.isTriggered && rem.time <= now) {
+          if (Notification.permission === 'granted') {
+            new Notification('HSC Tracker Reminder', {
+              body: rem.title,
+              icon: '/favicon.ico'
+            });
+          } else if (userState.notificationsEnabled) {
+            alert(`Reminder: ${rem.title}`);
+          }
+          return { ...rem, isTriggered: true };
+        }
+        return rem;
+      });
+
+      const hasChanges = JSON.stringify(updatedReminders) !== JSON.stringify(userState.reminders);
+      if (hasChanges) {
+        setUserState(prev => ({ ...prev, reminders: updatedReminders }));
+      }
+    };
+
+    reminderIntervalRef.current = window.setInterval(checkReminders, 10000); // Check every 10s
+    return () => { if (reminderIntervalRef.current) clearInterval(reminderIntervalRef.current); };
+  }, [userState.reminders, userState.notificationsEnabled]);
+
   // STREAK CALCULATION LOGIC
   useEffect(() => {
     if (!userState.isAuthenticated || !userState.studyHistory.length) return;
@@ -114,25 +142,19 @@ const App: React.FC = () => {
     const calculateStreak = () => {
       const today = new Date().setHours(0, 0, 0, 0);
       const yesterday = today - 86400000;
-      
-      // Get unique study dates normalized to midnight
-      // Fix: Applied explicit casting in sort function to prevent arithmetic operation errors on Line 121
       const studyDates = Array.from(new Set(
         userState.studyHistory.map(s => new Date(s.startTime).setHours(0, 0, 0, 0))
+      // Explicitly typing sort parameters as numbers to resolve arithmetic operation issues
       )).sort((a: any, b: any) => (b as number) - (a as number));
 
       if (studyDates.length === 0) return 0;
-
       const lastStudyDate = studyDates[0];
 
-      // Fix: lastStudyDate is number | undefined, added explicit cast for relational comparison
       if (lastStudyDate === undefined || (lastStudyDate as number) < yesterday) {
         return 0;
       }
 
-      // Count consecutive days backwards
       let streak = 0;
-      // Narrowing type by casting to number as we already checked for undefined
       let checkDate: number = lastStudyDate as number;
       const dateSet = new Set(studyDates);
 
@@ -153,12 +175,10 @@ const App: React.FC = () => {
     try {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
-        // Explicitly casting cloud state to unknown then to Partial<UserState> for better safety
         const cloudState = data.state as unknown as Partial<UserState>;
         setUserState(prev => {
           if (prev.activeTimer) {
             const cloudTimer = cloudState.activeTimer;
-            // Fix: Ensuring cloudTimer.lastTimestamp is treated as number
             if (!cloudTimer || Number(cloudTimer.lastTimestamp) < (prev.activeTimer?.lastTimestamp || 0)) {
               return { ...prev, ...cloudState, activeTimer: prev.activeTimer, isAuthenticated: true };
             }
@@ -166,7 +186,6 @@ const App: React.FC = () => {
           const newState = { ...prev, ...cloudState, isAuthenticated: true } as UserState;
           if (newState.activeTimer) {
              const now = Date.now();
-             // Fix: Ensuring lastTimestamp is treated as number for arithmetic operations
              const elapsedMs = now - Number(newState.activeTimer.lastTimestamp);
              const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
              if (deltaSeconds > 0) {
@@ -198,7 +217,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     if (userState.isAuthenticated) {
-      // Ensured lastCloudSaveRef.current is a number for arithmetic
       const timeSinceLastSave = Date.now() - lastCloudSaveRef.current;
       const isTimerRunning = !!userState.activeTimer;
       if (isTimerRunning && timeSinceLastSave > 30000) {
@@ -209,51 +227,6 @@ const App: React.FC = () => {
       }
     }
   }, [userState]);
-
-  // REMINDER & NOTIFICATION SYSTEM
-  useEffect(() => {
-    if (userState.notificationsEnabled) {
-      if (!reminderIntervalRef.current) {
-        reminderIntervalRef.current = window.setInterval(() => {
-          const now = Date.now();
-          const reminders = userState.reminders || [];
-          const triggeringReminders = reminders.filter(r => !r.isTriggered && r.time <= now);
-
-          if (triggeringReminders.length > 0) {
-            triggeringReminders.forEach(reminder => {
-              if (Notification.permission === 'granted') {
-                new Notification("HSC Study Tracker", {
-                  body: reminder.title,
-                  icon: '/favicon.ico'
-                });
-              } else {
-                console.log(`[App Reminder] ${reminder.title}`);
-              }
-            });
-
-            setUserState(prev => ({
-              ...prev,
-              reminders: (prev.reminders || []).map(r => 
-                r.time <= now ? { ...r, isTriggered: true } : r
-              )
-            }));
-          }
-        }, 15000); // Check every 15 seconds
-      }
-    } else {
-      if (reminderIntervalRef.current) {
-        clearInterval(reminderIntervalRef.current);
-        reminderIntervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (reminderIntervalRef.current) {
-        clearInterval(reminderIntervalRef.current);
-        reminderIntervalRef.current = null;
-      }
-    };
-  }, [userState.notificationsEnabled, userState.reminders]);
 
   useEffect(() => {
     if (userState.activeTimer) {
@@ -283,13 +256,13 @@ const App: React.FC = () => {
     } else {
       if (timerIntervalRef.current) {
         window.clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
+        (timerIntervalRef as any).current = null;
       }
     }
     return () => { 
       if (timerIntervalRef.current) {
         window.clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
+        (timerIntervalRef as any).current = null;
       } 
     };
   }, [userState.activeTimer?.isFocusActive, !!userState.activeTimer]);

@@ -1,66 +1,31 @@
 
+import { GoogleGenAI } from "@google/genai";
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * LEKHAPORA BOT - ROBUST DEEPSEEK BACKEND
+ * LEKHAPORA BOT - GEMINI BACKEND
  * Features:
- * 1. Exponential Backoff for 429 (Rate Limit) errors.
- * 2. Automated Task/Syllabus/Routine tracking via JSON detection.
- * 3. DeepSeek-Chat model integration.
- * 4. Audit logging to Supabase.
+ * 1. Automated Task/Syllabus/Routine tracking via JSON detection.
+ * 2. Gemini 3 Flash model integration for efficient conversational aid.
+ * 3. Audit logging to Supabase.
  */
 
-// 1. Initialize Supabase Admin with Service Role Key
+// Initialize Supabase Admin with Service Role Key
 const supabaseUrl = process.env.SUPABASE_URL || 'https://uycxbrcbweeuvizrgpnw.supabase.co';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''; 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-/**
- * Robust Fetch Wrapper with Exponential Backoff
- * Handles HTTP 429 (Too Many Requests) by retrying with increasing delays.
- */
-async function fetchWithRetry(url: string, options: any, maxRetries = 3, initialDelay = 1000): Promise<Response> {
-  let lastError: any;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      if (attempt > 0) {
-        // Exponential backoff: 1s, 2s, 4s...
-        const delay = initialDelay * Math.pow(2, attempt - 1);
-        console.warn(`[LekhaporaBot] Rate limit hit (429). Retry attempt ${attempt}/${maxRetries} in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-
-      const response = await fetch(url, options);
-
-      // If status is 429 (Rate Limit), retry if we haven't exhausted attempts
-      if (response.status === 429 && attempt < maxRetries) {
-        continue;
-      }
-
-      return response;
-    } catch (err) {
-      lastError = err;
-      // Network errors or other exceptions: retry
-      if (attempt < maxRetries) continue;
-      throw err;
-    }
-  }
-  throw lastError || new Error('Maximum retries exceeded');
-}
-
 export default async function handler(req: any, res: any) {
-  // 2. Validate Request Method
+  // Validate Request Method
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // 3. Resolve API Key
-  // Prioritize DEEPSEEK_API_KEY, fallback to generic API_KEY if available
-  const apiKey = process.env.DEEPSEEK_API_KEY || process.env.API_KEY;
+  // Guidelines: API key must be obtained exclusively from the environment variable process.env.API_KEY
+  const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    console.error("CRITICAL: DeepSeek API Key is missing in environment variables.");
+    console.error("CRITICAL: Gemini API Key is missing in environment variables.");
     return res.status(500).json({ 
       reply: 'দুঃখিত দোস্ত, আমার এআই চাবি (API Key) কাজ করছে না। দয়া করে অ্যাডমিনকে জানাও।' 
     });
@@ -72,6 +37,9 @@ export default async function handler(req: any, res: any) {
     if (!message || !userId) {
       return res.status(400).json({ error: 'Message and User ID are required.' });
     }
+
+    // Initialize Gemini API client
+    const ai = new GoogleGenAI({ apiKey });
 
     /**
      * DYNAMIC SYSTEM PROMPT: LEKHAPORA BOT
@@ -93,55 +61,37 @@ export default async function handler(req: any, res: any) {
     
     Respond in normal text for everything else.`;
 
-    const finalSystemPrompt = frontendContext 
+    const finalSystemInstruction = frontendContext 
       ? `${baseSystemPrompt}\n\nAdditional Context: ${frontendContext}` 
       : baseSystemPrompt;
 
-    // 4. Construct Message History
-    const messages = [{ role: 'system', content: finalSystemPrompt }];
-    
+    // Construct Message History for Gemini (role must be 'user' or 'model')
+    const contents = [];
     if (history && Array.isArray(history)) {
       history.forEach((msg: any) => {
-        messages.push({
-          role: (msg.role === 'ai' || msg.role === 'assistant' || msg.role === 'model') ? 'assistant' : 'user',
-          content: msg.text || msg.content || ''
+        contents.push({
+          role: (msg.role === 'ai' || msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user',
+          parts: [{ text: msg.text || msg.content || '' }]
         });
       });
     }
-    
-    messages.push({ role: 'user', content: message });
+    contents.push({ role: 'user', parts: [{ text: message }] });
 
-    // 5. Call DeepSeek with Robust Error Handling
-    const aiResponse = await fetchWithRetry('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
+    // Generate content using Gemini 3 Flash for conversational tasks
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: contents,
+      config: {
+        systemInstruction: finalSystemInstruction,
         temperature: 0.7,
-        max_tokens: 600,
-        stream: false
-      })
+      }
     });
 
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return res.status(200).json({ 
-          reply: "দুঃখিত দোস্ত, এখন অনেক স্টুডেন্ট একসাথে পড়াশোনা করছে। আমার ব্রেইন একটু জ্যাম হয়ে গেছে। ৫ মিনিট পর আবার নক দাও!" 
-        });
-      }
-      const errorText = await aiResponse.text();
-      throw new Error(`Upstream API failed (${aiResponse.status}): ${errorText}`);
-    }
+    // Extracting text output directly from property as per guidelines
+    const rawContent = response.text || "";
+    let finalReply = rawContent.trim();
 
-    const completion: any = await aiResponse.json();
-    const rawContent = completion.choices[0].message.content.trim();
-    let finalReply = rawContent;
-
-    // 6. Action Detection & Database Integration
+    // Action Detection & Database Integration
     const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       try {
@@ -176,13 +126,13 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 7. Audit Logging
+    // Audit Logging
     try {
       await supabaseAdmin.from('ai_logs').insert({
         user_id: userId,
         prompt: message,
         response: finalReply,
-        model: 'deepseek-chat',
+        model: 'gemini-3-flash-preview',
         created_at: new Date().toISOString()
       });
     } catch (logErr) {

@@ -2,7 +2,9 @@
 import React, { useMemo, useState } from 'react';
 import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
+// Added Loader2 to the lucide-react imports
+import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface DashboardProps {
   userState: UserState;
@@ -13,6 +15,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTriggerTest }) => {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [isAddingReminder, setIsAddingReminder] = useState(false);
   
   const [newTask, setNewTask] = useState({ 
     name: '', 
@@ -102,19 +105,45 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsTaskModalOpen(false);
   };
 
-  const addReminder = () => {
-    if (!newReminder.title.trim() || !newReminder.time) return;
-    const reminder: Reminder = {
-      id: `rem-${Date.now()}`,
-      title: newReminder.title.trim(),
-      time: new Date(newReminder.time).getTime(),
-      isTriggered: false,
-      isDone: false,
-      repeatType: newReminder.repeatType
-    };
-    onUpdateState(prev => ({ ...prev, reminders: [...(prev.reminders || []), reminder] }));
-    setNewReminder({ title: '', time: '', repeatType: 'none' });
-    setIsReminderModalOpen(false);
+  const addReminder = async () => {
+    if (!newReminder.title.trim() || !newReminder.time || isAddingReminder) return;
+    setIsAddingReminder(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Auth required");
+
+      const datetime = new Date(newReminder.time).toISOString();
+      
+      // Save to persistent Supabase table for polling
+      const { error } = await supabase.from('reminders').insert({
+        user_id: user.id,
+        title: newReminder.title.trim(),
+        reminder_datetime: datetime,
+        is_done: false,
+        repeat_type: newReminder.repeatType
+      });
+
+      if (error) throw error;
+
+      // Update local state for immediate UI feedback
+      const reminder: Reminder = {
+        id: `rem-${Date.now()}`,
+        title: newReminder.title.trim(),
+        time: new Date(newReminder.time).getTime(),
+        isTriggered: false,
+        isDone: false,
+        repeatType: newReminder.repeatType
+      };
+      
+      onUpdateState(prev => ({ ...prev, reminders: [...(prev.reminders || []), reminder] }));
+      setNewReminder({ title: '', time: '', repeatType: 'none' });
+      setIsReminderModalOpen(false);
+    } catch (err) {
+      alert("Failed to add reminder. Please try again.");
+    } finally {
+      setIsAddingReminder(false);
+    }
   };
 
   const toggleTask = (id: string) => {
@@ -268,7 +297,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).map(r => r.id === rem.id ? { ...r, isDone: true } : r) }))} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"><CheckCircle size={16} /></button>
+                    <button onClick={async () => {
+                      onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).map(r => r.id === rem.id ? { ...r, isDone: true } : r) }));
+                      // Also mark in DB
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) {
+                           await supabase.from('reminders').update({ is_done: true }).eq('title', rem.title).eq('user_id', user.id);
+                        }
+                      } catch (e) {}
+                    }} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"><CheckCircle size={16} /></button>
                     <button onClick={() => onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).filter(r => r.id !== rem.id) }))} className="p-2 text-brand-text-s hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={16} /></button>
                   </div>
                 </div>
@@ -308,7 +346,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       )}
 
-      {/* Reminder Modal - Enhanced with Repeat Options */}
+      {/* Reminder Modal */}
       {isReminderModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
@@ -333,7 +371,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                   <option value="weekly">{t('প্রতি সপ্তাহে', 'Weekly')}</option>
                 </select>
               </div>
-              <button onClick={addReminder} className="w-full py-4 bg-orange-500 text-white font-black rounded-2xl shadow-xl shadow-orange-500/20 uppercase tracking-widest text-xs mt-4 hover:scale-[1.02] active:scale-95 transition-all">{t('সেভ করো', 'Save Reminder')}</button>
+              <button 
+                onClick={addReminder} 
+                disabled={isAddingReminder}
+                className="w-full py-4 bg-orange-500 text-white font-black rounded-2xl shadow-xl shadow-orange-500/20 uppercase tracking-widest text-xs mt-4 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+              >
+                {isAddingReminder ? <Loader2 className="animate-spin mx-auto" size={16} /> : t('সেভ করো', 'Save Reminder')}
+              </button>
             </div>
           </div>
         </div>

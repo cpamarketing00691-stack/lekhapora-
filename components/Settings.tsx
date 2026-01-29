@@ -14,10 +14,12 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
   const [newExam, setNewExam] = useState({ name: '', date: '' });
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  // Verify permission status on mount
+  // Sync state with actual browser permission on mount
   useEffect(() => {
-    if (userState.notificationsEnabled && Notification.permission === 'denied') {
-      onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
+    if ("Notification" in window) {
+      if (Notification.permission !== 'granted' && userState.notificationsEnabled) {
+        onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
+      }
     }
   }, []);
 
@@ -29,22 +31,21 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
   };
 
   const toggleNotifications = async () => {
-    if (!userState.notificationsEnabled) {
-      // Logic for requesting permission
-      if (!("Notification" in window)) {
-        alert(t("তোমার ব্রাউজার নোটিফিকেশন সাপোর্ট করে না।", "Your browser does not support notifications."));
-        return;
-      }
+    if (!("Notification" in window)) {
+      alert(t("তোমার ব্রাউজার নোটিফিকেশন সাপোর্ট করে না।", "Your browser does not support notifications."));
+      return;
+    }
 
+    if (!userState.notificationsEnabled) {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         onUpdateState(prev => ({ ...prev, notificationsEnabled: true }));
-        new Notification(t("নোটিফিকেশন চালু হয়েছে!", "Notifications Enabled!"), {
-          body: t("এখন থেকে তুমি নিয়মিত রিমাইন্ডার পাবে।", "You will now receive regular reminders."),
+        new Notification(t("নোটিফিকেশন চালু হয়েছে!", "Success!"), {
+          body: t("এখন থেকে তুমি নিয়মিত রিমাইন্ডার পাবে।", "Reminders are now active."),
           icon: '/favicon.ico'
         });
       } else {
-        alert(t("দয়া করে ব্রাউজার সেটিং থেকে নোটিফিকেশন পারমিশন দাও।", "Please allow notifications in your browser settings."));
+        alert(t("দয়া করে ব্রাউজার সেটিংস থেকে নোটিফিকেশন অ্যালাউ করো।", "Please allow notifications in your browser settings to use this feature."));
       }
     } else {
       onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));

@@ -13,6 +13,9 @@ import { Layout } from './components/Layout';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
+// VAPID Public Key for Web Push
+const VAPID_PUBLIC_KEY = "BOQS5jGeY1uyMDkK7BocruEAkQVcWx3sSPe7VBVvoj_UpNT5FZmr52hu9izrT9i6M5J2ScIJhOd6AYhzWHRiAyI";
+
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
   profile: null,
@@ -71,7 +74,6 @@ const App: React.FC = () => {
   const reminderIntervalRef = useRef<number>(null);
   const lastCloudSaveRef = useRef<number>(Date.now());
 
-  // 1. Auth Initialization
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
       if (isInitialLoading) setIsInitialLoading(false);
@@ -107,14 +109,10 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  /**
-   * FIX: Global Reminder Heartbeat
-   * Polling Supabase 'reminders' table directly every 30s.
-   * Ensures persistence and prevents double notifications.
-   */
+  // GLOBAL REMINDER HEARTBEAT
   useEffect(() => {
     const pollReminders = async () => {
-      if (!userState.isAuthenticated) return;
+      if (!userState.isAuthenticated || !userState.notificationsEnabled) return;
       
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -122,7 +120,6 @@ const App: React.FC = () => {
 
         const now = new Date().toISOString();
         
-        // Query persistent 'reminders' table for due, unfinished tasks
         const { data: dueReminders, error } = await supabase
           .from('reminders')
           .select('*')
@@ -134,47 +131,39 @@ const App: React.FC = () => {
 
         if (dueReminders && dueReminders.length > 0) {
           for (const rem of dueReminders) {
-            // 1. Trigger System Notification
             if (Notification.permission === 'granted') {
-              try {
-                new Notification('HSC Tracker Reminder', {
-                  body: rem.title,
-                  icon: '/favicon.ico',
-                  tag: rem.id // Prevent spam if multiple tabs are open
-                });
-              } catch (e) {
-                alert(`Reminder: ${rem.title}`);
-              }
+              new Notification('HSC Study Tracker', {
+                body: `Study Time: ${rem.title}`,
+                icon: '/favicon.ico',
+                tag: rem.id, // Prevent duplicate alerts for the same reminder ID
+                requireInteraction: true // Keep notification until user dismisses
+              });
             } else {
-              // 2. Fallback to Alert if permission missing
-              alert(`Reminder: ${rem.title}`);
+              alert(`Study Reminder: ${rem.title}`);
             }
 
-            // 3. Update persistent DB immediately to prevent duplicate triggers
+            // Immediately mark as done in DB
             await supabase
               .from('reminders')
               .update({ is_done: true })
               .eq('id', rem.id);
           }
           
-          // 4. Force a local state refresh to clear UI list
-          await backgroundSync(user.id);
+          backgroundSync(user.id);
         }
       } catch (err) {
-        console.warn("Silent Reminder Error:", err);
+        console.warn("Heartbeat Error:", err);
       }
     };
 
-    // Execute polling every 30 seconds
+    // Poll every 30 seconds for maximum reliability without draining battery
     reminderIntervalRef.current = window.setInterval(pollReminders, 30000); 
-    
-    // Immediate initial check
-    pollReminders();
+    pollReminders(); // Immediate check on mount/state change
 
     return () => { if (reminderIntervalRef.current) clearInterval(reminderIntervalRef.current); };
   }, [userState.isAuthenticated, userState.notificationsEnabled]);
 
-  // 3. Streak Calculation
+  // Streak Calculation
   useEffect(() => {
     if (!userState.isAuthenticated || !userState.studyHistory.length) return;
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { UserState, StudySession, Reminder } from '../types';
 import { 
@@ -12,9 +11,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface StudyCalendarProps {
   userState: UserState;
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
+  onTabChange: (tab: 'dashboard' | 'calendar' | 'tracker' | 'syllabus' | 'test' | 'settings') => void;
 }
 
-const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState }) => {
+const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState, onTabChange }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(new Date().getDate());
   const [showSyncOptions, setShowSyncOptions] = useState(false);
@@ -249,7 +249,7 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState 
               </div>
 
               <button 
-                onClick={() => onUpdateState(prev => ({ ...prev, activeTab: 'tracker' } as any))}
+                onClick={() => onTabChange('tracker')}
                 className="mt-8 w-full py-4 bg-brand-primary text-white font-black rounded-2xl flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest shadow-xl shadow-brand-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
               >
                 <Plus size={16} />

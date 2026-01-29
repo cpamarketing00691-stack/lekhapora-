@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession, Reminder, TestAttempt } from './types';
 import { CHAPTER_LISTS } from './constants';
@@ -159,7 +158,7 @@ const App: React.FC = () => {
   return (
     <Layout userProfile={userState.profile} activeTab={activeTab} onTabChange={setActiveTab} language={userState.language}>
       {activeTab === 'dashboard' && <Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
-      {activeTab === 'calendar' && <StudyCalendar userState={userState} onUpdateState={setUserState} />}
+      {activeTab === 'calendar' && <StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={setActiveTab} />}
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
       {activeTab === 'test' && <TestSection userState={userState} onUpdateState={setUserState} initialContext={testContext} clearContext={() => setTestContext(null)} />}

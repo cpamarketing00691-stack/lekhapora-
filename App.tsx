@@ -116,22 +116,24 @@ const App: React.FC = () => {
       const yesterday = today - 86400000;
       
       // Get unique study dates normalized to midnight
+      // Fix: Applied explicit casting in sort function to prevent arithmetic operation errors on Line 121
       const studyDates = Array.from(new Set(
         userState.studyHistory.map(s => new Date(s.startTime).setHours(0, 0, 0, 0))
-      )).sort((a, b) => b - a);
+      )).sort((a: any, b: any) => (b as number) - (a as number));
 
       if (studyDates.length === 0) return 0;
 
       const lastStudyDate = studyDates[0];
 
-      // Fix: lastStudyDate is number | undefined, added explicit check to avoid comparison errors
-      if (lastStudyDate === undefined || lastStudyDate < yesterday) {
+      // Fix: lastStudyDate is number | undefined, added explicit cast for relational comparison
+      if (lastStudyDate === undefined || (lastStudyDate as number) < yesterday) {
         return 0;
       }
 
       // Count consecutive days backwards
       let streak = 0;
-      let checkDate = lastStudyDate;
+      // Narrowing type by casting to number as we already checked for undefined
+      let checkDate: number = lastStudyDate as number;
       const dateSet = new Set(studyDates);
 
       while (dateSet.has(checkDate)) {
@@ -151,21 +153,21 @@ const App: React.FC = () => {
     try {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
-        // Casting data.state to any because Supabase returns Json which is unknown in strict TS environments
-        const cloudState = data.state as any;
+        // Explicitly casting cloud state to unknown then to Partial<UserState> for better safety
+        const cloudState = data.state as unknown as Partial<UserState>;
         setUserState(prev => {
           if (prev.activeTimer) {
             const cloudTimer = cloudState.activeTimer;
-            // Fix: Ensured lastTimestamp is treated as number for comparison
-            if (!cloudTimer || (cloudTimer.lastTimestamp as number) < (prev.activeTimer?.lastTimestamp || 0)) {
+            // Fix: Ensuring cloudTimer.lastTimestamp is treated as number
+            if (!cloudTimer || Number(cloudTimer.lastTimestamp) < (prev.activeTimer?.lastTimestamp || 0)) {
               return { ...prev, ...cloudState, activeTimer: prev.activeTimer, isAuthenticated: true };
             }
           }
-          const newState = { ...prev, ...cloudState, isAuthenticated: true };
+          const newState = { ...prev, ...cloudState, isAuthenticated: true } as UserState;
           if (newState.activeTimer) {
              const now = Date.now();
              // Fix: Ensuring lastTimestamp is treated as number for arithmetic operations
-             const elapsedMs = now - (newState.activeTimer.lastTimestamp as number);
+             const elapsedMs = now - Number(newState.activeTimer.lastTimestamp);
              const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
              if (deltaSeconds > 0) {
                newState.activeTimer.accumulatedFocusSeconds += newState.activeTimer.isFocusActive ? deltaSeconds : 0;
@@ -196,8 +198,8 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     if (userState.isAuthenticated) {
-      // Fix: Ensured lastCloudSaveRef.current is treated as number for subtraction
-      const timeSinceLastSave = Date.now() - (lastCloudSaveRef.current as number);
+      // Ensured lastCloudSaveRef.current is a number for arithmetic
+      const timeSinceLastSave = Date.now() - lastCloudSaveRef.current;
       const isTimerRunning = !!userState.activeTimer;
       if (isTimerRunning && timeSinceLastSave > 30000) {
         saveUserData(userState);

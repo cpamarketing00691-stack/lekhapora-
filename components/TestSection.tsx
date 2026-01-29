@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserState, Subject, Chapter, MCQ, TestAttempt } from '../types';
 import { 
@@ -29,17 +30,27 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
   const timerRef = useRef<number | null>(null);
 
+  // Handle launch from outside (Dashboard/Syllabus)
   useEffect(() => {
     if (initialContext) {
-      setSelectedSubjectId(initialContext.subjectId);
-      setSelectedChapterId(initialContext.chapterId);
-      startExam();
+      const { subjectId, chapterId } = initialContext;
+      setSelectedSubjectId(subjectId);
+      setSelectedChapterId(chapterId);
+      // Pass IDs directly to bypass async state setter delay
+      startExam(subjectId, chapterId);
       clearContext();
     }
   }, [initialContext]);
 
-  const startExam = async () => {
-    if (!selectedSubjectId || !selectedChapterId) return;
+  const startExam = async (subjId?: string, chapId?: string) => {
+    const sId = subjId || selectedSubjectId;
+    const cId = chapId || selectedChapterId;
+    
+    if (!sId || !cId) {
+      alert(t("দয়া করে বিষয় ও চ্যাপ্টার নির্বাচন করো।", "Please select a subject and chapter."));
+      return;
+    }
+
     setIsLoading(true);
     
     try {
@@ -47,41 +58,49 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       if (!user) return;
 
       // 1. Fetch Question Bank Logic (Anti-Repetition)
-      // Step A: Get IDs of questions already seen by this user for this chapter
       const { data: seenLogs } = await supabase
         .from('test_attempts')
         .select('questions')
         .eq('user_id', user.id)
-        .eq('chapter_id', selectedChapterId);
+        .eq('chapter_id', cId);
 
-      const seenIds = (seenLogs || []).flatMap(log => log.questions.map((q: any) => q.id));
+      const seenIds = (seenLogs || []).flatMap(log => 
+        Array.isArray(log.questions) ? log.questions.map((q: any) => q.id) : []
+      );
 
-      // Step B: Get 30 Random Unseen Questions
-      let { data: questions, error } = await supabase
+      // 2. Fetch Unseen Questions (Randomized)
+      let query = supabase
         .from('mcqs')
         .select('*')
-        .eq('chapter_id', selectedChapterId)
-        .not('id', 'in', `(${seenIds.length > 0 ? seenIds.join(',') : 'none'})`)
-        .limit(30);
+        .eq('chapter_id', cId);
+      
+      // If user has seen questions, try to exclude them
+      if (seenIds.length > 0) {
+        query = query.not('id', 'in', `(${seenIds.join(',')})`);
+      }
 
-      // Step C: Fallback if bank is dry (Reset rotation)
-      if (!questions || questions.length < 30) {
-        const { data: resetQuestions } = await supabase
+      let { data: questions, error } = await query.limit(50);
+
+      // Fallback: If bank is empty or too small, pull from full chapter bank (reset cycle)
+      if (!questions || questions.length < 5) {
+        const { data: fallbackQuestions } = await supabase
           .from('mcqs')
           .select('*')
-          .eq('chapter_id', selectedChapterId)
-          .limit(30);
-        questions = resetQuestions;
+          .eq('chapter_id', cId)
+          .limit(50);
+        questions = fallbackQuestions;
       }
 
       if (!questions || questions.length === 0) {
-        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "No questions available for this chapter in the database."));
+        alert(t("এই চ্যাপ্টারের জন্য কোনো প্রশ্ন পাওয়া যায়নি।", "No questions found for this chapter."));
         setIsLoading(false);
         return;
       }
 
-      // Shuffle the results locally to ensure randomness
-      const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, 30);
+      // Locally shuffle and take exactly 30 (or max available)
+      const shuffled = [...questions]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 30);
 
       setCurrentQuestions(shuffled);
       setUserAnswers(new Array(shuffled.length).fill(-1));
@@ -89,7 +108,8 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       setTimeLeft(1800);
       setView('exam');
     } catch (err) {
-      console.error(err);
+      console.error("Test load failed:", err);
+      alert(t("টেস্ট লোড হতে সমস্যা হয়েছে।", "Error loading test."));
     } finally {
       setIsLoading(false);
     }
@@ -144,7 +164,6 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       } : s)
     }));
 
-    // Async save to Supabase
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -159,7 +178,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
           user_answers: userAnswers
         });
       }
-    } catch (e) { console.error("Cloud save failed", e); }
+    } catch (e) { console.error("History save failed", e); }
 
     setView('result');
   };
@@ -229,7 +248,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
                 <button 
                   disabled={!selectedSubjectId || !selectedChapterId || isLoading}
-                  onClick={startExam}
+                  onClick={() => startExam()}
                   className="w-full mt-4 py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[11px] disabled:opacity-30 active:scale-95 transition-all flex items-center justify-center gap-2"
                 >
                   {isLoading ? <Loader2 className="animate-spin" size={18} /> : <GraduationCap size={18} />}
@@ -259,7 +278,6 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                       </span>
                     </div>
                     <h4 className="text-xs font-bold text-brand-text-p truncate">{userState.subjects.find(s => s.id === att.subjectId)?.name}</h4>
-                    <p className="text-[9px] font-medium text-brand-text-s truncate">{userState.subjects.find(s => s.id === att.subjectId)?.chapters.find(c => c.id === att.chapterId)?.name}</p>
                   </button>
                 )) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-brand-text-s opacity-30 gap-3 py-10">
@@ -304,10 +322,10 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
           <div className="bg-brand-surface p-8 sm:p-12 rounded-[3rem] border border-brand-text-s/10 shadow-sm space-y-10 min-h-[400px] flex flex-col">
             <div className="flex-1">
               <h2 className="text-lg sm:text-2xl font-black text-brand-text-p leading-tight mb-10">
-                {currentQuestions[currentIndex].question}
+                {currentQuestions[currentIndex]?.question}
               </h2>
               <div className="grid grid-cols-1 gap-4">
-                {currentQuestions[currentIndex].options.map((option, idx) => (
+                {currentQuestions[currentIndex]?.options.map((option, idx) => (
                   <button 
                     key={idx}
                     onClick={() => {
@@ -335,12 +353,6 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                 <ChevronLeft size={24} />
               </button>
               
-              <div className="flex gap-1 overflow-x-auto max-w-[200px] scrollbar-hide py-2 px-1">
-                {currentQuestions.map((_, i) => (
-                   <div key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-brand-secondary' : 'bg-brand-text-s/20'}`}></div>
-                ))}
-              </div>
-
               <button 
                 onClick={() => {
                   if (currentIndex < currentQuestions.length - 1) {
@@ -363,7 +375,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
            <div className="bg-brand-surface p-10 rounded-[3rem] border border-brand-text-s/10 text-center shadow-xl space-y-8 relative overflow-hidden">
               <Sparkles className="absolute -right-10 -bottom-10 opacity-10 text-brand-primary" size={200} />
               <div className="relative z-10">
-                <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 shadow-2xl ${userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length >= 20 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
+                <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 shadow-2xl ${userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length >= (currentQuestions.length * 0.7) ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
                   <CheckCircle2 size={48} />
                 </div>
                 <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট সম্পন্ন হয়েছে!', 'Test Completed!')}</h2>
@@ -386,13 +398,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                   onClick={() => setView('selection')}
                   className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-xs active:scale-95 transition-all"
                 >
-                  {t('ড্যাশবোর্ডে ফিরে যাও', 'Return to Selection')}
-                </button>
-                <button 
-                  onClick={() => { setHistoryAttempt(userState.testHistory[0]); setView('history'); }}
-                  className="w-full mt-3 py-4 bg-brand-bg text-brand-text-p border border-brand-text-s/10 font-black rounded-2xl uppercase tracking-widest text-[10px] active:scale-95 transition-all"
-                >
-                  {t('প্রশ্নগুলোর সমাধান দেখো', 'Review Questions')}
+                  {t('ড্যাশবোর্ডে ফিরে যাও', 'Back to Tests')}
                 </button>
               </div>
            </div>
@@ -415,7 +421,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
               const userAns = historyAttempt.userAnswers[idx];
               
               return (
-                <div key={q.id} className={`bg-brand-surface p-6 rounded-[2rem] border transition-all ${isCorrect ? 'border-emerald-100 dark:border-emerald-900/30' : 'border-rose-100 dark:border-rose-900/30'}`}>
+                <div key={q.id} className={`bg-brand-surface p-6 rounded-[2rem] border transition-all ${isCorrect ? 'border-emerald-100' : 'border-rose-100'}`}>
                    <div className="flex items-start gap-4 mb-4">
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-xs ${isCorrect ? 'bg-emerald-500' : 'bg-rose-500'}`}>
                         {idx + 1}
@@ -428,32 +434,14 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                           key={oIdx}
                           className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-[11px] font-bold ${oIdx === q.correct_index ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : oIdx === userAns ? 'bg-rose-50 border-rose-500 text-rose-700' : 'bg-brand-bg border-transparent text-brand-text-s'}`}
                         >
-                           <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border text-[9px] ${oIdx === q.correct_index ? 'bg-emerald-500 border-emerald-500 text-white' : oIdx === userAns ? 'bg-rose-500 border-rose-500 text-white' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-s'}`}>
-                             {oIdx === q.correct_index ? <Check size={12} /> : oIdx === userAns ? <X size={12} /> : String.fromCharCode(65 + oIdx)}
-                           </div>
                            {opt}
                         </div>
                       ))}
                    </div>
-                   {q.explanation && (
-                     <div className="mt-4 p-4 bg-brand-bg/50 rounded-xl border border-brand-text-s/5">
-                        <p className="text-[10px] font-black text-brand-primary uppercase tracking-widest mb-1 flex items-center gap-2">
-                          <AlertCircle size={12} /> {t('ব্যাখ্যা', 'EXPLANATION')}
-                        </p>
-                        <p className="text-xs font-medium text-brand-text-s leading-relaxed italic">{q.explanation}</p>
-                     </div>
-                   )}
                 </div>
               );
             })}
           </div>
-
-          <button 
-            onClick={() => setView('selection')}
-            className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
-          >
-            {t('শেষ করো', 'Close Review')}
-          </button>
         </div>
       )}
     </div>

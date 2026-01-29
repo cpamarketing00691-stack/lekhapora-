@@ -1,7 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { UserProfile, Language } from '../types';
-import { Home, Timer, BookOpen, Bot, Sun, Moon, Settings } from 'lucide-react';
+import { Home, Timer, BookOpen, Sun, Moon, Settings } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -39,7 +39,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     { id: 'dashboard', icon: <Home size={20} />, label: t('হোম', 'Home') },
     { id: 'tracker', icon: <Timer size={20} />, label: t('ফোকাস', 'Focus') },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus') },
-    { id: 'ai', icon: <Bot size={20} />, label: t('Buddy', 'Buddy') },
     { id: 'settings', icon: <Settings size={20} />, label: t('সেটিংস', 'Settings') },
   ];
 

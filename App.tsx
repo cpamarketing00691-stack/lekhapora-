@@ -5,7 +5,6 @@ import { CHAPTER_LISTS } from './constants';
 import Onboarding from './components/Onboarding';
 import Dashboard from './components/Dashboard';
 import Tracker from './components/Tracker';
-import AISidebar from './components/AISidebar';
 import Auth from './components/Auth';
 import Settings from './components/Settings';
 import SyllabusManager from './components/SyllabusManager';
@@ -64,7 +63,7 @@ const App: React.FC = () => {
     return DEFAULT_STATE;
   });
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'ai' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'tracker' | 'syllabus' | 'settings'>('dashboard');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number | null>(null);
   const reminderIntervalRef = useRef<number | null>(null);
@@ -278,7 +277,6 @@ const App: React.FC = () => {
       {activeTab === 'dashboard' && <Dashboard userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} />}
-      {activeTab === 'ai' && <div className="h-full"><AISidebar userState={userState} /></div>}
       {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={() => setUserState(DEFAULT_STATE)} />}
     </Layout>
   );

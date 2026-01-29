@@ -62,7 +62,6 @@ export interface UserProfile {
   medium: Medium;
   targetYear: string;
   religion: Religion;
-  aiName: string;
   targetExamDate?: string; // Main HSC Start Date
   collegeExams?: CollegeExam[]; // Multiple college-specific exams
 }

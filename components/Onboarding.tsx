@@ -56,8 +56,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, language }) => {
   const finish = () => {
     if (data.fullName && data.group && data.board && data.medium && data.targetYear && data.religion && data.college && selectedElectives.length === 3 && selectedFourth) {
       const finalProfile: UserProfile = {
-        ...data as UserProfile,
-        aiName: `${data.fullName.split(' ')[0]} AI`
+        ...data as UserProfile
       };
       
       const allSelectedSubjectNames = [

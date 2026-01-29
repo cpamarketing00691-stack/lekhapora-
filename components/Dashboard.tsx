@@ -3,6 +3,7 @@ import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { subscribeToPush, checkNotificationPermission } from '../lib/push-service';
 
 interface DashboardProps {
   userState: UserState;
@@ -113,6 +114,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsAddingReminder(true);
     
     try {
+      // 1. Request Push Notifications Permission if not granted
+      const permission = await checkNotificationPermission();
+      if (permission !== 'granted') {
+        const confirmSub = confirm(t("রিমাইন্ডার নোটিফিকেশন পেতে চান? তাহলে নোটিফিকেশন অ্যালাউ করুন।", "Would you like to receive push notifications for your reminders? Please allow notifications."));
+        if (confirmSub) {
+          await subscribeToPush();
+        }
+      } else {
+        // Ensure subscription is synced
+        await subscribeToPush();
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Auth required");
 
@@ -124,6 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         title: newReminder.title.trim(),
         reminder_datetime: datetime,
         is_done: false,
+        is_triggered: false, // Explicitly track trigger state
         repeat_type: newReminder.repeatType
       });
 

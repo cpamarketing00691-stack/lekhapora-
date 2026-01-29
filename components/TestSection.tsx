@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserState, Subject, Chapter, MCQ, TestAttempt } from '../types';
 import { 
@@ -29,6 +30,17 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
   const timerRef = useRef<number | null>(null);
 
+  // Normalization utility for robust matching
+  const normalize = (str: any): string => {
+    if (!str) return '';
+    const banglaNums = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return String(str)
+      .toLowerCase()
+      .trim()
+      .replace(/[০-৯]/g, (d) => banglaNums.indexOf(d).toString())
+      .replace(/\s+/g, ' ');
+  };
+
   useEffect(() => {
     if (initialContext) {
       setSelectedSubjectId(initialContext.subjectId);
@@ -46,42 +58,61 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // 1. Fetch Question Bank Logic (Anti-Repetition)
-      // Step A: Get IDs of questions already seen by this user for this chapter
+      const currentSubject = userState.subjects.find(s => s.id === selectedSubjectId);
+      const currentChapter = currentSubject?.chapters.find(c => c.id === selectedChapterId);
+
+      if (!currentSubject || !currentChapter) {
+        throw new Error("Subject or Chapter not found in state");
+      }
+
+      const targetSubjectNorm = normalize(currentSubject.name);
+      const targetChapterNorm = normalize(currentChapter.name);
+
+      // 1. Fetch Question Bank using Normalized Matching
+      // We fetch questions for the subject and then filter by normalized chapter name
+      // This bypasses strict ID matching issues and handles naming variations
+      let { data: allChapterMcqs, error: fetchError } = await supabase
+        .from('mcqs')
+        .select('*')
+        .or(`subject_name.ilike.%${currentSubject.name}%,subject_id.eq.${selectedSubjectId}`);
+
+      if (fetchError) throw fetchError;
+
+      // Filter MCQs based on normalized chapter matching (includes sub-chapter fallback)
+      let filteredMcqs = (allChapterMcqs || []).filter(q => {
+        const qChapterNorm = normalize(q.chapter_name || q.chapter_id);
+        const qSubChapterNorm = normalize(q.sub_chapter_name || q.sub_chapter);
+        
+        // Match if chapter matches, or if it's a sub-chapter of the target chapter
+        return qChapterNorm.includes(targetChapterNorm) || 
+               targetChapterNorm.includes(qChapterNorm) ||
+               qSubChapterNorm.includes(targetChapterNorm);
+      });
+
+      // 2. Anti-Repetition Logic
       const { data: seenLogs } = await supabase
         .from('test_attempts')
         .select('questions')
         .eq('user_id', user.id)
         .eq('chapter_id', selectedChapterId);
 
-      const seenIds = (seenLogs || []).flatMap(log => log.questions.map((q: any) => q.id));
+      const seenIds = new Set((seenLogs || []).flatMap(log => log.questions.map((q: any) => q.id)));
+      
+      let unseenQuestions = filteredMcqs.filter(q => !seenIds.has(q.id));
+      
+      // 3. Select final set (fallback to seen if unseen is insufficient)
+      let finalQuestions = unseenQuestions.length >= 30 
+        ? unseenQuestions 
+        : filteredMcqs;
 
-      // Step B: Get 30 Random Unseen Questions
-      let { data: questions, error } = await supabase
-        .from('mcqs')
-        .select('*')
-        .eq('chapter_id', selectedChapterId)
-        .not('id', 'in', `(${seenIds.length > 0 ? seenIds.join(',') : 'none'})`)
-        .limit(30);
-
-      // Step C: Fallback if bank is dry (Reset rotation)
-      if (!questions || questions.length < 30) {
-        const { data: resetQuestions } = await supabase
-          .from('mcqs')
-          .select('*')
-          .eq('chapter_id', selectedChapterId)
-          .limit(30);
-        questions = resetQuestions;
-      }
-
-      if (!questions || questions.length === 0) {
+      if (!finalQuestions || finalQuestions.length === 0) {
         alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন ডেটাবেজে নেই।", "No questions available for this chapter in the database."));
         setIsLoading(false);
         return;
       }
 
-      // Shuffle the results locally to ensure randomness
-      const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, 30);
+      // Shuffle and pick 30
+      const shuffled = [...finalQuestions].sort(() => Math.random() - 0.5).slice(0, 30);
 
       setCurrentQuestions(shuffled);
       setUserAnswers(new Array(shuffled.length).fill(-1));
@@ -89,7 +120,8 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       setTimeLeft(1800);
       setView('exam');
     } catch (err) {
-      console.error(err);
+      console.error("Test Start Error:", err);
+      alert(t("টেস্ট শুরু করতে সমস্যা হয়েছে। আবার চেষ্টা করো।", "Failed to start test. Please try again."));
     } finally {
       setIsLoading(false);
     }

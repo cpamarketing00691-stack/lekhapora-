@@ -110,19 +110,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   };
 
   const addReminder = async () => {
-    // 1. Basic Validation
     if (!newReminder.title.trim() || !newReminder.time || isAddingReminder) return;
-    
-    // 2. Start Loading State
     setIsAddingReminder(true);
     
     try {
-      // 3. Environment Checks
-      if (!('serviceWorker' in navigator)) {
-        throw new Error(t("আপনার ব্রাউজারে সার্ভিস ওয়ার্কার সাপোর্ট করে না।", "Your browser does not support service workers."));
-      }
-
-      // 4. Notification Permission Handling
+      // 1. Permission Handling (Crucial)
       let permission = await checkNotificationPermission();
       
       if (permission === 'default') {
@@ -137,26 +129,20 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         throw new Error(t("ব্রাউজার সেটিং থেকে নোটিফিকেশন অন করে আবার চেষ্টা করুন।", "Please enable notifications in your browser settings and try again."));
       }
 
-      // 5. Service Worker Readiness (with Timeout to prevent infinite loading)
-      const swReady = await Promise.race([
-        navigator.serviceWorker.ready,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(t("সার্ভিস ওয়ার্কার প্রস্তুত হতে অনেক সময় নিচ্ছে। পেজ রিফ্রেশ দিন।", "Service worker timed out. Please refresh the page."))), 5000))
-      ]);
-
-      if (!swReady) {
-        throw new Error(t("সার্ভিস ওয়ার্কার সক্রিয় নয়।", "Service worker is not active."));
-      }
-
-      // 6. Push Subscription Sync
+      // 2. Background Sync / Push (Best Effort - Don't Block)
       try {
-        await subscribeToPush();
+        if ('serviceWorker' in navigator) {
+           // We try to sync push, but we don't throw if it fails (e.g. timeout)
+           // This prevents the infinite loading spinner.
+           await subscribeToPush();
+        }
       } catch (pushErr) {
-        console.warn("Push subscription sync failed, proceeding to database save anyway:", pushErr);
+        console.warn("Push sync failed, proceeding anyway:", pushErr);
       }
 
-      // 7. Database Persistence
+      // 3. Database Persistence (The Core Action)
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি। দয়া করে আবার লগইন করুন।", "Session not found. Please login again."));
+      if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি।", "Session not found."));
 
       const datetime = new Date(newReminder.time).toISOString();
       
@@ -171,7 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
       if (dbError) throw dbError;
 
-      // 8. Update Local UI State
+      // 4. Update UI
       const reminder: Reminder = {
         id: `rem-${Date.now()}`,
         title: newReminder.title.trim(),
@@ -186,18 +172,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         reminders: [...(prev.reminders || []), reminder] 
       }));
 
-      // 9. Reset Modal and State
       setNewReminder({ title: '', time: '', repeatType: 'none' });
       setIsReminderModalOpen(false);
-      
       alert(t("রিমাইন্ডার সফলভাবে সেট করা হয়েছে!", "Reminder set successfully!"));
 
     } catch (err: any) {
-      console.error("Reminder Save Error:", err);
-      // Ensure specific error messages are shown to the user
-      alert(err.message || t("রিমাইন্ডার সেট করা সম্ভব হয়নি। আবার চেষ্টা করুন।", "Failed to set reminder. Please try again."));
+      console.error("Reminder Error:", err);
+      alert(err.message || t("রিমাইন্ডার সেট করা সম্ভব হয়নি।", "Failed to set reminder."));
     } finally {
-      // 10. CRITICAL: Always end loading state regardless of outcome
+      // Always resolve loading state
       setIsAddingReminder(false);
     }
   };

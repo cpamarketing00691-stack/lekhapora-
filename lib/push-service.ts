@@ -25,13 +25,21 @@ export async function subscribeToPush() {
   }
 
   try {
-    // Add a safety timeout to avoid hanging forever if serviceWorker.ready doesn't settle
-    const registration = await Promise.race([
-        navigator.serviceWorker.ready,
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Service Worker readiness timeout")), 10000))
-    ]) as ServiceWorkerRegistration;
+    // Check if we already have a registration that is active
+    let registration = await navigator.serviceWorker.getRegistration();
     
-    if (!registration) throw new Error("Service Worker registration unavailable.");
+    // If no active registration or it's not ready, try to wait briefly
+    if (!registration || !registration.active) {
+      registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((_, reject) => setTimeout(() => reject(new Error("SW Timeout")), 3000))
+      ]) as ServiceWorkerRegistration;
+    }
+    
+    if (!registration || !registration.pushManager) {
+        console.warn("Push Manager not available on registration");
+        return null;
+    }
 
     // Check for existing subscription
     let subscription = await registration.pushManager.getSubscription();
@@ -46,7 +54,6 @@ export async function subscribeToPush() {
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user && subscription) {
-      // Store subscription in Supabase push_subscriptions table
       const { error } = await supabase.from('push_subscriptions').upsert({
         user_id: user.id,
         subscription: subscription.toJSON(),
@@ -57,7 +64,7 @@ export async function subscribeToPush() {
 
     return subscription;
   } catch (error) {
-    console.error('Failed to subscribe to push notifications:', error);
+    console.error('Push subscription failed (non-critical):', error);
     return null;
   }
 }

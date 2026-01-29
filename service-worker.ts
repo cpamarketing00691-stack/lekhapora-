@@ -5,7 +5,9 @@ const ASSETS_TO_CACHE = [
   '/manifest.webmanifest'
 ];
 
+// Ensure the new service worker takes over immediately
 self.addEventListener('install', (event: any) => {
+  (self as any).skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
@@ -13,12 +15,17 @@ self.addEventListener('install', (event: any) => {
   );
 });
 
+self.addEventListener('activate', (event: any) => {
+  // Take control of all open clients immediately
+  event.waitUntil((self as any).clients.claim());
+});
+
 self.addEventListener('fetch', (event: any) => {
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request).then((fetchResponse) => {
         return caches.open(CACHE_NAME).then((cache) => {
-          if (event.request.method === 'GET') {
+          if (event.request.method === 'GET' && fetchResponse.status === 200) {
             cache.put(event.request, fetchResponse.clone());
           }
           return fetchResponse;
@@ -51,7 +58,6 @@ self.addEventListener('push', (event: any) => {
     ]
   };
 
-  // Fix: Cast self to any to access the registration property in the service worker scope
   event.waitUntil(
     (self as any).registration.showNotification(data.title, options)
   );
@@ -63,7 +69,6 @@ self.addEventListener('notificationclick', (event: any) => {
   
   const urlToOpen = event.notification.data || '/';
 
-  // Fix: Access clients via self cast to any to resolve TS errors in service worker environment
   event.waitUntil(
     (self as any).clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients: any[]) => {
       for (let client of windowClients) {
@@ -71,7 +76,6 @@ self.addEventListener('notificationclick', (event: any) => {
           return client.focus();
         }
       }
-      // Fix: Ensure openWindow is accessed correctly via self.clients cast
       if ((self as any).clients.openWindow) {
         return (self as any).clients.openWindow(urlToOpen);
       }

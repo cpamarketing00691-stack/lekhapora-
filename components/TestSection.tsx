@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserState, Subject, Chapter, MCQ, TestAttempt } from '../types';
 import { 
   Timer, ChevronLeft, ChevronRight, CheckCircle2, 
   AlertCircle, History, BookOpen, Clock, 
-  Check, X, GraduationCap, Loader2, Sparkles
+  Check, X, GraduationCap, Loader2, Sparkles, Trophy
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -13,9 +12,10 @@ interface TestSectionProps {
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
   initialContext: { subjectId: string; chapterId: string } | null;
   clearContext: () => void;
+  onTriggerModelExam?: (examId: string) => void;
 }
 
-const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, initialContext, clearContext }) => {
+const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, initialContext, clearContext, onTriggerModelExam }) => {
   const [view, setView] = useState<'selection' | 'exam' | 'result' | 'history'>('selection');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialContext?.subjectId || '');
   const [selectedChapterId, setSelectedChapterId] = useState<string>(initialContext?.chapterId || '');
@@ -25,10 +25,29 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes
   const [isLoading, setIsLoading] = useState(false);
   const [historyAttempt, setHistoryAttempt] = useState<TestAttempt | null>(null);
+  
+  // Model Exams State
+  const [modelExams, setModelExams] = useState<any[]>([]);
+  const [loadingExams, setLoadingExams] = useState(false);
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
   const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const fetchModelExams = async () => {
+      setLoadingExams(true);
+      try {
+        const { data } = await supabase.from('exam_sys_exams').select('*').eq('is_active', true);
+        setModelExams(data || []);
+      } catch (e) {
+        console.error("Failed to fetch model exams");
+      } finally {
+        setLoadingExams(false);
+      }
+    };
+    fetchModelExams();
+  }, []);
 
   /**
    * Logical Normalization for Chapter Matching
@@ -71,32 +90,21 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         throw new Error("Selection Invalid");
       }
 
-      // 1. Fetch from Unified Table 'mcqs'
-      // Scalability Note: We filter by subject and paper first. 
-      // For 1M rows, this index-backed filter is extremely fast.
       const { data: rawData, error } = await supabase
         .from('mcqs')
         .select('*')
         .eq('subject', currentSubject.name)
         .eq('paper', currentSubject.paper);
 
-      if (error) {
-        console.error("Database fetch failed:", error);
-        throw error;
-      }
+      if (error) throw error;
 
       const targetChapterNorm = normalize(currentChapter.name);
-
-      // 2. Logical Filter for Chapter Matching
       let filtered = (rawData || []).filter(q => {
         const qChap = normalize(q.chapter);
         const qTopic = normalize(q.topic);
-        return qChap.includes(targetChapterNorm) || 
-               targetChapterNorm.includes(qChap) ||
-               qTopic.includes(targetChapterNorm);
+        return qChap.includes(targetChapterNorm) || targetChapterNorm.includes(qChap) || qTopic.includes(targetChapterNorm);
       });
 
-      // 3. Fallback: If no match in specific chapter, try matching by chapter_id if it exists in data
       if (filtered.length === 0) {
         filtered = (rawData || []).filter(q => q.chapter === currentChapter.name);
       }
@@ -107,7 +115,6 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         return;
       }
 
-      // 4. Map DB Columns to Frontend Type and Shuffle
       const mappedQuestions: MCQ[] = filtered.map(q => ({
         id: q.id,
         question: q.question,
@@ -121,9 +128,8 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       setCurrentIndex(0);
       setTimeLeft(1800);
       setView('exam');
-
     } catch (err: any) {
-      console.error("Critical Exam Start Error:", err);
+      console.error(err);
       alert(t("সার্ভার ত্রুটি। আবার চেষ্টা করো।", "Server error. Please try again."));
     } finally {
       setIsLoading(false);
@@ -149,10 +155,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
   const submitExam = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    
-    const correctCount = userAnswers.reduce((acc, ans, idx) => {
-      return ans === currentQuestions[idx].correct_index ? acc + 1 : acc;
-    }, 0);
+    const correctCount = userAnswers.reduce((acc, ans, idx) => acc + (ans === currentQuestions[idx].correct_index ? 1 : 0), 0);
 
     const attempt: TestAttempt = {
       id: `attempt-${Date.now()}`,
@@ -171,10 +174,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       testHistory: [attempt, ...(prev.testHistory || [])],
       subjects: prev.subjects.map(s => s.id === selectedSubjectId ? {
         ...s,
-        chapters: s.chapters.map(c => c.id === selectedChapterId ? {
-          ...c,
-          testScore: Math.max(c.testScore || 0, correctCount)
-        } : c)
+        chapters: s.chapters.map(c => c.id === selectedChapterId ? { ...c, testScore: Math.max(c.testScore || 0, correctCount) } : c)
       } : s)
     }));
 
@@ -192,8 +192,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
           user_answers: userAnswers
         });
       }
-    } catch (e) { console.error("History log failed", e); }
-
+    } catch (e) {}
     setView('result');
   };
 
@@ -210,11 +209,53 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     <div className="max-w-4xl mx-auto pb-20 animate-in fade-in duration-500">
       
       {view === 'selection' && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           <header>
             <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট ও প্র্যাকটিস', 'Test & Practice')}</h2>
             <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest mt-1">{t('তোমার প্রস্তুতির যাচাই করো', 'Evaluate your preparation level')}</p>
           </header>
+
+          {/* New Section: Professional Model Exams */}
+          <section className="bg-brand-primary/5 p-6 rounded-[2.5rem] border border-brand-primary/20 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Trophy className="text-brand-primary" size={24} />
+                <h3 className="font-bold text-lg">{t('প্রফেশনাল মডেল টেস্ট', 'Model Exams')}</h3>
+              </div>
+              <span className="text-[10px] font-black uppercase text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">{t('লাইভ এখন', 'Live Now')}</span>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {loadingExams ? (
+                <div className="col-span-full py-10 flex flex-col items-center gap-3 opacity-50">
+                  <Loader2 className="animate-spin text-brand-primary" size={24} />
+                  <p className="text-[10px] font-black uppercase tracking-widest">{t('লোড হচ্ছে...', 'Loading Exams...')}</p>
+                </div>
+              ) : modelExams.length > 0 ? modelExams.map(exam => (
+                <div key={exam.id} className="bg-brand-surface p-5 rounded-3xl border border-brand-text-s/10 hover:border-brand-primary transition-all group relative overflow-hidden">
+                   <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-20 transition-opacity">
+                      <GraduationCap size={40} />
+                   </div>
+                   <h4 className="font-black text-brand-text-p text-sm mb-1">{exam.title}</h4>
+                   <p className="text-[10px] font-bold text-brand-text-s uppercase mb-4">{exam.subject} • P{exam.paper}</p>
+                   <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-3 text-[10px] font-black text-brand-text-s uppercase">
+                       <span className="flex items-center gap-1"><Clock size={12}/> {exam.duration_minutes}m</span>
+                       <span className="flex items-center gap-1"><GraduationCap size={12}/> {exam.total_marks} Marks</span>
+                     </div>
+                     <button 
+                       onClick={() => onTriggerModelExam?.(exam.id)}
+                       className="px-4 py-2 bg-brand-primary text-white text-[10px] font-black rounded-xl shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
+                     >
+                       {t('স্টার্ট করো', 'Start Exam')}
+                     </button>
+                   </div>
+                </div>
+              )) : (
+                <p className="col-span-full py-6 text-center text-[10px] font-black text-brand-text-s uppercase opacity-30">{t('কোনো মডেল টেস্ট নেই', 'No model tests currently active')}</p>
+              )}
+            </div>
+          </section>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
@@ -325,67 +366,25 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                   <Clock size={16} className={timeLeft < 300 ? 'text-rose-500 animate-pulse' : 'text-brand-primary'} />
                   <span className={`text-sm font-black tabular-nums ${timeLeft < 300 ? 'text-rose-500' : 'text-brand-text-p'}`}>{formatTime(timeLeft)}</span>
                 </div>
-                <button 
-                  onClick={submitExam}
-                  className="px-6 py-2 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
-                >
-                  {t('সাবমিট', 'Finish')}
-                </button>
+                <button onClick={submitExam} className="px-6 py-2 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20">{t('সাবমিট', 'Finish')}</button>
              </div>
           </header>
-
           <div className="bg-brand-surface p-8 sm:p-12 rounded-[3rem] border border-brand-text-s/10 shadow-sm space-y-10 min-h-[400px] flex flex-col">
             <div className="flex-1">
-              <h2 className="text-lg sm:text-2xl font-black text-brand-text-p leading-tight mb-10">
-                {currentQuestions[currentIndex].question}
-              </h2>
+              <h2 className="text-lg sm:text-2xl font-black text-brand-text-p leading-tight mb-10">{currentQuestions[currentIndex].question}</h2>
               <div className="grid grid-cols-1 gap-4">
                 {currentQuestions[currentIndex].options.map((option, idx) => (
-                  <button 
-                    key={idx}
-                    onClick={() => {
-                      const newAns = [...userAnswers];
-                      newAns[currentIndex] = idx;
-                      setUserAnswers(newAns);
-                    }}
-                    className={`flex items-center gap-4 px-6 py-5 rounded-[1.5rem] border-2 transition-all text-left font-bold text-sm ${userAnswers[currentIndex] === idx ? 'bg-brand-primary border-brand-primary text-white shadow-xl shadow-brand-primary/20 scale-[1.02]' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-bg/80'}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${userAnswers[currentIndex] === idx ? 'bg-white/20 border-white' : 'bg-brand-surface border-brand-text-s/10'}`}>
-                       {String.fromCharCode(65 + idx)}
-                    </div>
+                  <button key={idx} onClick={() => { const newAns = [...userAnswers]; newAns[currentIndex] = idx; setUserAnswers(newAns); }} className={`flex items-center gap-4 px-6 py-5 rounded-[1.5rem] border-2 transition-all text-left font-bold text-sm ${userAnswers[currentIndex] === idx ? 'bg-brand-primary border-brand-primary text-white shadow-xl shadow-brand-primary/20 scale-[1.02]' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-bg/80'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${userAnswers[currentIndex] === idx ? 'bg-white/20 border-white' : 'bg-brand-surface border-brand-text-s/10'}`}>{String.fromCharCode(65 + idx)}</div>
                     {option}
                   </button>
                 ))}
               </div>
             </div>
-
             <div className="flex justify-between items-center pt-8 border-t border-brand-text-s/10">
-              <button 
-                disabled={currentIndex === 0}
-                onClick={() => setCurrentIndex(currentIndex - 1)}
-                className="p-4 bg-brand-bg text-brand-text-s rounded-2xl hover:text-brand-text-p disabled:opacity-20 transition-all"
-              >
-                <ChevronLeft size={24} />
-              </button>
-              
-              <div className="flex gap-1 overflow-x-auto max-w-[200px] scrollbar-hide py-2 px-1">
-                {currentQuestions.map((_, i) => (
-                   <div key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-brand-secondary' : 'bg-brand-text-s/20'}`}></div>
-                ))}
-              </div>
-
-              <button 
-                onClick={() => {
-                  if (currentIndex < currentQuestions.length - 1) {
-                    setCurrentIndex(currentIndex + 1);
-                  } else {
-                    submitExam();
-                  }
-                }}
-                className="p-4 bg-brand-primary text-white rounded-2xl hover:scale-110 active:scale-95 transition-all shadow-lg shadow-brand-primary/20"
-              >
-                {currentIndex === currentQuestions.length - 1 ? <CheckCircle2 size={24} /> : <ChevronRight size={24} />}
-              </button>
+              <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)} className="p-4 bg-brand-bg text-brand-text-s rounded-2xl hover:text-brand-text-p disabled:opacity-20 transition-all"><ChevronLeft size={24} /></button>
+              <div className="flex gap-1 overflow-x-auto max-w-[200px] scrollbar-hide py-2 px-1">{currentQuestions.map((_, i) => ( <div key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-brand-secondary' : 'bg-brand-text-s/20'}`}></div> ))}</div>
+              <button onClick={() => { if (currentIndex < currentQuestions.length - 1) { setCurrentIndex(currentIndex + 1); } else { submitExam(); } }} className="p-4 bg-brand-primary text-white rounded-2xl hover:scale-110 active:scale-95 transition-all shadow-lg shadow-brand-primary/20">{currentIndex === currentQuestions.length - 1 ? <CheckCircle2 size={24} /> : <ChevronRight size={24} />}</button>
             </div>
           </div>
         </div>
@@ -396,13 +395,9 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
            <div className="bg-brand-surface p-10 rounded-[3rem] border border-brand-text-s/10 text-center shadow-xl space-y-8 relative overflow-hidden">
               <Sparkles className="absolute -right-10 -bottom-10 opacity-10 text-brand-primary" size={200} />
               <div className="relative z-10">
-                <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 shadow-2xl ${userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length >= 20 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
-                  <CheckCircle2 size={48} />
-                </div>
+                <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 shadow-2xl ${userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length >= 20 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}><CheckCircle2 size={48} /></div>
                 <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট সম্পন্ন হয়েছে!', 'Test Completed!')}</h2>
-                <p className="text-brand-text-s font-bold text-xs uppercase tracking-widest mt-2">{t('তোমার ফলাফল নিচের মতো:', 'Here is your performance summary:')}</p>
               </div>
-
               <div className="grid grid-cols-2 gap-4 relative z-10">
                  <div className="bg-brand-bg p-6 rounded-3xl border border-brand-text-s/5">
                     <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সঠিক উত্তর', 'SCORE')}</p>
@@ -413,20 +408,9 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                     <h3 className="text-3xl font-black text-brand-text-p">{formatTime(1800 - timeLeft)}</h3>
                  </div>
               </div>
-
               <div className="pt-4 relative z-10">
-                <button 
-                  onClick={() => setView('selection')}
-                  className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-xs active:scale-95 transition-all"
-                >
-                  {t('ড্যাশবোর্ডে ফিরে যাও', 'Return to Selection')}
-                </button>
-                <button 
-                  onClick={() => { setHistoryAttempt(userState.testHistory[0]); setView('history'); }}
-                  className="w-full mt-3 py-4 bg-brand-bg text-brand-text-p border border-brand-text-s/10 font-black rounded-2xl uppercase tracking-widest text-[10px] active:scale-95 transition-all"
-                >
-                  {t('প্রশ্নগুলোর সমাধান দেখো', 'Review Questions')}
-                </button>
+                <button onClick={() => setView('selection')} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-xs active:scale-95 transition-all">{t('ড্যাশবোর্ডে ফিরে যাও', 'Return to Selection')}</button>
+                <button onClick={() => { setHistoryAttempt(userState.testHistory[0]); setView('history'); }} className="w-full mt-3 py-4 bg-brand-bg text-brand-text-p border border-brand-text-s/10 font-black rounded-2xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('প্রশ্নগুলোর সমাধান দেখো', 'Review Questions')}</button>
               </div>
            </div>
         </div>
@@ -435,58 +419,33 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       {view === 'history' && historyAttempt && (
         <div className="space-y-6">
           <header className="flex items-center justify-between">
-            <button onClick={() => setView('selection')} className="flex items-center gap-2 text-brand-text-s hover:text-brand-text-p font-black text-[10px] uppercase tracking-widest transition-all">
-              <ChevronLeft size={16} /> {t('পিছনে', 'Back')}
-            </button>
+            <button onClick={() => setView('selection')} className="flex items-center gap-2 text-brand-text-s hover:text-brand-text-p font-black text-[10px] uppercase tracking-widest transition-all"><ChevronLeft size={16} /> {t('পিছনে', 'Back')}</button>
             <h3 className="text-sm font-black text-brand-text-p uppercase tracking-widest">{t('রিভিউ ও সমাধান', 'Review & Solutions')}</h3>
             <div className="w-10"></div>
           </header>
-
           <div className="space-y-4">
             {historyAttempt.questions.map((q, idx) => {
               const isCorrect = historyAttempt.userAnswers[idx] === q.correct_index;
               const userAns = historyAttempt.userAnswers[idx];
-              
               return (
                 <div key={q.id} className={`bg-brand-surface p-6 rounded-[2rem] border transition-all ${isCorrect ? 'border-emerald-100 dark:border-emerald-900/30' : 'border-rose-100 dark:border-rose-900/30'}`}>
                    <div className="flex items-start gap-4 mb-4">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-xs ${isCorrect ? 'bg-emerald-500' : 'bg-rose-500'}`}>
-                        {idx + 1}
-                      </div>
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-xs ${isCorrect ? 'bg-emerald-500' : 'bg-rose-500'}`}>{idx + 1}</div>
                       <h4 className="text-sm sm:text-lg font-black text-brand-text-p leading-tight">{q.question}</h4>
                    </div>
                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {q.options.map((opt, oIdx) => (
-                        <div 
-                          key={oIdx}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-[11px] font-bold ${oIdx === q.correct_index ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : oIdx === userAns ? 'bg-rose-50 border-rose-500 text-rose-700' : 'bg-brand-bg border-transparent text-brand-text-s'}`}
-                        >
-                           <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border text-[9px] ${oIdx === q.correct_index ? 'bg-emerald-500 border-emerald-500 text-white' : oIdx === userAns ? 'bg-rose-500 border-rose-500 text-white' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-s'}`}>
-                             {oIdx === q.correct_index ? <Check size={12} /> : oIdx === userAns ? <X size={12} /> : String.fromCharCode(65 + oIdx)}
-                           </div>
+                        <div key={oIdx} className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-[11px] font-bold ${oIdx === q.correct_index ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : oIdx === userAns ? 'bg-rose-50 border-rose-500 text-rose-700' : 'bg-brand-bg border-transparent text-brand-text-s'}`}>
+                           <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border text-[9px] ${oIdx === q.correct_index ? 'bg-emerald-500 border-emerald-500 text-white' : oIdx === userAns ? 'bg-rose-500 border-rose-500 text-white' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-s'}`}>{oIdx === q.correct_index ? <Check size={12} /> : oIdx === userAns ? <X size={12} /> : String.fromCharCode(65 + oIdx)}</div>
                            {opt}
                         </div>
                       ))}
                    </div>
-                   {q.explanation && (
-                     <div className="mt-4 p-4 bg-brand-bg/50 rounded-xl border border-brand-text-s/5">
-                        <p className="text-[10px] font-black text-brand-primary uppercase tracking-widest mb-1 flex items-center gap-2">
-                          <AlertCircle size={12} /> {t('ব্যাখ্যা', 'EXPLANATION')}
-                        </p>
-                        <p className="text-xs font-medium text-brand-text-s leading-relaxed italic">{q.explanation}</p>
-                     </div>
-                   )}
                 </div>
               );
             })}
           </div>
-
-          <button 
-            onClick={() => setView('selection')}
-            className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all"
-          >
-            {t('শেষ করো', 'Close Review')}
-          </button>
+          <button onClick={() => setView('selection')} className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('শেষ করো', 'Close Review')}</button>
         </div>
       )}
     </div>

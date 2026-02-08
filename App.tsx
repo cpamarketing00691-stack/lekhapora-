@@ -9,6 +9,7 @@ import Settings from './components/Settings';
 import SyllabusManager from './components/SyllabusManager';
 import TestSection from './components/TestSection';
 import StudyCalendar from './components/StudyCalendar';
+import ProExamSystem from './components/ProExamSystem';
 import { Layout } from './components/Layout';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
@@ -68,6 +69,7 @@ const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'calendar' | 'tracker' | 'syllabus' | 'test' | 'settings'>('dashboard');
   const [testContext, setTestContext] = useState<{ subjectId: string; chapterId: string } | null>(null);
+  const [activeModelExamId, setActiveModelExamId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const timerIntervalRef = useRef<number>(null);
   const reminderIntervalRef = useRef<number>(null);
@@ -161,8 +163,12 @@ const App: React.FC = () => {
       {activeTab === 'calendar' && <StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={setActiveTab} />}
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
-      {activeTab === 'test' && <TestSection userState={userState} onUpdateState={setUserState} initialContext={testContext} clearContext={() => setTestContext(null)} />}
+      {activeTab === 'test' && <TestSection userState={userState} onUpdateState={setUserState} initialContext={testContext} clearContext={() => setTestContext(null)} onTriggerModelExam={(id) => setActiveModelExamId(id)} />}
       {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={() => setUserState(DEFAULT_STATE)} />}
+      
+      {activeModelExamId && (
+        <ProExamSystem examId={activeModelExamId} onClose={() => setActiveModelExamId(null)} />
+      )}
     </Layout>
   );
 };

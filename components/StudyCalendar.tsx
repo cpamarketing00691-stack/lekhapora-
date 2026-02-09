@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { UserState, StudySession, Reminder } from '../types';
+import { UserState, StudySession, Reminder, Subject, Mood } from '../types';
 import { 
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, 
   Download, Share2, Plus, Clock, BookOpen, 
   CheckCircle2, AlertCircle, Sparkles, X, 
-  Target, Zap, Flame, Layout
+  Target, Zap, Flame, Layout, Trash2, Edit3, Save, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -18,6 +18,16 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number | null>(new Date().getDate());
   const [showSyncOptions, setShowSyncOptions] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  
+  const [manualSession, setManualSession] = useState({
+    subjectId: '',
+    chapterId: '',
+    durationHours: 1,
+    durationMinutes: 0,
+    mood: 'Focused' as Mood,
+    isRevision: false
+  });
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
@@ -65,9 +75,59 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const handleAddWidget = () => {
-    // Provide a helpful prompt to encourage PWA installation for widgets
-    alert(t("তোমার ফোনের হোম স্ক্রিনে পড়াশোনার উইজেট পেতে অ্যাপটি 'Add to Home Screen' করো।", "To use the study widget on your phone's home screen, please select 'Add to Home Screen' from your browser menu."));
+  const handleAddManualSession = () => {
+    if (!manualSession.subjectId || !selectedDay) return;
+    
+    const startTime = new Date(year, month, selectedDay, 10, 0, 0).getTime();
+    const durationSeconds = (manualSession.durationHours * 3600) + (manualSession.durationMinutes * 60);
+    
+    const newSession: StudySession = {
+      id: `session-manual-${Date.now()}`,
+      subjectId: manualSession.subjectId,
+      chapterId: manualSession.chapterId || undefined,
+      startTime: startTime,
+      endTime: startTime + (durationSeconds * 1000),
+      durationSeconds: durationSeconds,
+      breakSeconds: 0,
+      numBreaks: 0,
+      focusLevel: 10,
+      mood: manualSession.mood,
+      isRevision: manualSession.isRevision
+    };
+
+    onUpdateState(prev => ({
+      ...prev,
+      studyHistory: [...prev.studyHistory, newSession]
+    }));
+    
+    setIsManualModalOpen(false);
+  };
+
+  const deleteSession = (sessionId: string) => {
+    if (!confirm(t("সেশনটি মুছে ফেলতে চাও?", "Delete this session?"))) return;
+    onUpdateState(prev => ({
+      ...prev,
+      studyHistory: prev.studyHistory.filter(s => s.id !== sessionId)
+    }));
+  };
+
+  const exportICal = () => {
+    let ical = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//StudyKori//HSC Tracker//EN\r\n";
+    
+    userState.studyHistory.forEach(s => {
+      const subject = userState.subjects.find(sub => sub.id === s.subjectId)?.name || "Study";
+      const start = new Date(s.startTime).toISOString().replace(/-|:|\.\d+/g, "");
+      const end = new Date(s.startTime + (s.durationSeconds * 1000)).toISOString().replace(/-|:|\.\d+/g, "");
+      ical += `BEGIN:VEVENT\r\nSUMMARY:${subject}\r\nDTSTART:${start}\r\nDTEND:${end}\r\nDESCRIPTION:HSC Study Tracker Session\r\nEND:VEVENT\r\n`;
+    });
+
+    ical += "END:VCALENDAR";
+    
+    const blob = new Blob([ical], { type: "text/calendar;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "study-history.ics";
+    link.click();
   };
 
   const getGoogleCalLink = () => {
@@ -113,7 +173,6 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Calendar Grid Section */}
         <section className="lg:col-span-8 bg-brand-surface rounded-[2.5rem] p-6 sm:p-8 shadow-sm border border-brand-text-s/10">
           <div className="flex items-center justify-between mb-8 px-2">
             <h3 className="text-xl font-black text-brand-text-p flex items-center gap-3">
@@ -139,10 +198,12 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
               const isPast = isDateInPast(day);
               const isSelected = selectedDay === day;
 
-              let glowClass = "";
-              if (isStudied) glowClass = "shadow-[0_0_15px_rgba(34,197,94,0.3)] bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400";
-              else if (isPast) glowClass = "bg-rose-500/5 border-rose-500/10 text-rose-300 dark:text-rose-900/50";
-              else glowClass = "bg-brand-bg/50 border-transparent text-brand-text-s";
+              let glowClass = "bg-brand-bg/50 border-transparent text-brand-text-s";
+              if (isStudied) {
+                glowClass = "shadow-[0_0_20px_rgba(16,185,129,0.4)] ring-1 ring-emerald-500/20 bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400";
+              } else if (isPast) {
+                glowClass = "shadow-[0_0_15px_rgba(239,68,68,0.3)] ring-1 ring-red-500/10 bg-rose-500/5 border-rose-500/10 text-rose-500/50";
+              }
 
               if (isSelected) glowClass += " border-2 border-brand-primary scale-105 z-10 shadow-lg";
 
@@ -167,7 +228,6 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
           </div>
         </section>
 
-        {/* Detail Panel */}
         <section className="lg:col-span-4 space-y-6">
           <AnimatePresence mode="wait">
             <motion.div
@@ -182,19 +242,25 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
                   <h4 className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সেশন বিবরণী', 'Session Details')}</h4>
                   <p className="text-xl font-black text-brand-text-p">{selectedDay} {monthName}</p>
                 </div>
-                <div className="p-3 bg-brand-bg rounded-2xl text-brand-primary">
-                  <Zap size={24} />
-                </div>
+                <button 
+                  onClick={() => setIsManualModalOpen(true)}
+                  className="p-3 bg-brand-primary text-white rounded-2xl hover:scale-105 transition-all shadow-lg shadow-brand-primary/20"
+                >
+                  <Plus size={20} />
+                </button>
               </div>
 
               <div className="flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-hide">
                 {selectedDayData.length > 0 ? selectedDayData.map(session => (
-                  <div key={session.id} className="p-4 bg-brand-bg rounded-2xl border border-emerald-500/10 group">
+                  <div key={session.id} className="p-4 bg-brand-bg rounded-2xl border border-emerald-500/10 group relative">
                     <div className="flex justify-between items-start mb-2">
                        <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-tighter">
                          {session.isRevision ? 'Revision' : 'Study'}
                        </span>
-                       <span className="text-[10px] font-bold text-brand-text-s">{new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                       <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-brand-text-s">{new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <button onClick={() => deleteSession(session.id)} className="text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
+                       </div>
                     </div>
                     <p className="text-sm font-black text-brand-text-p truncate">
                       {userState.subjects.find(s => s.id === session.subjectId)?.name || 'General Study'}
@@ -232,13 +298,46 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
                 onClick={() => onTabChange('tracker')}
                 className="mt-8 w-full py-4 bg-brand-primary text-white font-black rounded-2xl flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest shadow-xl shadow-brand-primary/20 hover:scale-[1.02] active:scale-95 transition-all"
               >
-                <Plus size={16} />
-                {t('পড়া শুরু করো', 'Start Study')}
+                <Zap size={16} />
+                {t('ফোকাস মোড', 'Focus Mode')}
               </button>
             </motion.div>
           </AnimatePresence>
         </section>
       </div>
+
+      {/* Manual Entry Modal */}
+      <AnimatePresence>
+        {isManualModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div initial={{scale:0.9, opacity:0}} animate={{scale:1, opacity:1}} className="w-full max-w-md bg-brand-surface p-8 rounded-[3rem] shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="text-lg font-black">{t('ম্যানুয়াল সেশন যোগ করো', 'Add Manual Session')}</h4>
+                <button onClick={() => setIsManualModalOpen(false)}><X/></button>
+              </div>
+              <div className="space-y-4">
+                <select 
+                  value={manualSession.subjectId} 
+                  onChange={e => setManualSession({...manualSession, subjectId: e.target.value})}
+                  className="w-full p-4 bg-brand-bg rounded-2xl outline-none font-bold text-sm"
+                >
+                  <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
+                  {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
+                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <input type="number" placeholder="Hours" value={manualSession.durationHours} onChange={e => setManualSession({...manualSession, durationHours: parseInt(e.target.value)})} className="p-4 bg-brand-bg rounded-2xl font-bold" />
+                  <input type="number" placeholder="Mins" value={manualSession.durationMinutes} onChange={e => setManualSession({...manualSession, durationMinutes: parseInt(e.target.value)})} className="p-4 bg-brand-bg rounded-2xl font-bold" />
+                </div>
+                <label className="flex items-center gap-3 p-4 bg-brand-bg rounded-2xl cursor-pointer">
+                  <input type="checkbox" checked={manualSession.isRevision} onChange={e => setManualSession({...manualSession, isRevision: e.target.checked})} />
+                  <span className="text-sm font-black uppercase">{t('রিভিশন', 'Revision')}</span>
+                </label>
+                <button onClick={handleAddManualSession} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl">{t('সেশন সেভ করো', 'Save Session')}</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Sync Modal */}
       <AnimatePresence>
@@ -257,15 +356,15 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
 
               <div className="space-y-4">
                 <button 
-                  onClick={handleAddWidget}
+                  onClick={exportICal}
                   className="w-full p-6 bg-brand-bg rounded-[2rem] border border-brand-text-s/10 flex items-center gap-5 hover:border-brand-primary transition-all group"
                 >
                    <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary group-hover:scale-110 transition-transform">
-                      <Layout size={24} />
+                      <Download size={24} />
                    </div>
                    <div className="text-left">
-                      <p className="font-black text-sm text-brand-text-p">{t('হোম স্ক্রিন উইজেট', 'Home Screen Widget')}</p>
-                      <p className="text-[10px] font-bold text-brand-text-s uppercase">{t('সরাসরি অ্যাড করো', 'Add to Home Screen')}</p>
+                      <p className="font-black text-sm text-brand-text-p">{t('iCal এক্সপোর্ট', 'iCal Export')}</p>
+                      <p className="text-[10px] font-bold text-brand-text-s uppercase">{t('ফাইল ডাউনলোড করো', 'Download .ics File')}</p>
                    </div>
                 </button>
 
@@ -284,10 +383,6 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
                    </div>
                 </a>
               </div>
-
-              <p className="mt-8 text-center text-[9px] font-black uppercase text-brand-text-s tracking-widest opacity-50">
-                {t('অফলাইন ব্যবহারের জন্য সিঙ্ক করো', 'Optimized for offline & mobile widgets')}
-              </p>
             </motion.div>
           </div>
         )}

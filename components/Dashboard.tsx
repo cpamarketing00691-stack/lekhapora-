@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2, Download } from 'lucide-react';
+import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2, Download, ChevronLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { subscribeToPush, checkNotificationPermission } from '../lib/push-service';
 
@@ -59,6 +59,29 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     const rems = userState.reminders ?? [];
     return rems.filter(r => !r.isDone).sort((a, b) => a.time - b.time);
   }, [userState.reminders]);
+
+  // Calendar Widget Logic
+  const calendarWidget = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(year, month, 1).getDay();
+    
+    const studyMap: Record<number, boolean> = {};
+    userState.studyHistory.forEach(s => {
+      const d = new Date(s.startTime);
+      if (d.getMonth() === month && d.getFullYear() === year) {
+        studyMap[d.getDate()] = true;
+      }
+    });
+
+    const days = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+    return { month, year, days, studyMap };
+  }, [userState.studyHistory]);
 
   const stats = useMemo(() => {
     const today = getLocalDateString(Date.now());
@@ -242,30 +265,69 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-black flex items-center gap-2"><BookOpen size={20} className="text-brand-primary" /> {t('সিলেবাস স্ট্যাটাস', 'Syllabus Status')}</h3>
-              <span className="text-[10px] font-black uppercase text-brand-text-s">{stats.completion}% {t('সম্পন্ন', 'Completed')}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {userState.subjects.map(sub => {
-                const total = sub.chapters?.length || 0;
-                const done = sub.chapters?.filter(c => c.isCompleted).length || 0;
-                const perc = total > 0 ? Math.round((done / total) * 100) : 0;
-                return (
-                  <div key={sub.id} className="bg-brand-bg/50 p-4 rounded-2xl border border-brand-text-s/5 group hover:border-brand-primary transition-all">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-bold text-brand-text-p">{sub.name} <span className="text-[10px] opacity-40">P{sub.paper}</span></span>
-                      <span className="text-[10px] font-black text-brand-primary">{perc}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-brand-surface rounded-full overflow-hidden">
-                      <div className="h-full bg-brand-primary rounded-full transition-all duration-1000" style={{ width: `${perc}%` }} />
-                    </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             {/* Syllabus Progress */}
+             <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-black flex items-center gap-2"><BookOpen size={20} className="text-brand-primary" /> {t('সিলেবাস', 'Syllabus')}</h3>
+                  <span className="text-[10px] font-black uppercase text-brand-text-s">{stats.completion}%</span>
+                </div>
+                <div className="space-y-4">
+                  {userState.subjects.slice(0, 4).map(sub => {
+                    const total = sub.chapters?.length || 0;
+                    const done = sub.chapters?.filter(c => c.isCompleted).length || 0;
+                    const perc = total > 0 ? Math.round((done / total) * 100) : 0;
+                    return (
+                      <div key={sub.id} className="bg-brand-bg/50 p-4 rounded-2xl border border-brand-text-s/5 group hover:border-brand-primary transition-all">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-bold text-brand-text-p truncate max-w-[100px]">{sub.name}</span>
+                          <span className="text-[10px] font-black text-brand-primary">{perc}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-brand-surface rounded-full overflow-hidden">
+                          <div className="h-full bg-brand-primary rounded-full transition-all duration-1000" style={{ width: `${perc}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+             </section>
+
+             {/* Study Calendar Widget */}
+             <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-black flex items-center gap-2"><Calendar size={20} className="text-emerald-500" /> {t('ক্যালেন্ডার', 'Calendar')}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span className="text-[9px] font-black uppercase text-brand-text-s">{t('পড়া হয়েছে', 'Studied')}</span>
                   </div>
-                );
-              })}
-            </div>
-          </section>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {['S','M','T','W','T','F','S'].map(d => <div key={d} className="text-[8px] font-black text-brand-text-s opacity-40">{d}</div>)}
+                  {calendarWidget.days.map((day, idx) => {
+                    if (day === null) return <div key={idx} />;
+                    const hasStudied = calendarWidget.studyMap[day];
+                    const isToday = day === new Date().getDate();
+                    const isPast = day < new Date().getDate();
+                    
+                    let bgColor = "bg-brand-bg";
+                    let glowClass = "";
+                    if (hasStudied) {
+                      bgColor = "bg-emerald-500 text-white";
+                      glowClass = "shadow-[0_0_12px_rgba(16,185,129,0.5)] ring-1 ring-emerald-400/30";
+                    } else if (isPast) {
+                      bgColor = "bg-rose-500/10 text-rose-500";
+                      glowClass = "shadow-[0_0_8px_rgba(239,68,68,0.2)]";
+                    }
+
+                    return (
+                      <div key={idx} className={`aspect-square flex items-center justify-center text-[9px] font-black rounded-lg transition-all ${bgColor} ${glowClass} ${isToday ? 'border-2 border-brand-primary' : ''}`}>
+                        {day}
+                      </div>
+                    );
+                  })}
+                </div>
+             </section>
+          </div>
 
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <h3 className="text-lg font-black mb-6 flex items-center gap-3"><History size={20} className="text-brand-secondary" /> {t('সাম্প্রতিক সেশন', 'Recent Sessions')}</h3>

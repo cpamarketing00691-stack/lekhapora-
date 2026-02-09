@@ -2,7 +2,8 @@ const CACHE_NAME = 'hsc-tracker-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.webmanifest'
+  '/manifest.json',
+  '/app-icon.png'
 ];
 
 // Ensure the new service worker takes over immediately
@@ -49,8 +50,8 @@ self.addEventListener('push', (event: any) => {
 
   const options = {
     body: data.body,
-    icon: 'https://cdn-icons-png.flaticon.com/512/3413/3413535.png',
-    badge: 'https://cdn-icons-png.flaticon.com/512/3413/3413535.png',
+    icon: '/app-icon.png',
+    badge: '/app-icon.png',
     data: data.url || '/',
     vibrate: [100, 50, 100],
     actions: [

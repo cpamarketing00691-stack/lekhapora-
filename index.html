@@ -8,6 +8,7 @@
     <link rel="apple-touch-icon" href="/app-icon.png">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#5B7DBE">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -109,20 +110,19 @@
       // Service Worker Registration with enhanced origin safety and graceful failure for sandboxed previews
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Point to the .ts source file to allow the build environment to handle transpilation correctly
-          const swUrl = new URL('/service-worker.ts', window.location.origin + window.location.pathname).href;
+          // Standard service worker registration path pointing to the compiled js file
+          const swUrl = '/service-worker.js';
           
           // Safety check: only register if origins match and context is secure (required by SW spec)
           const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           
           if (isSecure) {
             try {
-              navigator.serviceWorker.register(swUrl, { type: 'module' })
+              navigator.serviceWorker.register(swUrl)
                 .then(registration => {
                   console.debug('Service Worker registered with scope:', registration.scope);
                 })
                 .catch(error => {
-                  // In some preview environments (like Google AI Studio), SW registration is blocked by SecurityPolicy
                   if (error.name === 'SecurityError' || error.message.includes('origin')) {
                     console.debug('Service Worker registration skipped: environment restriction (Origin Mismatch/Sandbox).');
                   } else {
@@ -135,9 +135,6 @@
           }
         });
       }
-      
-      // Native Bridge Injection Point
-      // The native wrapper will inject NativeBridge.js here automatically.
     </script>
 </body>
 </html>

@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+
+import React, { useEffect } from 'react';
 import { UserProfile, Language } from '../types';
-import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays, Bot, X } from 'lucide-react';
+import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays } from 'lucide-react';
 import BackgroundGrid from './BackgroundGrid';
-import AISidebar from './AISidebar';
-import { UserState } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,12 +10,10 @@ interface LayoutProps {
   activeTab: string;
   onTabChange: (tab: any) => void;
   language: Language;
-  userState: UserState; // Added to pass to AI Sidebar
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language, userState }) => {
-  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-  const [isAiOpen, setIsAiOpen] = useState(false);
+export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language }) => {
+  const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
 
   const t = (bn: string, en: string) => language === 'bn' ? bn : en;
 
@@ -24,9 +21,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     const root = window.document.documentElement;
     if (isDark) {
       root.classList.add('dark');
+      root.classList.remove('light');
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
       localStorage.setItem('theme', 'dark');
     } else {
+      root.classList.add('light');
       root.classList.remove('dark');
+      document.body.classList.add('light');
+      document.body.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
   }, [isDark]);
@@ -44,10 +47,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden relative">
+      {/* Background Grid */}
       <BackgroundGrid />
 
-      {/* Desktop Sidebar */}
-      <aside className="relative z-30 hidden md:flex flex-col w-64 bg-brand-surface/90 backdrop-blur-md border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
+      {/* Sidebar - Desktop */}
+      <aside className="relative z-20 hidden md:flex flex-col w-64 bg-brand-surface/90 backdrop-blur-md border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
         <div className="mb-10">
           <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic">
             HSC TRACKER
@@ -72,13 +76,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         </nav>
 
         <div className="mt-auto pt-8 space-y-4">
-           <button 
-             onClick={() => setIsAiOpen(true)}
-             className="w-full flex items-center gap-4 px-5 py-3 bg-brand-primary/10 text-brand-primary rounded-2xl hover:bg-brand-primary/20 transition-all font-bold text-sm"
-           >
-             <Bot size={20} />
-             <span>Lekhapora Bot</span>
-           </button>
+           <div className="flex items-center gap-3 p-4 bg-brand-bg/50 rounded-3xl border border-brand-text-s/10">
+             <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-black text-lg shrink-0">
+               {userProfile.fullName?.[0] || 'U'}
+             </div>
+             <div className="min-w-0">
+               <p className="text-sm font-bold truncate leading-none mb-1">{userProfile.fullName}</p>
+               <p className="text-[9px] uppercase font-black text-brand-text-s leading-none">{userProfile.group}</p>
+             </div>
+           </div>
            <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-brand-bg/50 rounded-2xl text-brand-text-s transition-all">
              {isDark ? <Sun size={20} /> : <Moon size={20} />}
              <span className="text-sm font-bold">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')}</span>
@@ -87,21 +93,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
       </aside>
 
       {/* Main Content Area */}
-      <main className="relative z-20 flex-1 flex flex-col min-w-0 h-full md:h-screen">
+      <main className="relative z-10 flex-1 flex flex-col min-w-0 h-full md:h-screen">
         <header className="flex items-center justify-between px-5 py-3.5 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
           <h1 className="font-black text-brand-primary italic tracking-tight text-sm">HSC TRACKER</h1>
-          <div className="flex gap-2">
-            <button onClick={() => setIsAiOpen(true)} className="p-2 text-brand-primary active:scale-90">
-              <Bot size={18} />
-            </button>
-            <button onClick={toggleTheme} className="p-2 text-brand-text-s active:scale-90">
+          <div className="flex gap-1">
+            <button onClick={toggleTheme} className="p-2 text-brand-text-s hover:text-brand-text-p transition-colors active:scale-90">
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth scrollbar-hide">
-          <div className="max-w-6xl mx-auto h-full relative z-10">
+          <div className="max-w-6xl mx-auto h-full">
             {children}
           </div>
         </div>
@@ -124,22 +127,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
           ))}
         </nav>
       </main>
-
-      {/* AI Bot Slide-over Panel */}
-      {isAiOpen && (
-        <div className="fixed inset-0 z-[200] flex justify-end">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsAiOpen(false)} />
-          <div className="relative w-full max-w-md h-full bg-brand-bg shadow-2xl animate-in slide-in-from-right duration-300">
-            <button 
-              onClick={() => setIsAiOpen(false)}
-              className="absolute top-4 right-4 p-2 bg-brand-surface rounded-full text-brand-text-s z-10 shadow-md"
-            >
-              <X size={20} />
-            </button>
-            <AISidebar userState={userState} />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

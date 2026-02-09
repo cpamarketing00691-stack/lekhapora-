@@ -14,6 +14,8 @@ import { Layout } from './components/Layout';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
+const VAPID_PUBLIC_KEY = "BOQS5jGeY1uyMDkK7BocruEAkQVcWx3sSPe7VBVvoj_UpNT5FZmr52hu9izrT9i6M5J2ScIJhOd6AYhzWHRiAyI";
+
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
   profile: null,
@@ -47,7 +49,7 @@ const App: React.FC = () => {
             const isFocus = state.activeTimer.isFocusActive;
             state.activeTimer = {
               ...state.activeTimer,
-              lastTimestamp: now,
+              lastTimestamp: state.activeTimer.lastTimestamp + (deltaSeconds * 1000),
               accumulatedFocusSeconds: isFocus 
                 ? state.activeTimer.accumulatedFocusSeconds + deltaSeconds 
                 : state.activeTimer.accumulatedFocusSeconds,
@@ -69,6 +71,9 @@ const App: React.FC = () => {
   const [testContext, setTestContext] = useState<{ subjectId: string; chapterId: string } | null>(null);
   const [activeModelExamId, setActiveModelExamId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const timerIntervalRef = useRef<number>(null);
+  const reminderIntervalRef = useRef<number>(null);
+  const lastCloudSaveRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const initApp = async () => {
@@ -107,13 +112,14 @@ const App: React.FC = () => {
         state: stateToSave, 
         updated_at: new Date().toISOString() 
       }, { onConflict: 'user_id' });
-    } catch (e) { console.warn("Cloud save failed"); }
+      lastCloudSaveRef.current = Date.now();
+    } catch (e) { }
   };
 
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     if (userState.isAuthenticated) {
-      const timeoutId = setTimeout(() => saveUserData(userState), 5000);
+      const timeoutId = setTimeout(() => saveUserData(userState), 3000);
       return () => clearTimeout(timeoutId);
     }
   }, [userState]);
@@ -152,13 +158,7 @@ const App: React.FC = () => {
   if (!userState.profile) return <Onboarding onComplete={handleProfileComplete} language={userState.language} />;
 
   return (
-    <Layout 
-      userProfile={userState.profile} 
-      activeTab={activeTab} 
-      onTabChange={setActiveTab} 
-      language={userState.language}
-      userState={userState}
-    >
+    <Layout userProfile={userState.profile} activeTab={activeTab} onTabChange={setActiveTab} language={userState.language}>
       {activeTab === 'dashboard' && <Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
       {activeTab === 'calendar' && <StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={setActiveTab} />}
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}

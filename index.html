@@ -103,29 +103,25 @@
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Check for restricted environment or insecure origin
-          const isSecure = window.location.protocol === 'https:' || 
-                           window.location.hostname === 'localhost' || 
-                           window.location.hostname === '127.0.0.1';
-          
           const isSandboxed = window.location.href === 'about:srcdoc' || 
-                              window.location.origin === 'null';
+                              window.location.origin === 'null' ||
+                              window.location.protocol === 'data:';
 
-          if (!isSecure || isSandboxed) {
-            console.debug('Service Worker registration skipped: insecure or sandboxed environment.');
+          if (isSandboxed) {
+            console.debug('Service Worker registration skipped: sandboxed environment detected.');
             return;
           }
 
-          // We use simple relative paths which are safest across various hosting setups.
-          // Browser handles path resolution automatically relative to the document.
-          navigator.serviceWorker.register('service-worker.js')
+          // We use a relative path without complex URL construction to avoid protocol (':') errors
+          // which occur when base resolution fails in some proxy/sandboxed environments.
+          const swFile = 'service-worker.js';
+          
+          navigator.serviceWorker.register(swFile, { scope: './' })
             .then(registration => {
-              console.debug('Service Worker registered successfully:', registration.scope);
+              console.debug('Service Worker registered successfully at scope:', registration.scope);
             })
             .catch(error => {
-              console.warn('Primary SW registration failed, trying alternative path:', error);
-              navigator.serviceWorker.register('./service-worker.js')
-                .catch(e => console.error('All Service Worker registration attempts failed.', e));
+              console.warn('Service Worker registration failed:', error);
             });
         });
       }

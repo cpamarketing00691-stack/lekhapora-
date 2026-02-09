@@ -103,26 +103,40 @@
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
+          // Robust checking for sandbox/iframe issues
           const isSandboxed = window.location.href === 'about:srcdoc' || 
                               window.location.origin === 'null' ||
+                              window.location.origin === 'undefined' ||
                               window.location.protocol === 'data:';
 
           if (isSandboxed) {
-            console.debug('Service Worker registration skipped: sandboxed environment detected.');
+            console.debug('Service Worker registration skipped: Sandboxed or about:srcdoc environment.');
             return;
           }
 
-          // We use a relative path without complex URL construction to avoid protocol (':') errors
-          // which occur when base resolution fails in some proxy/sandboxed environments.
-          const swFile = 'service-worker.js';
-          
-          navigator.serviceWorker.register(swFile, { scope: './' })
-            .then(registration => {
-              console.debug('Service Worker registered successfully at scope:', registration.scope);
-            })
-            .catch(error => {
-              console.warn('Service Worker registration failed:', error);
-            });
+          try {
+            // Force absolute URL based on the window's REAL origin and pathname to bypass injected <base> tags.
+            // This prevents the browser from trying to fetch the SW from https://ai.studio
+            const origin = window.location.origin;
+            const path = window.location.pathname;
+            const baseDir = path.substring(0, path.lastIndexOf('/') + 1);
+            const swUrl = origin + baseDir + 'service-worker.js';
+
+            console.debug('Attempting to register Service Worker at:', swUrl);
+            
+            navigator.serviceWorker.register(swUrl, { scope: baseDir || './' })
+              .then(registration => {
+                console.debug('Service Worker registered successfully at scope:', registration.scope);
+              })
+              .catch(error => {
+                console.warn('Absolute path SW registration failed, falling back to relative:', error);
+                // Last ditch effort: simple relative path
+                navigator.serviceWorker.register('service-worker.js', { scope: './' })
+                  .catch(e => console.error('All Service Worker registration attempts failed:', e));
+              });
+          } catch (err) {
+            console.error('Logic error in SW registration block:', err);
+          }
         });
       }
     </script>

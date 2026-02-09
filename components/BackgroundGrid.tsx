@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 const CELL_SIZE = 60;
 
 const GridCell = React.memo(({ r, c, rippleOrigin, onClick }: { r: number, c: number, rippleOrigin: { r: number, c: number, time: number }, onClick: (r: number, c: number) => void }) => {
-  // We calculate the distance purely to determine the delay
   const distance = useMemo(() => 
     Math.sqrt(Math.pow(r - rippleOrigin.r, 2) + Math.pow(c - rippleOrigin.c, 2)),
     [r, c, rippleOrigin.r, rippleOrigin.c]
@@ -17,7 +15,6 @@ const GridCell = React.memo(({ r, c, rippleOrigin, onClick }: { r: number, c: nu
         e.stopPropagation();
         onClick(r, c);
       }}
-      // Re-trigger animation only when rippleOrigin.time changes
       key={rippleOrigin.time}
       initial={{ backgroundColor: "rgba(91, 125, 190, 0)" }}
       animate={rippleOrigin.time > 0 ? {
@@ -32,11 +29,10 @@ const GridCell = React.memo(({ r, c, rippleOrigin, onClick }: { r: number, c: nu
         delay: distance * 0.05,
         ease: "easeOut"
       }}
-      className="border-[0.5px] border-brand-text-s/5 w-full h-full cursor-pointer hover:bg-brand-primary/5 transition-colors relative z-0"
+      className="border-[0.5px] border-brand-text-s/5 w-full h-full cursor-pointer hover:bg-brand-primary/5 transition-colors relative z-0 pointer-events-auto"
     />
   );
 }, (prev, next) => {
-  // Only re-render if this specific cell was clicked OR a new ripple started
   return prev.rippleOrigin.time === next.rippleOrigin.time;
 });
 
@@ -56,7 +52,6 @@ const BackgroundGrid: React.FC = () => {
   useEffect(() => {
     updateDimensions();
     const handleResize = () => {
-      // Debounce resize to avoid layout thrashing
       requestAnimationFrame(updateDimensions);
     };
     window.addEventListener('resize', handleResize);
@@ -81,8 +76,8 @@ const BackgroundGrid: React.FC = () => {
 
   return (
     <div 
-      className="fixed inset-0 overflow-hidden select-none" 
-      style={{ zIndex: -1 }} // Ensure it is behind EVERYTHING
+      className="fixed inset-0 overflow-hidden select-none pointer-events-none" 
+      style={{ zIndex: -1 }}
     >
       <div 
         className="grid w-full h-full" 
@@ -93,7 +88,7 @@ const BackgroundGrid: React.FC = () => {
       >
         {cells.map((cell) => (
           <GridCell 
-            key={`${cell.r}-${cell.c}`} // Stable key to prevent remounting
+            key={`${cell.r}-${cell.c}`} 
             r={cell.r} 
             c={cell.c} 
             rippleOrigin={rippleOrigin} 

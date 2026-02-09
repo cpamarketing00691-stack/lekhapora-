@@ -110,15 +110,15 @@
       // Service Worker Registration with enhanced origin safety and graceful failure for sandboxed previews
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Standard service worker registration path pointing to the compiled js file
-          const swUrl = '/service-worker.js';
+          // Standard service worker registration path. Using /service-worker.ts to allow the build environment to resolve correctly.
+          const swUrl = '/service-worker.ts';
           
           // Safety check: only register if origins match and context is secure (required by SW spec)
           const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           
           if (isSecure) {
             try {
-              navigator.serviceWorker.register(swUrl)
+              navigator.serviceWorker.register(swUrl, { type: 'module' })
                 .then(registration => {
                   console.debug('Service Worker registered with scope:', registration.scope);
                 })

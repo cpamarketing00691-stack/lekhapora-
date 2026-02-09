@@ -107,31 +107,28 @@
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
     <script>
-      // Service Worker Registration with enhanced origin safety and graceful failure for sandboxed previews
+      // Handle PWA installation trigger
+      window.deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa-install-available'));
+      });
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Standard service worker registration path. Using /service-worker.ts to allow the build environment to resolve correctly.
-          const swUrl = '/service-worker.ts';
-          
-          // Safety check: only register if origins match and context is secure (required by SW spec)
+          // Standard service worker registration attempt
+          const swUrl = '/service-worker.js';
           const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           
           if (isSecure) {
-            try {
-              navigator.serviceWorker.register(swUrl, { type: 'module' })
-                .then(registration => {
-                  console.debug('Service Worker registered with scope:', registration.scope);
-                })
-                .catch(error => {
-                  if (error.name === 'SecurityError' || error.message.includes('origin')) {
-                    console.debug('Service Worker registration skipped: environment restriction (Origin Mismatch/Sandbox).');
-                  } else {
-                    console.warn('Service Worker registration failed:', error);
-                  }
-                });
-            } catch (e) {
-              console.debug('Service Worker not supported or blocked in this environment.');
-            }
+            navigator.serviceWorker.register(swUrl)
+              .then(registration => console.debug('SW registered'))
+              .catch(error => {
+                // Try .ts if .js fails (common in various dev environments)
+                navigator.serviceWorker.register('/service-worker.ts', { type: 'module' })
+                  .catch(e => console.debug('All SW registration attempts failed'));
+              });
           }
         });
       }

@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
+import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { subscribeToPush, checkNotificationPermission } from '../lib/push-service';
 
@@ -15,6 +15,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isAddingReminder, setIsAddingReminder] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   
   const [newTask, setNewTask] = useState({ 
     name: '', 
@@ -30,6 +31,24 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   });
   
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
+
+  useEffect(() => {
+    const handleInstallAvailable = () => setShowInstallBanner(true);
+    window.addEventListener('pwa-install-available', handleInstallAvailable);
+    if ((window as any).deferredPrompt) setShowInstallBanner(true);
+    return () => window.removeEventListener('pwa-install-available', handleInstallAvailable);
+  }, []);
+
+  const handleInstallClick = async () => {
+    const promptEvent = (window as any).deferredPrompt;
+    if (!promptEvent) return;
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallBanner(false);
+    }
+    (window as any).deferredPrompt = null;
+  };
 
   const getLocalDateString = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -114,7 +133,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsAddingReminder(true);
     
     try {
-      // 1. Permission Handling (Crucial)
       let permission = await checkNotificationPermission();
       
       if (permission === 'default') {
@@ -129,18 +147,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         throw new Error(t("ব্রাউজার সেটিং থেকে নোটিফিকেশন অন করে আবার চেষ্টা করুন।", "Please enable notifications in your browser settings and try again."));
       }
 
-      // 2. Background Sync / Push (Best Effort - Don't Block)
       try {
         if ('serviceWorker' in navigator) {
-           // We try to sync push, but we don't throw if it fails (e.g. timeout)
-           // This prevents the infinite loading spinner.
            await subscribeToPush();
         }
       } catch (pushErr) {
         console.warn("Push sync failed, proceeding anyway:", pushErr);
       }
 
-      // 3. Database Persistence (The Core Action)
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি।", "Session not found."));
 
@@ -157,7 +171,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
       if (dbError) throw dbError;
 
-      // 4. Update UI
       const reminder: Reminder = {
         id: `rem-${Date.now()}`,
         title: newReminder.title.trim(),
@@ -180,7 +193,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
       console.error("Reminder Error:", err);
       alert(err.message || t("রিমাইন্ডার সেট করা সম্ভব হয়নি।", "Failed to set reminder."));
     } finally {
-      // Always resolve loading state
       setIsAddingReminder(false);
     }
   };
@@ -199,6 +211,24 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
   return (
     <div className="space-y-6 pb-24 animate-in fade-in duration-700">
+      {/* PWA Install Banner */}
+      {showInstallBanner && (
+        <div className="bg-brand-primary text-white p-5 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 flex items-center justify-between animate-in slide-in-from-top-4 mb-2">
+           <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
+                 <Download className="animate-bounce" size={24} />
+              </div>
+              <div>
+                 <h4 className="font-black text-sm uppercase tracking-widest">{t('অ্যাপ ইনস্টল করো', 'Install StudyKori')}</h4>
+                 <p className="text-[10px] font-bold opacity-80">{t('হোমস্ক্রিনে অ্যাড করে পড়াশোনা সহজ করো', 'Add to Home Screen for the best experience')}</p>
+              </div>
+           </div>
+           <button onClick={handleInstallClick} className="px-6 py-2.5 bg-white text-brand-primary rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+             {t('ইনস্টল', 'Install')}
+           </button>
+        </div>
+      )}
+
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-brand-text-p">{userState.profile?.fullName}! {t('স্বাগতম', 'Welcome')}</h1>
@@ -254,7 +284,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
 
         <div className="space-y-6">
-          {/* Exam Countdown Section */}
           {countdowns.length > 0 && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('আসন্ন পরীক্ষা', 'Exam Countdowns')}</h3>
@@ -315,7 +344,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
           </section>
 
-          {/* Reminders Section */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-black flex items-center gap-3"><Bell size={20} className="text-orange-500" /> {t('রিমাইন্ডার', 'Reminders')}</h3>
@@ -338,7 +366,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                   <div className="flex items-center gap-2">
                     <button onClick={async () => {
                       onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).map(r => r.id === rem.id ? { ...r, isDone: true } : r) }));
-                      // Also mark in DB
                       try {
                         const { data: { user } } = await supabase.auth.getUser();
                         if (user) {
@@ -359,7 +386,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       </div>
 
-      {/* Task Modal */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">
@@ -385,7 +411,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       )}
 
-      {/* Reminder Modal */}
       {isReminderModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[2rem] shadow-2xl border border-brand-text-s/10">

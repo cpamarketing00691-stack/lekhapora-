@@ -47,11 +47,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden relative">
-      {/* Background Grid */}
+      {/* Background Grid - Set to lowest z-index */}
       <BackgroundGrid />
 
       {/* Sidebar - Desktop */}
-      <aside className="relative z-20 hidden md:flex flex-col w-64 bg-brand-surface/90 backdrop-blur-md border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
+      <aside className="relative z-30 hidden md:flex flex-col w-64 bg-brand-surface/90 backdrop-blur-md border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
         <div className="mb-10">
           <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic">
             HSC TRACKER
@@ -92,8 +92,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="relative z-10 flex-1 flex flex-col min-w-0 h-full md:h-screen">
+      {/* Main Content Area - High z-index */}
+      <main className="relative z-20 flex-1 flex flex-col min-w-0 h-full md:h-screen">
         <header className="flex items-center justify-between px-5 py-3.5 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
           <h1 className="font-black text-brand-primary italic tracking-tight text-sm">HSC TRACKER</h1>
           <div className="flex gap-1">
@@ -104,7 +104,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth scrollbar-hide">
-          <div className="max-w-6xl mx-auto h-full">
+          <div className="max-w-6xl mx-auto h-full relative z-10">
             {children}
           </div>
         </div>

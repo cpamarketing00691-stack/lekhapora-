@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>HSC Study Tracker</title>
-    <link rel="icon" type="image/png" href="/app-icon.png">
-    <link rel="apple-touch-icon" href="/app-icon.png">
-    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="app-icon.png">
+    <link rel="apple-touch-icon" href="app-icon.png">
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#5B7DBE">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -55,7 +55,7 @@
           --brand-text-s: 138 148 166;
         }
         html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--brand-bg); font-family: 'Inter', sans-serif; }
-        #root { height: 100dvh; display: flex; flex-direction: column; }
+        #root { height: 100dvh; display: flex; flex-direction: column; position: relative; z-index: 10; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
@@ -77,7 +77,8 @@
     "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.2",
-    "web-push": "https://esm.sh/web-push@^3.6.7"
+    "web-push": "https://esm.sh/web-push@^3.6.7",
+    "webworker": "https://esm.sh/webworker@^0.8.4"
   }
 }
 </script>
@@ -89,11 +90,8 @@
       // Global PWA Installation handler
       window.deferredPrompt = null;
       window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent the mini-infobar from appearing on mobile
         e.preventDefault();
-        // Stash the event so it can be triggered later.
         window.deferredPrompt = e;
-        // Dispatch custom event to notify React components
         window.dispatchEvent(new CustomEvent('pwa-install-ready'));
         console.debug('PWA Install Prompt available');
       });
@@ -105,22 +103,30 @@
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Changed to .js to match typical build output and avoid 404
-          const swUrl = '/service-worker.js';
-          const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          // Check for restricted environment or insecure origin
+          const isSecure = window.location.protocol === 'https:' || 
+                           window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1';
           
-          if (isSecure) {
-            navigator.serviceWorker.register(swUrl)
-              .then(registration => {
-                console.debug('Service Worker registered successfully');
-              })
-              .catch(error => {
-                console.warn('Service Worker registration failed:', error);
-                // Fallback attempt for dev environment
-                navigator.serviceWorker.register('/service-worker.ts', { type: 'module' })
-                  .catch(e => {});
-              });
+          const isSandboxed = window.location.href === 'about:srcdoc' || 
+                              window.location.origin === 'null';
+
+          if (!isSecure || isSandboxed) {
+            console.debug('Service Worker registration skipped: insecure or sandboxed environment.');
+            return;
           }
+
+          // We use simple relative paths which are safest across various hosting setups.
+          // Browser handles path resolution automatically relative to the document.
+          navigator.serviceWorker.register('service-worker.js')
+            .then(registration => {
+              console.debug('Service Worker registered successfully:', registration.scope);
+            })
+            .catch(error => {
+              console.warn('Primary SW registration failed, trying alternative path:', error);
+              navigator.serviceWorker.register('./service-worker.js')
+                .catch(e => console.error('All Service Worker registration attempts failed.', e));
+            });
         });
       }
     </script>

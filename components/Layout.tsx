@@ -1,6 +1,6 @@
 
 import React, { useEffect } from 'react';
-import { UserProfile, Language } from '../types';
+import { UserProfile, Language, UserState } from '../types';
 import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays } from 'lucide-react';
 import BackgroundGrid from './BackgroundGrid';
 
@@ -10,9 +10,12 @@ interface LayoutProps {
   activeTab: string;
   onTabChange: (tab: any) => void;
   language: Language;
+  // Added userState to props to fix TS error in App.tsx
+  userState: UserState;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language }) => {
+// Added userState to the component's destructured props
+export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language, userState }) => {
   const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
 
   const t = (bn: string, en: string) => language === 'bn' ? bn : en;

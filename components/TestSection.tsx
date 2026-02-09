@@ -318,24 +318,34 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                 <h3 className="font-bold text-lg">{t('টেস্ট হিস্ট্রি', 'Test History')}</h3>
               </div>
               <div className="flex-1 space-y-3 overflow-y-auto scrollbar-hide">
-                {userState.testHistory && userState.testHistory.length > 0 ? userState.testHistory.map(att => (
-                  <button 
-                    key={att.id} 
-                    onClick={() => { setHistoryAttempt(att); setView('history'); }}
-                    className="w-full text-left p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5 group hover:border-brand-primary transition-all"
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">
-                        {new Date(att.date).toLocaleDateString()}
+                {userState.testHistory && userState.testHistory.length > 0 ? userState.testHistory.map(att => {
+                  const isModelExam = att.subjectId === 'MODEL_EXAM';
+                  const subj = userState.subjects.find(s => s.id === att.subjectId);
+                  const examMeta = modelExams.find(e => e.id === att.chapterId);
+                  
+                  return (
+                    <button 
+                      key={att.id} 
+                      onClick={() => { setHistoryAttempt(att); setView('history'); }}
+                      className="w-full text-left p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5 group hover:border-brand-primary transition-all"
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">
+                          {new Date(att.date).toLocaleDateString()}
+                        </p>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${att.score >= (att.total * 0.7) ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
+                          {att.score}/{att.total}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-brand-text-p truncate">
+                        {isModelExam ? (examMeta?.title || t('মডেল টেস্ট', 'Model Exam')) : (subj?.name || t('অজানা বিষয়', 'Unknown Subject'))}
+                      </h4>
+                      <p className="text-[9px] font-medium text-brand-text-s truncate">
+                        {isModelExam ? t('প্রফেশনাল এসেসমেন্ট', 'Professional Assessment') : (subj?.chapters.find(c => c.id === att.chapterId)?.name || '')}
                       </p>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${att.score >= 20 ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                        {att.score}/{att.total}
-                      </span>
-                    </div>
-                    <h4 className="text-xs font-bold text-brand-text-p truncate">{userState.subjects.find(s => s.id === att.subjectId)?.name}</h4>
-                    <p className="text-[9px] font-medium text-brand-text-s truncate">{userState.subjects.find(s => s.id === att.subjectId)?.chapters.find(c => c.id === att.chapterId)?.name}</p>
-                  </button>
-                )) : (
+                    </button>
+                  );
+                }) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-brand-text-s opacity-30 gap-3 py-10">
                     <AlertCircle size={40} />
                     <p className="text-[10px] font-black uppercase tracking-widest">{t('কোনো টেস্ট দেওয়া হয়নি', 'No tests taken yet')}</p>

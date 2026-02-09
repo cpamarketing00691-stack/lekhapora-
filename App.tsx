@@ -30,6 +30,41 @@ const DEFAULT_STATE: UserState = {
   notificationsEnabled: false
 };
 
+const calculateStreak = (history: StudySession[]): number => {
+  if (!history || history.length === 0) return 0;
+
+  // Normalize all session start times to date strings for unique daily study check
+  const studyDates = new Set(
+    history.map(s => new Date(s.startTime).toDateString())
+  );
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const todayStr = today.toDateString();
+  const yesterdayStr = yesterday.toDateString();
+
+  // If no study today AND no study yesterday, the streak is broken (0)
+  if (!studyDates.has(todayStr) && !studyDates.has(yesterdayStr)) {
+    return 0;
+  }
+
+  let streakCount = 0;
+  // Start checking from today if studied today, otherwise start from yesterday
+  let checkDate = new Date();
+  if (!studyDates.has(todayStr)) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  while (studyDates.has(checkDate.toDateString())) {
+    streakCount++;
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  return streakCount;
+};
+
 const App: React.FC = () => {
   const [userState, setUserState] = useState<UserState>(() => {
     const saved = localStorage.getItem('hsc_study_tracker_state');
@@ -57,6 +92,8 @@ const App: React.FC = () => {
             };
           }
         }
+        // Recalculate streak on load to ensure it's up to date with real-time
+        state.streaks = calculateStreak(state.studyHistory);
         return state;
       } catch (e) {
         console.error("Local storage recovery failed:", e);
@@ -92,7 +129,9 @@ const App: React.FC = () => {
       const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
         const cloudState = data.state as unknown as Partial<UserState>;
-        setUserState(prev => ({ ...prev, ...cloudState, isAuthenticated: true }));
+        // Recalculate streak from synced history
+        const newStreak = cloudState.studyHistory ? calculateStreak(cloudState.studyHistory) : 0;
+        setUserState(prev => ({ ...prev, ...cloudState, streaks: newStreak, isAuthenticated: true }));
       }
     } catch (e) { console.warn("Background sync failed"); }
   };
@@ -111,6 +150,14 @@ const App: React.FC = () => {
       console.warn("Cloud save failed:", e);
     }
   };
+
+  // Keep streaks in sync whenever studyHistory changes
+  useEffect(() => {
+    const newStreak = calculateStreak(userState.studyHistory);
+    if (newStreak !== userState.streaks) {
+      setUserState(prev => ({ ...prev, streaks: newStreak }));
+    }
+  }, [userState.studyHistory]);
 
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
@@ -154,7 +201,7 @@ const App: React.FC = () => {
   if (!userState.profile) return <Onboarding onComplete={handleProfileComplete} language={userState.language} />;
 
   return (
-    <Layout userProfile={userState.profile} activeTab={activeTab} onTabChange={setActiveTab} language={userState.language}>
+    <Layout userProfile={userState.profile} activeTab={activeTab} onTabChange={setActiveTab} language={userState.language} userState={userState}>
       {activeTab === 'dashboard' && <Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
       {activeTab === 'calendar' && <StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={setActiveTab} />}
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
@@ -163,7 +210,11 @@ const App: React.FC = () => {
       {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={() => setUserState(DEFAULT_STATE)} />}
       
       {activeModelExamId && (
-        <ProExamSystem examId={activeModelExamId} onClose={() => setActiveModelExamId(null)} />
+        <ProExamSystem 
+          examId={activeModelExamId} 
+          onClose={() => setActiveModelExamId(null)} 
+          onUpdateState={setUserState}
+        />
       )}
     </Layout>
   );

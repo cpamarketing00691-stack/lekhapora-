@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Timer, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Check, X, GraduationCap, Loader2, Sparkles, Trophy } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { UserState, TestAttempt, MCQ } from '../types';
 
 interface ProExamProps {
   examId: string;
   onClose: () => void;
+  onUpdateState?: React.Dispatch<React.SetStateAction<UserState>>;
 }
 
 interface Question {
@@ -21,7 +23,7 @@ interface Exam {
   duration_minutes: number;
 }
 
-const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
+const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState }) => {
   const [view, setView] = useState<'loading' | 'exam' | 'result' | 'leaderboard'>('loading');
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -36,8 +38,6 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return onClose();
 
-      // REMOVED: "one attempt rule" check. Users can now give exams multiple times.
-
       // Fetch Exam and Questions
       const [examRes, questionsRes] = await Promise.all([
         supabase.from('exam_sys_exams').select('*').eq('id', examId).single(),
@@ -49,25 +49,18 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
       setExam(examRes.data);
       setQuestions(questionsRes.data);
 
-      // Session Tracking & Sync - simplified for multi-attempt
+      // Session Tracking & Sync - Start fresh for every entry
       const { data: session } = await supabase
         .from('exam_sys_sessions')
-        .upsert({ user_id: user.id, exam_id: examId }, { onConflict: 'user_id,exam_id' })
+        .upsert({ 
+          user_id: user.id, 
+          exam_id: examId,
+          started_at: new Date().toISOString() // Force a fresh start time
+        }, { onConflict: 'user_id,exam_id' })
         .select()
         .single();
 
-      const startTime = new Date(session.started_at).getTime();
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startTime) / 1000);
-      const remaining = (examRes.data.duration_minutes * 60) - elapsedSeconds;
-
-      if (remaining <= 0) {
-        // If they left and came back after time expired, just reset session for a fresh try
-        await supabase.from('exam_sys_sessions').delete().eq('user_id', user.id).eq('exam_id', examId);
-        setTimeLeft(examRes.data.duration_minutes * 60);
-      } else {
-        setTimeLeft(remaining);
-      }
+      setTimeLeft(examRes.data.duration_minutes * 60);
       setView('exam');
     } catch (err) {
       console.error(err);
@@ -93,6 +86,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
 
       const skippedCount = questions.filter(q => userAnswers[q.id] === undefined).length;
       const wrongCount = questions.length - correctCount - skippedCount;
+      const duration = (exam!.duration_minutes * 60) - timeLeft;
 
       const submission = {
         user_id: user.id,
@@ -101,13 +95,40 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
         correct_count: correctCount,
         wrong_count: wrongCount,
         skipped_count: skippedCount,
-        time_taken_seconds: (exam!.duration_minutes * 60) - timeLeft
+        time_taken_seconds: duration
       };
 
+      // 1. Save to global Supabase results
       const { data, error } = await supabase.from('exam_sys_submissions').insert(submission).select().single();
       if (error) throw error;
 
-      // Clean up session
+      // 2. Add to local history so it shows up in "History" tab
+      if (onUpdateState) {
+        const historyEntry: TestAttempt = {
+          id: `model-exam-${Date.now()}`,
+          subjectId: 'MODEL_EXAM', // Identifier for model exam entries
+          chapterId: examId,       // Reference back to this exam
+          score: correctCount,
+          total: questions.length,
+          timeTakenSeconds: duration,
+          date: Date.now(),
+          questions: questions.map(q => ({
+            id: q.id,
+            question: q.question,
+            options: q.options,
+            correct_index: q.correct_index,
+            explanation: q.explanation
+          })) as any,
+          userAnswers: questions.map(q => userAnswers[q.id] ?? -1)
+        };
+
+        onUpdateState(prev => ({
+          ...prev,
+          testHistory: [historyEntry, ...(prev.testHistory || [])]
+        }));
+      }
+
+      // 3. Clean up session for a clean restart later
       await supabase.from('exam_sys_sessions').delete().eq('user_id', user.id).eq('exam_id', examId);
 
       setResult(data);

@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { UserProfile, Language } from '../types';
 import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays } from 'lucide-react';
+import BackgroundGrid from './BackgroundGrid';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -45,9 +46,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
   ];
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden relative">
+      {/* Background Grid */}
+      <BackgroundGrid />
+
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-64 bg-brand-surface border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
+      <aside className="relative z-20 hidden md:flex flex-col w-64 bg-brand-surface/90 backdrop-blur-md border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
         <div className="mb-10">
           <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic">
             HSC TRACKER
@@ -89,7 +93,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 h-full md:h-screen relative">
+      <main className="relative z-10 flex-1 flex flex-col min-w-0 h-full md:h-screen">
         <header className="flex items-center justify-between px-5 py-3.5 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
           <h1 className="font-black text-brand-primary italic tracking-tight text-sm">HSC TRACKER</h1>
           <div className="flex gap-1">

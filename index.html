@@ -11,6 +11,8 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="HSC Tracker">
+    <meta name="apple-mobile-web-app-title" content="HSC Tracker">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -105,22 +107,14 @@
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Changed to .js to match typical build output and avoid 404
-          const swUrl = '/service-worker.js';
-          const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          
-          if (isSecure) {
-            navigator.serviceWorker.register(swUrl)
-              .then(registration => {
-                console.debug('Service Worker registered successfully');
-              })
-              .catch(error => {
-                console.warn('Service Worker registration failed:', error);
-                // Fallback attempt for dev environment
-                navigator.serviceWorker.register('/service-worker.ts', { type: 'module' })
-                  .catch(e => {});
-              });
-          }
+          // Register the JS service worker from the root
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.debug('Service Worker registered successfully');
+            })
+            .catch(error => {
+              console.warn('Service Worker registration failed:', error);
+            });
         });
       }
     </script>

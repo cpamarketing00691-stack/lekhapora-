@@ -1,8 +1,8 @@
-
 import React, { useEffect } from 'react';
 import { UserProfile, Language, UserState } from '../types';
 import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays } from 'lucide-react';
 import BackgroundGrid from './BackgroundGrid';
+import { CollapsibleSidebar } from './CollapsibleSidebar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -10,11 +10,9 @@ interface LayoutProps {
   activeTab: string;
   onTabChange: (tab: any) => void;
   language: Language;
-  // Added userState to props to fix TS error in App.tsx
   userState: UserState;
 }
 
-// Added userState to the component's destructured props
 export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language, userState }) => {
   const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
 
@@ -53,47 +51,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
       {/* Background Grid */}
       <BackgroundGrid />
 
-      {/* Sidebar - Desktop */}
-      <aside className="relative z-20 hidden md:flex flex-col w-64 bg-brand-surface/90 backdrop-blur-md border-r border-brand-text-s/10 p-8 transition-colors shrink-0">
-        <div className="mb-10">
-          <h1 className="text-2xl font-black bg-gradient-to-br from-brand-primary to-brand-secondary bg-clip-text text-transparent italic">
-            HSC TRACKER
-          </h1>
-        </div>
-        
-        <nav className="flex-1 space-y-3 overflow-y-auto scrollbar-hide">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${
-                activeTab === item.id 
-                  ? 'bg-brand-primary text-white shadow-xl shadow-brand-primary/20 font-bold scale-105' 
-                  : 'hover:bg-brand-bg/50 text-brand-text-s hover:text-brand-text-p'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="mt-auto pt-8 space-y-4">
-           <div className="flex items-center gap-3 p-4 bg-brand-bg/50 rounded-3xl border border-brand-text-s/10">
-             <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-black text-lg shrink-0">
-               {userProfile.fullName?.[0] || 'U'}
-             </div>
-             <div className="min-w-0">
-               <p className="text-sm font-bold truncate leading-none mb-1">{userProfile.fullName}</p>
-               <p className="text-[9px] uppercase font-black text-brand-text-s leading-none">{userProfile.group}</p>
-             </div>
-           </div>
-           <button onClick={toggleTheme} className="w-full flex items-center gap-4 px-5 py-3 hover:bg-brand-bg/50 rounded-2xl text-brand-text-s transition-all">
-             {isDark ? <Sun size={20} /> : <Moon size={20} />}
-             <span className="text-sm font-bold">{isDark ? t('লাইট', 'Light') : t('ডার্ক', 'Dark')}</span>
-           </button>
-        </div>
-      </aside>
+      {/* Collapsible Sidebar - Desktop */}
+      <CollapsibleSidebar 
+        userProfile={userProfile}
+        activeTab={activeTab}
+        onTabChange={onTabChange}
+        language={language}
+        isDark={isDark}
+        toggleTheme={toggleTheme}
+        navItems={navItems}
+      />
 
       {/* Main Content Area */}
       <main className="relative z-10 flex-1 flex flex-col min-w-0 h-full md:h-screen">

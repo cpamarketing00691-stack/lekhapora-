@@ -109,8 +109,8 @@
       // Service Worker Registration with enhanced origin safety and graceful failure for sandboxed previews
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Use URL constructor to ensure absolute resolution relative to the app origin
-          const swUrl = new URL('/service-worker.ts', window.location.origin + window.location.pathname).href;
+          // Use .js extension for the registered service worker to ensure it is correctly handled by the browser for PWA support
+          const swUrl = new URL('/service-worker.js', window.location.origin + window.location.pathname).href;
           
           // Safety check: only register if origins match and context is secure (required by SW spec)
           const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';

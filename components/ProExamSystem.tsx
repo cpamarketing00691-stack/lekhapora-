@@ -36,18 +36,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return onClose();
 
-      // Check for existing submission (one attempt rule)
-      const { data: existing } = await supabase
-        .from('exam_sys_submissions')
-        .select('id')
-        .eq('exam_id', examId)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (existing) {
-        alert("You have already attempted this exam.");
-        return onClose();
-      }
+      // REMOVED: "one attempt rule" check. Users can now give exams multiple times.
 
       // Fetch Exam and Questions
       const [examRes, questionsRes] = await Promise.all([
@@ -60,7 +49,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
       setExam(examRes.data);
       setQuestions(questionsRes.data);
 
-      // Session Tracking & Sync
+      // Session Tracking & Sync - simplified for multi-attempt
       const { data: session } = await supabase
         .from('exam_sys_sessions')
         .upsert({ user_id: user.id, exam_id: examId }, { onConflict: 'user_id,exam_id' })
@@ -73,11 +62,13 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
       const remaining = (examRes.data.duration_minutes * 60) - elapsedSeconds;
 
       if (remaining <= 0) {
-        submitExam(true);
+        // If they left and came back after time expired, just reset session for a fresh try
+        await supabase.from('exam_sys_sessions').delete().eq('user_id', user.id).eq('exam_id', examId);
+        setTimeLeft(examRes.data.duration_minutes * 60);
       } else {
         setTimeLeft(remaining);
-        setView('exam');
       }
+      setView('exam');
     } catch (err) {
       console.error(err);
       onClose();
@@ -155,8 +146,8 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose }) => {
     return (
       <div className="fixed inset-0 z-[200] bg-brand-bg flex flex-col items-center justify-center p-6 text-center">
         <Loader2 size={40} className="animate-spin text-brand-primary mb-4" />
-        <h2 className="font-black text-brand-text-p uppercase tracking-widest text-sm">Initializing Secure Exam Session</h2>
-        <p className="text-brand-text-s text-xs mt-2">Connecting to Supabase...</p>
+        <h2 className="font-black text-brand-text-p uppercase tracking-widest text-sm">Preparing Your Exam</h2>
+        <p className="text-brand-text-s text-xs mt-2">Entering Secure Mode...</p>
       </div>
     );
   }

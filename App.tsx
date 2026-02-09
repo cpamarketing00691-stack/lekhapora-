@@ -14,8 +14,6 @@ import { Layout } from './components/Layout';
 import { supabase } from './lib/supabase';
 import { Loader2 } from 'lucide-react';
 
-const VAPID_PUBLIC_KEY = "BOQS5jGeY1uyMDkK7BocruEAkQVcWx3sSPe7VBVvoj_UpNT5FZmr52hu9izrT9i6M5J2ScIJhOd6AYhzWHRiAyI";
-
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
   profile: null,
@@ -49,7 +47,7 @@ const App: React.FC = () => {
             const isFocus = state.activeTimer.isFocusActive;
             state.activeTimer = {
               ...state.activeTimer,
-              lastTimestamp: state.activeTimer.lastTimestamp + (deltaSeconds * 1000),
+              lastTimestamp: now, // Sync to current time
               accumulatedFocusSeconds: isFocus 
                 ? state.activeTimer.accumulatedFocusSeconds + deltaSeconds 
                 : state.activeTimer.accumulatedFocusSeconds,
@@ -71,9 +69,6 @@ const App: React.FC = () => {
   const [testContext, setTestContext] = useState<{ subjectId: string; chapterId: string } | null>(null);
   const [activeModelExamId, setActiveModelExamId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const timerIntervalRef = useRef<number>(null);
-  const reminderIntervalRef = useRef<number>(null);
-  const lastCloudSaveRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const initApp = async () => {
@@ -112,14 +107,15 @@ const App: React.FC = () => {
         state: stateToSave, 
         updated_at: new Date().toISOString() 
       }, { onConflict: 'user_id' });
-      lastCloudSaveRef.current = Date.now();
-    } catch (e) { }
+    } catch (e) { 
+      console.warn("Cloud save failed:", e);
+    }
   };
 
   useEffect(() => {
     localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     if (userState.isAuthenticated) {
-      const timeoutId = setTimeout(() => saveUserData(userState), 3000);
+      const timeoutId = setTimeout(() => saveUserData(userState), 5000);
       return () => clearTimeout(timeoutId);
     }
   }, [userState]);

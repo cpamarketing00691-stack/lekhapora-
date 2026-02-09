@@ -1,8 +1,7 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { UserState } from '../types';
 import { Send, Bot, Sparkles, Loader2, User, AlertCircle, Lightbulb } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { getGeminiResponse } from '../services/gemini';
 
 interface AISidebarProps {
   userState: UserState;
@@ -35,43 +34,22 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
     setIsLoading(true);
 
     try {
-      const systemInstruction = `You are "Lekhapora Bot", a supportive, casual study friend for ${userState.profile?.fullName}. Tone: casual Bengali.`;
+      const systemInstruction = `You are "Lekhapora Bot", a supportive, casual study friend for a Bangladesh HSC student named ${userState.profile?.fullName || 'Bondhu'}. 
+      TONE: Casual, friendly, motivating. Use a mix of Bengali and English (Banglish).
+      LIMIT: Keep responses within 2-3 sentences.
+      GOAL: Help with study tips, motivation, or general prep questions.`;
 
-      const chatHistoryForAPI = messages.map(msg => ({
-        role: msg.role === 'ai' ? 'assistant' : 'user',
-        content: msg.text
+      const chatHistory = messages.map(msg => ({
+        role: msg.role === 'ai' ? 'model' as const : 'user' as const,
+        parts: [{ text: msg.text }]
       }));
 
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
-
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: textToSend,
-          history: chatHistoryForAPI,
-          systemInstruction: systemInstruction,
-          userId: userId
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
-
-      const data = await response.json();
+      const reply = await getGeminiResponse(textToSend, chatHistory, systemInstruction);
       
-      setMessages(prev => [...prev, { 
-        role: 'ai', 
-        text: data.reply || "দুঃখিত দোস্ত, আমি ঠিক বুঝতে পারিনি।" 
-      }]);
+      setMessages(prev => [...prev, { role: 'ai', text: reply || "দুঃখিত দোস্ত, আমি ঠিক বুঝতে পারিনি।" }]);
     } catch (err: any) {
       setError("সার্ভারে সমস্যা হয়েছে।");
-      setMessages(prev => [...prev, { 
-        role: 'ai', 
-        text: "দুঃখিত দোস্ত, সার্ভারের সাথে যোগাযোগ করতে পারছি না। আবার চেষ্টা কর।" 
-      }]);
+      setMessages(prev => [...prev, { role: 'ai', text: "দুঃখিত দোস্ত, আমি এখন কিছুটা ক্লান্ত। পরে কথা বলি?" }]);
     } finally {
       setIsLoading(false);
     }
@@ -86,7 +64,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
           </div>
           <div>
             <h3 className="font-black text-sm tracking-tight">Lekhapora Bot</h3>
-            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Online & Ready</p>
+            <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">Active Assistant</p>
           </div>
         </div>
       </div>
@@ -138,7 +116,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
       <div className="p-4 bg-white dark:bg-brand-surface border-t border-brand-text-s/10 space-y-3">
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <button 
-            onClick={() => handleSend("আমাকে পড়ার কিছু টিপস দাও")}
+            onClick={() => handleSend("পড়ার জন্য কিছু অনুপ্রেরণা দাও")}
             disabled={isLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-secondary/10 text-brand-secondary rounded-full border border-brand-secondary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-secondary/20 transition-all shrink-0 disabled:opacity-50"
           >
@@ -146,12 +124,12 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
             Study Tips
           </button>
           <button 
-            onClick={() => handleSend("আজকের পড়ার রুটিন কী হবে?")}
+            onClick={() => handleSend("আজকে কি পড়া উচিত?")}
             disabled={isLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary/10 text-brand-primary rounded-full border border-brand-primary/20 text-[10px] font-black uppercase tracking-widest whitespace-nowrap hover:bg-brand-primary/20 transition-all shrink-0 disabled:opacity-50"
           >
             <Sparkles size={12} />
-            Routine Help
+            Guidance
           </button>
         </div>
 
@@ -162,7 +140,7 @@ const AISidebar: React.FC<AISidebarProps> = ({ userState }) => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="কিছু বলবি দোস্ত?"
-            className="flex-1 bg-transparent border-0 px-3 py-2 text-sm focus:ring-0 placeholder:text-brand-text-s/50"
+            className="flex-1 bg-transparent border-0 px-3 py-2 text-sm focus:ring-0 placeholder:text-brand-text-s/50 outline-none"
           />
           <button 
             onClick={() => handleSend()}

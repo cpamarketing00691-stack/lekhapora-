@@ -1,6 +1,3 @@
-// Fix: Added empty export to treat this file as a module, preventing naming collisions in the global scope.
-export {};
-
 const CACHE_NAME = 'hsc-tracker-v1';
 const ASSETS_TO_CACHE = [
   '/',
@@ -9,9 +6,8 @@ const ASSETS_TO_CACHE = [
   '/app-icon.png'
 ];
 
-// Ensure the new service worker takes over immediately
-self.addEventListener('install', (event: any) => {
-  (self as any).skipWaiting();
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
@@ -19,12 +15,11 @@ self.addEventListener('install', (event: any) => {
   );
 });
 
-self.addEventListener('activate', (event: any) => {
-  // Take control of all open clients immediately
-  event.waitUntil((self as any).clients.claim());
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('fetch', (event: any) => {
+self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request).then((fetchResponse) => {

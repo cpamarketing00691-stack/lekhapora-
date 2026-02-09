@@ -86,27 +86,39 @@
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
     <script>
-      // Handle PWA installation trigger
+      // Global PWA Installation handler
       window.deferredPrompt = null;
       window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent the mini-infobar from appearing on mobile
         e.preventDefault();
+        // Stash the event so it can be triggered later.
         window.deferredPrompt = e;
-        window.dispatchEvent(new CustomEvent('pwa-install-available'));
+        // Dispatch custom event to notify React components
+        window.dispatchEvent(new CustomEvent('pwa-install-ready'));
+        console.debug('PWA Install Prompt available');
+      });
+
+      window.addEventListener('appinstalled', (evt) => {
+        console.log('HSC Tracker was installed');
+        window.deferredPrompt = null;
       });
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Point to /service-worker.js which is the common build output path
+          // Changed to .js to match typical build output and avoid 404
           const swUrl = '/service-worker.js';
           const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           
           if (isSecure) {
             navigator.serviceWorker.register(swUrl)
-              .then(registration => console.debug('SW registered'))
+              .then(registration => {
+                console.debug('Service Worker registered successfully');
+              })
               .catch(error => {
-                // Try .ts fallback for specific dev environments that support module-type SW
+                console.warn('Service Worker registration failed:', error);
+                // Fallback attempt for dev environment
                 navigator.serviceWorker.register('/service-worker.ts', { type: 'module' })
-                  .catch(e => console.debug('All SW registration attempts failed'));
+                  .catch(e => {});
               });
           }
         });

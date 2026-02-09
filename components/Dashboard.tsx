@@ -14,7 +14,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isAddingReminder, setIsAddingReminder] = useState(false);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
   
   const [newTask, setNewTask] = useState({ 
     name: '', 
@@ -32,19 +32,23 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
   useEffect(() => {
-    const handleInstallAvailable = () => setShowInstallBanner(true);
-    window.addEventListener('pwa-install-available', handleInstallAvailable);
-    if ((window as any).deferredPrompt) setShowInstallBanner(true);
-    return () => window.removeEventListener('pwa-install-available', handleInstallAvailable);
+    const handleInstallReady = () => setCanInstall(true);
+    window.addEventListener('pwa-install-ready', handleInstallReady);
+    if ((window as any).deferredPrompt) setCanInstall(true);
+    return () => window.removeEventListener('pwa-install-ready', handleInstallReady);
   }, []);
 
-  const handleInstallClick = async () => {
+  const handleInstallApp = async () => {
     const promptEvent = (window as any).deferredPrompt;
-    if (!promptEvent) return;
+    if (!promptEvent) {
+      alert(t("অ্যাপটি ইতিমধ্যে ইনস্টল করা আছে অথবা আপনার ব্রাউজার এটি সমর্থন করছে না।", "App is already installed or your browser doesn't support direct installation."));
+      return;
+    }
     promptEvent.prompt();
     const { outcome } = await promptEvent.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
     if (outcome === 'accepted') {
-      setShowInstallBanner(false);
+      setCanInstall(false);
     }
     (window as any).deferredPrompt = null;
   };
@@ -59,7 +63,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     return rems.filter(r => !r.isDone).sort((a, b) => a.time - b.time);
   }, [userState.reminders]);
 
-  // Calendar Widget Logic
   const calendarWidget = useMemo(() => {
     const now = new Date();
     const month = now.getMonth();
@@ -209,20 +212,23 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
   return (
     <div className="space-y-6 pb-24 animate-in fade-in duration-700">
-      {/* PWA Install Banner */}
-      {showInstallBanner && (
-        <div className="bg-brand-primary text-white p-5 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 flex items-center justify-between animate-in slide-in-from-top-4 mb-2">
-           <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md">
-                 <Download className="animate-bounce" size={24} />
+      {/* Dynamic PWA Install Button Section */}
+      {canInstall && (
+        <div className="bg-brand-primary text-white p-6 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 border border-white/10">
+           <div className="flex items-center gap-5">
+              <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md shadow-inner">
+                 <Download className="animate-bounce" size={28} />
               </div>
-              <div>
-                 <h4 className="font-black text-sm uppercase tracking-widest">{t('অ্যাপ ইনস্টল করো', 'Install StudyKori')}</h4>
-                 <p className="text-[10px] font-bold opacity-80">{t('হোমস্ক্রিনে অ্যাড করে পড়াশোনা সহজ করো', 'Add to Home Screen for the best experience')}</p>
+              <div className="text-center sm:text-left">
+                 <h4 className="font-black text-base uppercase tracking-widest">{t('অ্যাপ ডাউনলোড করো', 'Download App')}</h4>
+                 <p className="text-[10px] font-bold opacity-80 uppercase tracking-tighter">{t('হোমস্ক্রিনে অ্যাড করে অফলাইনেও পড়াশোনা করো', 'Add to home screen for better access')}</p>
               </div>
            </div>
-           <button onClick={handleInstallClick} className="px-6 py-2.5 bg-white text-brand-primary rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
-             {t('ইনস্টল', 'Install')}
+           <button 
+             onClick={handleInstallApp} 
+             className="w-full sm:w-auto px-8 py-3 bg-white text-brand-primary rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all"
+           >
+             {t('ইনস্টল', 'Install Now')}
            </button>
         </div>
       )}
@@ -232,7 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
           <h1 className="text-2xl font-black text-brand-text-p">{userState.profile?.fullName}! {t('স্বাগতম', 'Welcome')}</h1>
           <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest">{t('তোমার আজকের অগ্রগতির চিত্র', 'Daily Progress Overview')}</p>
         </div>
-        <div className="flex items-center gap-3 bg-orange-500/10 text-orange-600 px-4 py-2 rounded-2xl border border-orange-500/20">
+        <div className="flex items-center gap-3 bg-orange-500/10 text-orange-600 px-4 py-2 rounded-2xl border border-orange-500/20 shadow-sm">
           <Flame size={18} className="animate-bounce" />
           <span className="text-xs font-black uppercase">{userState.streaks} {t('দিনের স্ট্রিক', 'Day Streak')}</span>
         </div>
@@ -241,7 +247,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             {/* Syllabus Progress */}
              <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-black flex items-center gap-2"><BookOpen size={20} className="text-brand-primary" /> {t('সিলেবাস', 'Syllabus')}</h3>
@@ -267,7 +272,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                 </div>
              </section>
 
-             {/* Study Calendar Widget */}
              <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-black flex items-center gap-2"><Calendar size={20} className="text-emerald-500" /> {t('ক্যালেন্ডার', 'Calendar')}</h3>

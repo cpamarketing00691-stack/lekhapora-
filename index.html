@@ -36,27 +36,6 @@
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-    <script>
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      const isAllowedDomain = window.location.hostname === 'lekhapora-beta.vercel.app' || window.location.hostname === 'localhost';
-      
-      if (isAllowedDomain) {
-        OneSignalDeferred.push(async function(OneSignal) {
-          try {
-            await OneSignal.init({
-              appId: "60485ed0-3b0d-4d73-ba7f-a152676d14d2",
-              safari_web_id: "web.onesignal.auto.108d8132-70b8-4c60-a549-b58607a7ec41",
-              notifyButton: { enable: false },
-              allowLocalhostAsSecureOrigin: true,
-            });
-          } catch (e) {
-            console.warn("OneSignal initialization failed:", e.message);
-          }
-        });
-      }
-    </script>
-
     <style>
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         :root {
@@ -117,7 +96,7 @@
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Standard service worker registration attempt
+          // Point to /service-worker.js which is the common build output path
           const swUrl = '/service-worker.js';
           const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
           
@@ -125,7 +104,7 @@
             navigator.serviceWorker.register(swUrl)
               .then(registration => console.debug('SW registered'))
               .catch(error => {
-                // Try .ts if .js fails (common in various dev environments)
+                // Try .ts fallback for specific dev environments that support module-type SW
                 navigator.serviceWorker.register('/service-worker.ts', { type: 'module' })
                   .catch(e => console.debug('All SW registration attempts failed'));
               });

@@ -3,7 +3,6 @@ import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2, Download, ChevronLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { subscribeToPush, checkNotificationPermission } from '../lib/push-service';
 
 interface DashboardProps {
   userState: UserState;
@@ -156,28 +155,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsAddingReminder(true);
     
     try {
-      let permission = await checkNotificationPermission();
-      
-      if (permission === 'default') {
-        const userAgreed = confirm(t("রিমাইন্ডার পেতে নোটিফিকেশন অ্যালাউ করা জরুরি। আপনি কি রাজি?", "Notification permission is required to send reminders. Do you agree?"));
-        if (!userAgreed) {
-          throw new Error(t("নোটিফিকেশন পারমিশন ছাড়া রিমাইন্ডার সেট করা সম্ভব নয়।", "Cannot set reminder without notification permission."));
-        }
-        permission = await Notification.requestPermission();
-      }
-
-      if (permission !== 'granted') {
-        throw new Error(t("ব্রাউজার সেটিং থেকে নোটিফিকেশন অন করে আবার চেষ্টা করুন।", "Please enable notifications in your browser settings and try again."));
-      }
-
-      try {
-        if ('serviceWorker' in navigator) {
-           await subscribeToPush();
-        }
-      } catch (pushErr) {
-        console.warn("Push sync failed, proceeding anyway:", pushErr);
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি।", "Session not found."));
 
@@ -210,8 +187,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
       setNewReminder({ title: '', time: '', repeatType: 'none' });
       setIsReminderModalOpen(false);
-      alert(t("রিমাইন্ডার সফলভাবে সেট করা হয়েছে!", "Reminder set successfully!"));
-
     } catch (err: any) {
       console.error("Reminder Error:", err);
       alert(err.message || t("রিমাইন্ডার সেট করা সম্ভব হয়নি।", "Failed to set reminder."));

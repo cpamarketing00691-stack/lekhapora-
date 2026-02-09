@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { UserState, UserProfile, Religion, Medium, Group, CollegeExam } from '../types';
 import { User, LogOut, Languages, Palette, ShieldCheck, Calendar, School, Plus, Trash2, GraduationCap, Bell, BellOff } from 'lucide-react';
@@ -14,49 +13,11 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
   const [newExam, setNewExam] = useState({ name: '', date: '' });
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  // Sync state with OneSignal status on mount
-  useEffect(() => {
-    const OneSignal = (window as any).OneSignal;
-    if (OneSignal && userState.notificationsEnabled) {
-      if (!OneSignal.Notifications.permission) {
-        onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
-      }
-    }
-  }, []);
-
   const updateProfile = (updates: Partial<UserProfile>) => {
     onUpdateState(prev => ({
       ...prev,
       profile: prev.profile ? { ...prev.profile, ...updates } : null
     }));
-  };
-
-  const toggleNotifications = async () => {
-    const OneSignal = (window as any).OneSignal;
-    if (!OneSignal) {
-      alert(t("পুষ নোটিফিকেশন সিস্টেম লোড হচ্ছে, দয়া করে একটু অপেক্ষা করো।", "Notification system is loading, please wait a moment."));
-      return;
-    }
-
-    if (!userState.notificationsEnabled) {
-      try {
-        await OneSignal.Notifications.requestPermission();
-        // v16 permission is true if accepted
-        if (OneSignal.Notifications.permission) {
-          onUpdateState(prev => ({ ...prev, notificationsEnabled: true }));
-          // Send a test notification via SDK
-          console.log("Push enabled successfully.");
-        } else {
-          alert(t("দয়া করে ব্রাউজার সেটিংস থেকে নোটিফিকেশন অ্যালাউ করো।", "Please allow notifications in your browser settings to use this feature."));
-        }
-      } catch (err) {
-        console.error("OneSignal permission error:", err);
-      }
-    } else {
-      // In v16 we don't necessarily "unsubscribe" via JS easy-toggle usually, 
-      // but we update local state to stop the heartbeat reminders.
-      onUpdateState(prev => ({ ...prev, notificationsEnabled: false }));
-    }
   };
 
   const addExam = () => {
@@ -180,20 +141,6 @@ const Settings: React.FC<SettingsProps> = ({ userState, onUpdateState, onLogout 
                 <button onClick={() => onUpdateState(prev => ({ ...prev, language: 'bn' }))} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${userState.language === 'bn' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-s'}`}>বাংলা</button>
                 <button onClick={() => onUpdateState(prev => ({ ...prev, language: 'en' }))} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${userState.language === 'en' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-s'}`}>English</button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-brand-text-s/10">
-              <div>
-                <p className="font-bold text-sm">{t('নোটিফিকেশন', 'Notifications')}</p>
-                <p className="text-xs text-brand-text-s">{t('রিমাইন্ডার এবং পরীক্ষার অ্যালার্ট', 'Reminders & Exam Alerts')}</p>
-              </div>
-              <button 
-                onClick={toggleNotifications}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${userState.notificationsEnabled ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20' : 'bg-brand-bg text-brand-text-s'}`}
-              >
-                {userState.notificationsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-                {userState.notificationsEnabled ? t('চালু', 'ON') : t('বন্ধ', 'OFF')}
-              </button>
             </div>
           </section>
 

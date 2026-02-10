@@ -49,13 +49,13 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       setExam(examRes.data);
       setQuestions(questionsRes.data);
 
-      // Session Tracking & Sync - Start fresh for every entry
+      // Session Tracking
       await supabase
         .from('exam_sys_sessions')
         .upsert({ 
           user_id: user.id, 
           exam_id: examId,
-          started_at: new Date().toISOString() // Force a fresh start time
+          started_at: new Date().toISOString()
         }, { onConflict: 'user_id,exam_id' });
 
       setTimeLeft(examRes.data.duration_minutes * 60);
@@ -93,17 +93,27 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
         correct_count: correctCount,
         wrong_count: wrongCount,
         skipped_count: skippedCount,
-        time_taken_seconds: duration
+        time_taken_seconds: duration,
+        submitted_at: new Date().toISOString()
       };
 
-      // 1. Save to global Supabase results
-      const { data, error } = await supabase.from('exam_sys_submissions').insert(submission).select().single();
-      if (error) throw error;
+      // Use UPSERT instead of INSERT to resolve the 409 Conflict if constraint is present
+      // To allow multiple entries in history, user must run the SQL DROP CONSTRAINT command.
+      const { data, error } = await supabase
+        .from('exam_sys_submissions')
+        .upsert(submission, { onConflict: 'user_id,exam_id' })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Submission Error:", error);
+        throw error;
+      }
 
-      // 2. Add to local history so it shows up in "History" tab
+      // 2. Update local history for "History" tab
       if (onUpdateState) {
         const historyEntry: TestAttempt = {
-          id: `model-exam-${Date.now()}`, // Ensure unique ID per attempt
+          id: `model-exam-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           subjectId: 'MODEL_EXAM', 
           chapterId: examId,       
           score: correctCount,
@@ -126,14 +136,14 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
         }));
       }
 
-      // 3. Clean up session for a clean restart later
-      await supabase.from('exam_sys_sessions').delete().eq('user_id', user.id).eq('exam_id', examId);
+      // 3. Clean up active session
+      await supabase.from('exam_sys_sessions').delete().match({ user_id: user.id, exam_id: examId });
 
       setResult(data);
       setView('result');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Submission failed. Please try again.");
+      alert(err.message || "Submission failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

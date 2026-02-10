@@ -1,11 +1,11 @@
 /// <reference lib="webworker" />
 
-const CACHE_NAME = 'hsc-tracker-v3';
+const CACHE_NAME = 'hsc-tracker-v4';
 const REQUIRED_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/app-icon.png'
+  '/app-icon.svg'
 ];
 
 const sw = self as unknown as ServiceWorkerGlobalScope;

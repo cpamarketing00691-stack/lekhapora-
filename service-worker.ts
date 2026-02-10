@@ -1,40 +1,79 @@
-// Fix: Added empty export to treat this file as a module, preventing naming collisions in the global scope.
-export {};
+/// <reference lib="webworker" />
 
-const CACHE_NAME = 'hsc-tracker-v1';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'hsc-tracker-v3';
+const REQUIRED_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/app-icon.png'
 ];
 
-// Ensure the new service worker takes over immediately
-self.addEventListener('install', (event: any) => {
-  (self as any).skipWaiting();
+const sw = self as unknown as ServiceWorkerGlobalScope;
+
+sw.addEventListener('install', (event: ExtendableEvent) => {
+  sw.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+      // We attempt to cache all required assets.
+      return cache.addAll(REQUIRED_ASSETS).catch((error) => {
+          console.warn('Failed to cache some required assets:', error);
+      });
     })
   );
 });
 
-self.addEventListener('activate', (event: any) => {
-  // Take control of all open clients immediately
-  event.waitUntil((self as any).clients.claim());
-});
-
-self.addEventListener('fetch', (event: any) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((fetchResponse) => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          if (event.request.method === 'GET' && fetchResponse.status === 200) {
-            cache.put(event.request, fetchResponse.clone());
+sw.addEventListener('activate', (event: ExtendableEvent) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
           }
-          return fetchResponse;
-        });
-      });
-    }).catch(() => caches.match('/index.html'))
+        })
+      );
+    }).then(() => sw.clients.claim())
   );
 });
+
+sw.addEventListener('fetch', (event: FetchEvent) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  // Only handle requests to the same origin
+  if (url.origin !== sw.location.origin) return;
+
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      if (response) return response;
+
+      return fetch(event.request).then((fetchResponse) => {
+        // Don't cache if not a success or if it's a non-standard resource
+        if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
+          return fetchResponse;
+        }
+
+        const responseToCache = fetchResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
+
+        return fetchResponse;
+      }).catch(() => {
+        // Fallback for navigation requests (SPA support)
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html') as Promise<Response>;
+        }
+        return new Response('Network error happened', {
+          status: 408,
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      });
+    })
+  );
+});
+
+// Empty export to ensure this is treated as a module
+export {};

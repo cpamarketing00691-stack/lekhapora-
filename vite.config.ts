@@ -9,11 +9,11 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: './index.html',
-        sw: './service-worker.ts'
+        'service-worker': './service-worker.ts'
       },
       output: {
         entryFileNames: (assetInfo) => {
-          return assetInfo.name === 'sw' ? '[name].js' : 'assets/[name]-[hash].js';
+          return assetInfo.name === 'service-worker' ? '[name].js' : 'assets/[name]-[hash].js';
         }
       }
     }

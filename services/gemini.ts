@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Guideline: Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getGeminiResponse = async (message: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[], systemInstruction: string) => {
   try {
@@ -12,6 +13,7 @@ export const getGeminiResponse = async (message: string, history: { role: 'user'
         temperature: 0.7,
       },
     });
+    // Guideline: The GenerateContentResponse object features a text property (not a method).
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);

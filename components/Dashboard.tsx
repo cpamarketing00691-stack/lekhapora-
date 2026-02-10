@@ -3,6 +3,7 @@ import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2, Download, ChevronLeft, LayoutGrid, Award } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { checkNotificationPermission, generateICS } from '../lib/push-service';
 
 interface DashboardProps {
   userState: UserState;
@@ -15,6 +16,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isAddingReminder, setIsAddingReminder] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
+  const [syncToCalendar, setSyncToCalendar] = useState(false);
   
   const [newTask, setNewTask] = useState({ 
     name: '', 
@@ -102,14 +104,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     if (userState.profile?.targetExamDate) {
       const target = new Date(userState.profile.targetExamDate).getTime();
       const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
-      if (diff >= 0) list.push({ name: t('এইচএসসি পরীক্ষা', 'HSC Exam'), days: diff, type: 'hsc' });
+      if (diff >= 0) list.push({ name: t('এইচএসসি পরীক্ষা', 'HSC Exam'), days: diff, type: 'hsc', originalDate: userState.profile.targetExamDate });
     }
 
     if (userState.profile?.collegeExams) {
       userState.profile.collegeExams.forEach(ex => {
         const target = new Date(ex.date).getTime();
         const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
-        if (diff >= 0) list.push({ name: ex.name, days: diff, type: 'college' });
+        if (diff >= 0) list.push({ name: ex.name, days: diff, type: 'college', originalDate: ex.date });
       });
     }
 
@@ -138,14 +140,36 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsTaskModalOpen(false);
   };
 
+  const openReminderForTask = (task: Task) => {
+    setNewReminder({
+      title: `${t('পড়াশোনা:', 'Study:')} ${task.name}`,
+      time: new Date().toISOString().slice(0, 16),
+      repeatType: 'none'
+    });
+    setIsReminderModalOpen(true);
+  };
+
+  const openReminderForExam = (exam: { name: string, originalDate: string }) => {
+    setNewReminder({
+      title: `${t('পরীক্ষা প্রস্তুতি:', 'Exam Prep:')} ${exam.name}`,
+      time: new Date(exam.originalDate).toISOString().slice(0, 16),
+      repeatType: 'none'
+    });
+    setIsReminderModalOpen(true);
+  };
+
   const addReminder = async () => {
     if (!newReminder.title.trim() || !newReminder.time || isAddingReminder) return;
     setIsAddingReminder(true);
     
     try {
+      // Request notification permission
+      await checkNotificationPermission();
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি।", "Session not found."));
 
+      const reminderTime = new Date(newReminder.time).getTime();
       const datetime = new Date(newReminder.time).toISOString();
       
       const { error: dbError } = await supabase.from('reminders').insert({
@@ -162,11 +186,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
       const reminder: Reminder = {
         id: `rem-${Date.now()}`,
         title: newReminder.title.trim(),
-        time: new Date(newReminder.time).getTime(),
+        time: reminderTime,
         isTriggered: false,
         isDone: false,
         repeatType: newReminder.repeatType
       };
+
+      // Sync to system calendar if requested
+      if (syncToCalendar) {
+        generateICS(reminder.title, reminder.time);
+      }
       
       onUpdateState(prev => ({ 
         ...prev, 
@@ -174,6 +203,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
       }));
 
       setNewReminder({ title: '', time: '', repeatType: 'none' });
+      setSyncToCalendar(false);
       setIsReminderModalOpen(false);
     } catch (err: any) {
       alert(err.message || t("রিমাইন্ডার সেট করা সম্ভব হয়নি।", "Failed to set reminder."));
@@ -347,7 +377,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             <section className="space-y-3">
               <h3 className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('আসন্ন পরীক্ষা', 'Exam Countdowns')}</h3>
               {countdowns.map((cd, idx) => (
-                <div key={idx} className={`p-5 rounded-3xl border flex items-center justify-between shadow-sm transition-all ${cd.type === 'hsc' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-p'}`}>
+                <div key={idx} className={`p-5 rounded-3xl border flex items-center justify-between shadow-sm transition-all group ${cd.type === 'hsc' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-p'}`}>
                   <div className="flex items-center gap-3">
                     <div className={`p-2.5 rounded-2xl ${cd.type === 'hsc' ? 'bg-white/20' : 'bg-brand-primary/10 text-brand-primary'}`}><Calendar size={20} /></div>
                     <div>
@@ -355,9 +385,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                       <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{cd.type === 'hsc' ? 'National Board' : 'College Exam'}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-black leading-none">{cd.days}</p>
-                    <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{t('দিন বাকি', 'Days Left')}</p>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="text-right">
+                      <p className="text-2xl font-black leading-none">{cd.days}</p>
+                      <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{t('দিন বাকি', 'Days Left')}</p>
+                    </div>
+                    <button 
+                      onClick={() => openReminderForExam(cd)}
+                      className={`p-1.5 rounded-lg transition-all active:scale-90 ${cd.type === 'hsc' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-brand-bg hover:bg-brand-primary/10 text-brand-primary'}`}
+                      title={t('রিমাইন্ডার সেট করো', 'Set Reminder')}
+                    >
+                      <Bell size={14} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -382,7 +421,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                       <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'line-through opacity-50' : 'text-brand-text-p'}`}>{task.name}</p>
                       <p className="text-[9px] font-black uppercase text-brand-text-s mt-1 tracking-tighter opacity-80">{getSubjectName(task.subjectId)}</p>
                     </div>
-                    <button onClick={() => onUpdateState(prev => ({ ...prev, dailyTasks: prev.dailyTasks.filter(t => t.id !== task.id) }))} className="text-brand-text-s hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                    <div className="flex flex-col gap-2">
+                       <button onClick={() => onUpdateState(prev => ({ ...prev, dailyTasks: prev.dailyTasks.filter(t => t.id !== task.id) }))} className="text-brand-text-s hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                       {!task.isCompleted && (
+                         <button 
+                           onClick={() => openReminderForTask(task)} 
+                           className="text-brand-text-s hover:text-brand-primary transition-colors"
+                           title={t('রিমাইন্ডার সেট করো', 'Set Reminder')}
+                         >
+                           <Bell size={16} />
+                         </button>
+                       )}
+                    </div>
                   </div>
                   {task.isCompleted && task.subjectId && task.chapterId && (
                     <button onClick={() => onTriggerTest(task.subjectId!, task.chapterId!)} className="w-full mt-4 py-2.5 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all">
@@ -439,7 +489,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       </div>
 
-      {/* Modals remain the same */}
+      {/* Modals */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[3rem] shadow-2xl border border-brand-text-s/10">
@@ -470,16 +520,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[3rem] shadow-2xl border border-brand-text-s/10">
             <div className="flex items-center justify-between mb-6">
               <h4 className="font-black text-brand-text-p uppercase tracking-widest">{t('নতুন রিমাইন্ডার', 'Set Reminder')}</h4>
-              <button onClick={() => setIsReminderModalOpen(false)} className="p-2 hover:bg-brand-bg rounded-xl text-brand-text-s"><X size={20} /></button>
+              <button onClick={() => { setIsReminderModalOpen(false); setSyncToCalendar(false); }} className="p-2 hover:bg-brand-bg rounded-xl text-brand-text-s"><X size={20} /></button>
             </div>
             <div className="space-y-4">
-              <input type="text" value={newReminder.title} onChange={e => setNewReminder({...newReminder, title: e.target.value})} placeholder={t("কি মনে করিয়ে দেব?", "Remind me about...")} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none" />
-              <input type="datetime-local" value={newReminder.time} onChange={e => setNewReminder({...newReminder, time: e.target.value})} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none cursor-pointer" />
-              <select value={newReminder.repeatType} onChange={e => setNewReminder({...newReminder, repeatType: e.target.value as any})} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none cursor-pointer">
+              <input type="text" value={newReminder.title} onChange={e => setNewReminder({...newReminder, title: e.target.value})} placeholder={t("কি মনে করিয়ে দেব?", "Remind me about...")} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-brand-primary/20" />
+              <input type="datetime-local" value={newReminder.time} onChange={e => setNewReminder({...newReminder, time: e.target.value})} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/20" />
+              <select value={newReminder.repeatType} onChange={e => setNewReminder({...newReminder, repeatType: e.target.value as any})} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none cursor-pointer focus:ring-2 focus:ring-brand-primary/20">
                 <option value="none">{t('কখনো না', 'No Repeat')}</option>
                 <option value="daily">{t('প্রতিদিন', 'Repeat Daily')}</option>
                 <option value="weekly">{t('প্রতি সপ্তাহে', 'Repeat Weekly')}</option>
               </select>
+
+              <div className="flex items-center justify-between p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5">
+                <div className="flex items-center gap-3">
+                  <Calendar className="text-brand-primary" size={18} />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-brand-text-p">{t('ক্যালেন্ডারে সিঙ্ক করো', 'Sync to System Calendar')}</span>
+                </div>
+                <button onClick={() => setSyncToCalendar(!syncToCalendar)} className={`w-12 h-6 rounded-full transition-all relative ${syncToCalendar ? 'bg-brand-primary' : 'bg-brand-text-s/30'}`}>
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${syncToCalendar ? 'left-7' : 'left-1'}`} />
+                </button>
+              </div>
+
               <button 
                 onClick={addReminder} 
                 disabled={isAddingReminder}

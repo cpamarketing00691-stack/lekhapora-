@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { UserProfile, Language, UserState } from '../types';
-import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays } from 'lucide-react';
+import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays, Bell, X } from 'lucide-react';
 import BackgroundGrid from './BackgroundGrid';
 import { CollapsibleSidebar } from './CollapsibleSidebar';
+import { showLocalNotification } from '../lib/push-service';
+import { supabase } from '../lib/supabase';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,6 +17,8 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language, userState }) => {
   const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
+  const [activeAlert, setActiveAlert] = React.useState<string | null>(null);
+  const checkedReminders = useRef<Set<string>>(new Set());
 
   const t = (bn: string, en: string) => language === 'bn' ? bn : en;
 
@@ -35,6 +39,30 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     }
   }, [isDark]);
 
+  // Background Reminder Checker
+  useEffect(() => {
+    const checkReminders = () => {
+      const now = Date.now();
+      const reminders = userState.reminders || [];
+      
+      reminders.forEach(rem => {
+        // If due within the last 5 minutes and not already triggered/done in this session
+        if (!rem.isDone && !checkedReminders.current.has(rem.id) && rem.time <= now && rem.time > now - 300000) {
+          showLocalNotification(t('পড়াশোনার সময়!', 'Study Reminder!'), rem.title);
+          setActiveAlert(rem.title);
+          checkedReminders.current.add(rem.id);
+          
+          // Optionally auto-dismiss alert after 10s
+          setTimeout(() => setActiveAlert(null), 10000);
+        }
+      });
+    };
+
+    const interval = setInterval(checkReminders, 60000); // Check every minute
+    checkReminders(); // Initial check
+    return () => clearInterval(interval);
+  }, [userState.reminders, language]);
+
   const toggleTheme = () => setIsDark(!isDark);
 
   const navItems = [
@@ -50,6 +78,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden relative">
       {/* Background Grid */}
       <BackgroundGrid />
+
+      {/* In-App Toast Alert */}
+      {activeAlert && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md animate-in slide-in-from-top-4 duration-500">
+           <div className="bg-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 backdrop-blur-md">
+             <div className="flex items-center gap-3">
+               <Bell className="animate-bounce" size={20} />
+               <p className="text-xs font-black uppercase tracking-widest">{activeAlert}</p>
+             </div>
+             <button onClick={() => setActiveAlert(null)} className="p-1 hover:bg-white/20 rounded-lg">
+               <X size={18} />
+             </button>
+           </div>
+        </div>
+      )}
 
       {/* Collapsible Sidebar - Desktop */}
       <CollapsibleSidebar 

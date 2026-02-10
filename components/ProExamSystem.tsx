@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Timer, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Check, X, GraduationCap, Loader2, Sparkles, Trophy } from 'lucide-react';
+import { Timer, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Check, X, GraduationCap, Loader2, Sparkles, Trophy, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { UserState, TestAttempt, MCQ } from '../types';
 
@@ -50,15 +50,13 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       setQuestions(questionsRes.data);
 
       // Session Tracking & Sync - Start fresh for every entry
-      const { data: session } = await supabase
+      await supabase
         .from('exam_sys_sessions')
         .upsert({ 
           user_id: user.id, 
           exam_id: examId,
           started_at: new Date().toISOString() // Force a fresh start time
-        }, { onConflict: 'user_id,exam_id' })
-        .select()
-        .single();
+        }, { onConflict: 'user_id,exam_id' });
 
       setTimeLeft(examRes.data.duration_minutes * 60);
       setView('exam');
@@ -105,9 +103,9 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       // 2. Add to local history so it shows up in "History" tab
       if (onUpdateState) {
         const historyEntry: TestAttempt = {
-          id: `model-exam-${Date.now()}`,
-          subjectId: 'MODEL_EXAM', // Identifier for model exam entries
-          chapterId: examId,       // Reference back to this exam
+          id: `model-exam-${Date.now()}`, // Ensure unique ID per attempt
+          subjectId: 'MODEL_EXAM', 
+          chapterId: examId,       
           score: correctCount,
           total: questions.length,
           timeTakenSeconds: duration,
@@ -139,6 +137,15 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleRetake = () => {
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setTimeLeft(0);
+    setResult(null);
+    setView('loading');
+    fetchExamData();
   };
 
   useEffect(() => {
@@ -246,7 +253,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
               </div>
               <div className="bg-brand-bg p-4 rounded-2xl border border-brand-text-s/5">
                 <p className="text-[10px] font-black text-brand-text-s uppercase">Accuracy</p>
-                <h3 className="text-2xl font-black text-brand-text-p">{Math.round((result.correct_count / questions.length) * 100)}%</h3>
+                <h3 className="text-2xl font-black text-brand-text-p">{Math.round((result.correct_count / (questions.length || 1)) * 100)}%</h3>
               </div>
            </div>
            <div className="space-y-2 text-left bg-brand-bg p-4 rounded-2xl">
@@ -254,10 +261,16 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
              <div className="flex justify-between text-xs font-bold"><span>Wrong:</span> <span className="text-rose-500">{result.wrong_count}</span></div>
              <div className="flex justify-between text-xs font-bold"><span>Skipped:</span> <span className="text-brand-text-s">{result.skipped_count}</span></div>
            </div>
-           <button onClick={() => setView('leaderboard')} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-xs">
-             <Trophy size={16} /> View Leaderboard
-           </button>
-           <button onClick={onClose} className="w-full text-brand-text-s font-black uppercase text-[10px]">Back to Dashboard</button>
+           
+           <div className="grid grid-cols-1 gap-3">
+              <button onClick={handleRetake} className="w-full py-4 bg-brand-bg text-brand-primary border border-brand-primary/20 font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-xs hover:bg-brand-primary/5 transition-all">
+                <RefreshCw size={16} /> Retake Exam
+              </button>
+              <button onClick={() => setView('leaderboard')} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-xs shadow-lg shadow-brand-primary/20">
+                <Trophy size={16} /> View Leaderboard
+              </button>
+           </div>
+           <button onClick={onClose} className="w-full text-brand-text-s font-black uppercase text-[10px] mt-2">Back to Dashboard</button>
         </div>
       </div>
     );

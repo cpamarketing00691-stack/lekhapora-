@@ -49,8 +49,8 @@
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Use relative path to improve registration reliability
-          navigator.serviceWorker.register('./service-worker.js')
+          // Use absolute path to ensure correct registration from root
+          navigator.serviceWorker.register('/service-worker.js')
             .then(registration => console.debug('Service Worker registered'))
             .catch(error => console.warn('Service Worker registration failed:', error));
         });

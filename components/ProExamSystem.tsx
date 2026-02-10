@@ -97,11 +97,11 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
         submitted_at: new Date().toISOString()
       };
 
-      // Use UPSERT instead of INSERT to resolve the 409 Conflict if constraint is present
-      // To allow multiple entries in history, user must run the SQL DROP CONSTRAINT command.
+      // Changed to INSERT to support multiple retakes (requires SQL constraint removal)
+      // Since the unique constraint on (user_id, exam_id) is removed, we simply insert a new row for history.
       const { data, error } = await supabase
         .from('exam_sys_submissions')
-        .upsert(submission, { onConflict: 'user_id,exam_id' })
+        .insert(submission)
         .select()
         .single();
       

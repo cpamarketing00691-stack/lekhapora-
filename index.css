@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --brand-bg: 246 248 245;
+  --brand-primary: 91 125 190;
+  --brand-secondary: 127 174 158;
+  --brand-surface: 233 237 240;
+  --brand-text-p: 47 52 55;
+  --brand-text-s: 107 114 128;
+}
+
+.dark {
+  --brand-bg: 14 22 36;
+  --brand-primary: 95 179 162;
+  --brand-secondary: 139 156 242;
+  --brand-surface: 22 31 46;
+  --brand-text-p: 227 232 239;
+  --brand-text-s: 138 148 166;
+}
+
+html, body { 
+  width: 100%; 
+  height: 100%; 
+  margin: 0; 
+  padding: 0; 
+  overflow: hidden; 
+  background: rgb(var(--brand-bg)); 
+  font-family: 'Inter', sans-serif; 
+}
+
+#root { 
+  height: 100dvh; 
+  display: flex; 
+  flex-direction: column; 
+}
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+
+main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; }
+@media (min-width: 768px) { main { padding-bottom: 2rem !important; } }

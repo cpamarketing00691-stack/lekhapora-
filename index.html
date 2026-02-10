@@ -14,76 +14,26 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="application-name" content="HSC Tracker">
     <meta name="apple-mobile-web-app-title" content="HSC Tracker">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-          darkMode: 'class',
-          theme: {
-            extend: {
-              colors: {
-                brand: {
-                  bg: 'rgb(var(--brand-bg) / <alpha-value>)',
-                  surface: 'rgb(var(--brand-surface) / <alpha-value>)',
-                  primary: 'rgb(var(--brand-primary) / <alpha-value>)',
-                  secondary: 'rgb(var(--brand-secondary) / <alpha-value>)',
-                  'text-p': 'rgb(var(--brand-text-p) / <alpha-value>)',
-                  'text-s': 'rgb(var(--brand-text-s) / <alpha-value>)',
-                }
-              },
-              animation: {
-                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              }
-            }
-          }
-        }
-    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        :root {
-          --brand-bg: 246 248 245;
-          --brand-primary: 91 125 190;
-          --brand-secondary: 127 174 158;
-          --brand-surface: 233 237 240;
-          --brand-text-p: 47 52 55;
-          --brand-text-s: 107 114 128;
-        }
-        .dark {
-          --brand-bg: 14 22 36;
-          --brand-primary: 95 179 162;
-          --brand-secondary: 139 156 242;
-          --brand-surface: 22 31 46;
-          --brand-text-p: 227 232 239;
-          --brand-text-s: 138 148 166;
-        }
-        html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: var(--brand-bg); font-family: 'Inter', sans-serif; }
-        #root { height: 100dvh; display: flex; flex-direction: column; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-        main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; }
-        @media (min-width: 768px) { main { padding-bottom: 2rem !important; } }
-    </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@19.0.0",
-    "react/": "https://esm.sh/react@19.0.0/",
-    "react-dom": "https://esm.sh/react-dom@19.0.0",
-    "react-dom/": "https://esm.sh/react-dom@19.0.0/",
-    "lucide-react": "https://esm.sh/lucide-react@0.475.0?external=react",
-    "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
-    "framer-motion": "https://esm.sh/framer-motion@11.11.11?external=react,react-dom",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.2",
-    "web-push": "https://esm.sh/web-push@^3.6.7"
-  }
-}
-</script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.0.0",
+        "react/": "https://esm.sh/react@19.0.0/",
+        "react-dom": "https://esm.sh/react-dom@19.0.0",
+        "react-dom/": "https://esm.sh/react-dom@19.0.0/",
+        "lucide-react": "https://esm.sh/lucide-react@0.475.0?external=react",
+        "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
+        "framer-motion": "https://esm.sh/framer-motion@11.11.11?external=react,react-dom",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
+        "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+        "vite": "https://esm.sh/vite@^7.3.1",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+        "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.2",
+        "web-push": "https://esm.sh/web-push@^3.6.7"
+      }
+    }
+    </script>
 </head>
 <body class="light">
     <div id="root"></div>

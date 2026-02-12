@@ -219,6 +219,7 @@ const App: React.FC = () => {
           examId={activeModelExamId} 
           onClose={() => setActiveModelExamId(null)} 
           onUpdateState={setUserState}
+          language={userState.language}
         />
       )}
     </Layout>

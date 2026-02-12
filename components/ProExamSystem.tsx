@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Timer, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Check, X, GraduationCap, Loader2, Sparkles, Trophy, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { UserState, TestAttempt, MCQ } from '../types';
+import { UserState, TestAttempt, MCQ, Language } from '../types';
 
 interface ProExamProps {
   examId: string;
   onClose: () => void;
   onUpdateState?: React.Dispatch<React.SetStateAction<UserState>>;
+  language?: Language;
 }
 
 interface Question {
@@ -25,7 +27,7 @@ interface Exam {
 
 type ExamStatus = 'not_started' | 'in_progress' | 'submitting' | 'completed';
 
-const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState }) => {
+const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState, language = 'bn' }) => {
   const [examStatus, setExamStatus] = useState<ExamStatus>('not_started');
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -36,21 +38,19 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
   
   const timerIntervalRef = useRef<number | null>(null);
   const isSubmissionLocked = useRef(false);
-  
-  // 1. MOUNT GUARD: Prevents redundant initialization attempts
   const initializedRef = useRef(false);
 
+  // Translation helper function
+  const t = (bn: string, en: string) => language === 'bn' ? bn : en;
+
   const fetchExamData = useCallback(async () => {
-    // 2. GUARD: Prevent fetch if already processing, or if we already have a result
     if (initializedRef.current || examStatus !== 'not_started' || result) return;
-    
     initializedRef.current = true;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return onClose();
 
-      // 3. REMOUNT RECOVERY: Check if user already submitted this exam
       const { data: existingSubmission } = await supabase
         .from('exam_sys_submissions')
         .select('*')
@@ -59,13 +59,12 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
         .maybeSingle();
 
       if (existingSubmission) {
-        // If found, immediately show result instead of starting exam
         const [examRes, questionsRes] = await Promise.all([
           supabase.from('exam_sys_exams').select('*').eq('id', examId).single(),
           supabase.from('exam_sys_questions').select('*').eq('exam_id', examId).order('order_index')
         ]);
         setExam(examRes.data);
-        setQuestions(questionsRes.data);
+        setQuestions(questionsRes.data || []);
         setResult(existingSubmission);
         setExamStatus('completed');
         return;
@@ -79,11 +78,8 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       if (examRes.error || questionsRes.error) throw new Error("Data load failed");
 
       setExam(examRes.data);
-      setQuestions(questionsRes.data);
+      setQuestions(questionsRes.data || []);
       setTimeLeft(examRes.data.duration_minutes * 60);
-      
-      // 4. CONDITIONAL START: Only set 'in_progress' if we aren't loading an existing result.
-      // Fix: Removed redundant comparison of incompatible states as early return ensures status is not 'completed' here.
       setExamStatus('in_progress');
 
       await supabase.from('exam_sys_sessions').upsert({ 
@@ -99,7 +95,6 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     }
   }, [examId, onClose, examStatus, result]);
 
-  // 5. STABILIZED MOUNT EFFECT: Only triggers fetch if initializedRef is false
   useEffect(() => {
     if (!initializedRef.current && examStatus === 'not_started' && !result) {
       fetchExamData();
@@ -151,22 +146,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       
       if (error) throw error;
 
-      if (onUpdateState) {
-        onUpdateState(prev => ({
-          ...prev,
-          testHistory: [{
-            id: `model-exam-${Date.now()}`,
-            subjectId: 'MODEL_EXAM', 
-            chapterId: examId,       
-            score: correctCount,
-            total: questions.length,
-            timeTakenSeconds: duration,
-            date: Date.now(),
-            questions: questions.map(q => ({ ...q, id: q.id })) as any,
-            userAnswers: questions.map(q => userAnswers[q.id] ?? -1)
-          }, ...(prev.testHistory || [])]
-        }));
-      }
+      // REMOVED: Parent state update (onUpdateState) removed from here to prevent remount loop.
 
       await supabase.from('exam_sys_sessions').delete().match({ user_id: user.id, exam_id: examId });
 
@@ -177,7 +157,28 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       isSubmissionLocked.current = false;
       setExamStatus('in_progress');
     }
-  }, [examId, questions, userAnswers, exam, timeLeft, onUpdateState, examStatus]);
+  }, [examId, questions, userAnswers, exam, timeLeft, examStatus]);
+
+  // Handle exiting the exam and syncing with parent state
+  const handleFinalExit = () => {
+    if (onUpdateState && result) {
+      onUpdateState(prev => ({
+        ...prev,
+        testHistory: [{
+          id: `model-exam-${Date.now()}`,
+          subjectId: 'MODEL_EXAM', 
+          chapterId: examId,       
+          score: result.score,
+          total: questions.length,
+          timeTakenSeconds: result.time_taken_seconds,
+          date: Date.now(),
+          questions: questions.map(q => ({ ...q, id: q.id })) as any,
+          userAnswers: questions.map(q => userAnswers[q.id] ?? -1)
+        }, ...(prev.testHistory || [])]
+      }));
+    }
+    onClose();
+  };
 
   useEffect(() => {
     if (examStatus === 'in_progress' && timeLeft > 0) {
@@ -293,12 +294,12 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
            <h2 className="text-2xl font-black text-brand-text-p">Exam Submitted!</h2>
            <div className="grid grid-cols-2 gap-3">
               <div className="bg-brand-bg p-4 rounded-2xl border border-brand-text-s/5">
-                <p className="text-[10px] font-black text-brand-text-s uppercase">Score</p>
+                <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সঠিক উত্তর', 'SCORE')}</p>
                 <h3 className="text-2xl font-black text-brand-primary">{result.score} / {questions.length}</h3>
               </div>
               <div className="bg-brand-bg p-4 rounded-2xl border border-brand-text-s/5">
-                <p className="text-[10px] font-black text-brand-text-s uppercase">Accuracy</p>
-                <h3 className="text-2xl font-black text-brand-text-p">{Math.round((result.correct_count / (questions.length || 1)) * 100)}%</h3>
+                <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সময় লেগেছে', 'TIME')}</p>
+                <h3 className="text-2xl font-black text-brand-text-p">{formatTime(result.time_taken_seconds)}</h3>
               </div>
            </div>
            <div className="space-y-2 text-left bg-brand-bg p-4 rounded-2xl">
@@ -312,7 +313,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
                 <RefreshCw size={16} /> Retake Exam
               </button>
            </div>
-           <button onClick={onClose} className="w-full text-brand-text-s font-black uppercase text-[10px] mt-2">Back to Dashboard</button>
+           <button onClick={handleFinalExit} className="w-full text-brand-text-s font-black uppercase text-[10px] mt-2">Back to Dashboard</button>
         </div>
       </div>
     );

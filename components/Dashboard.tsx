@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
@@ -118,6 +119,14 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     return list.sort((a, b) => a.days - b.days).slice(0, 3);
   }, [userState.profile, userState.language]);
 
+  const suggestedReminders = useMemo(() => {
+    const existingTitles = new Set((userState.reminders || []).map(r => r.title.toLowerCase()));
+    return countdowns.filter(cd => {
+      const title = `${t('পরীক্ষা প্রস্তুতি:', 'Exam Prep:')} ${cd.name}`.toLowerCase();
+      return !existingTitles.has(title);
+    });
+  }, [countdowns, userState.reminders, userState.language]);
+
   function formatDuration(totalSeconds: number) {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
@@ -158,12 +167,46 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsReminderModalOpen(true);
   };
 
+  const quickAddReminder = async (exam: any) => {
+    const title = `${t('পরীক্ষা প্রস্তুতি:', 'Exam Prep:')} ${exam.name}`;
+    const examDate = new Date(exam.originalDate);
+    // Set for 8 AM of the exam date
+    examDate.setHours(8, 0, 0, 0);
+
+    const reminder: Reminder = {
+      id: `rem-quick-${Date.now()}`,
+      title,
+      time: examDate.getTime(),
+      isTriggered: false,
+      isDone: false,
+      repeatType: 'none'
+    };
+
+    onUpdateState(prev => ({ 
+      ...prev, 
+      reminders: [...(prev.reminders || []), reminder] 
+    }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('reminders').insert({
+          user_id: user.id,
+          title: title,
+          reminder_datetime: examDate.toISOString(),
+          is_done: false,
+          is_triggered: false,
+          repeat_type: 'none'
+        });
+      }
+    } catch (e) {}
+  };
+
   const addReminder = async () => {
     if (!newReminder.title.trim() || !newReminder.time || isAddingReminder) return;
     setIsAddingReminder(true);
     
     try {
-      // Request notification permission
       await checkNotificationPermission();
 
       const { data: { user } } = await supabase.auth.getUser();
@@ -192,7 +235,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         repeatType: newReminder.repeatType
       };
 
-      // Sync to system calendar if requested
       if (syncToCalendar) {
         generateICS(reminder.title, reminder.time);
       }
@@ -267,7 +309,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Main Stat Summary */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
              <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm flex items-center justify-between overflow-hidden relative">
                 <div className="relative z-10">
@@ -305,7 +346,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
              </section>
           </div>
 
-          {/* Subjects Progress Grid */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-black flex items-center gap-2"><LayoutGrid size={20} className="text-brand-primary" /> {t('সিলেবাস অগ্রগতি', 'Syllabus Breakdown')}</h3>
@@ -351,7 +391,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
           </section>
 
-          {/* Activity Chart */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <h3 className="text-lg font-black mb-6 flex items-center gap-3"><History size={20} className="text-brand-secondary" /> {t('পড়াশোনার ইতিহাস', 'Weekly Activity')}</h3>
             <div className="h-48 w-full">
@@ -370,9 +409,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
           </section>
         </div>
 
-        {/* Sidebar Widgets */}
         <div className="space-y-6">
-          {/* Exam Countdown Widget */}
           {countdowns.length > 0 && (
             <section className="space-y-3">
               <h3 className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('আসন্ন পরীক্ষা', 'Exam Countdowns')}</h3>
@@ -403,7 +440,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </section>
           )}
 
-          {/* Daily Tasks Widget */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-black flex items-center gap-3"><ListTodo size={20} className="text-brand-primary" /> {t('ডেইলি টাস্ক', 'Today\'s Task')}</h3>
@@ -434,11 +470,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                        )}
                     </div>
                   </div>
-                  {task.isCompleted && task.subjectId && task.chapterId && (
-                    <button onClick={() => onTriggerTest(task.subjectId!, task.chapterId!)} className="w-full mt-4 py-2.5 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all">
-                      <GraduationCap size={16} /> {t('অধ্যায় যাচাই করো', 'Test This Chapter')}
-                    </button>
-                  )}
                 </div>
               )) : (
                 <div className="py-8 text-center bg-brand-bg/30 rounded-3xl border border-dashed border-brand-text-s/20">
@@ -448,7 +479,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
           </section>
 
-          {/* Reminders Widget */}
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-black flex items-center gap-3"><Bell size={20} className="text-orange-500" /> {t('রিমাইন্ডার', 'Alerts')}</h3>
@@ -456,6 +486,25 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
             
             <div className="space-y-3">
+              {suggestedReminders.length > 0 && (
+                <div className="mb-4 p-4 bg-brand-primary/5 rounded-3xl border border-dashed border-brand-primary/20 space-y-3">
+                  <p className="text-[8px] font-black uppercase text-brand-primary tracking-widest">{t('পরামর্শ', 'Suggested for You')}</p>
+                  {suggestedReminders.map((s, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => quickAddReminder(s)}
+                      className="w-full flex items-center justify-between p-3 bg-white dark:bg-brand-bg rounded-2xl hover:scale-[1.02] active:scale-95 transition-all group shadow-sm"
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <GraduationCap size={14} className="text-brand-primary shrink-0" />
+                        <span className="text-[10px] font-bold text-brand-text-p truncate">{s.name}</span>
+                      </div>
+                      <Plus size={14} className="text-brand-primary group-hover:rotate-90 transition-transform" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {activeReminders.length > 0 ? activeReminders.map(rem => (
                 <div key={rem.id} className="p-4 bg-white dark:bg-brand-surface rounded-2xl border border-brand-text-s/10 flex items-center justify-between group hover:border-orange-500/50 transition-all">
                   <div className="min-w-0">
@@ -489,7 +538,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
         </div>
       </div>
 
-      {/* Modals */}
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="w-full max-w-md bg-brand-surface p-8 rounded-[3rem] shadow-2xl border border-brand-text-s/10">

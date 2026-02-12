@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Timer, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Check, X, GraduationCap, Loader2, Sparkles, Trophy, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { UserState, TestAttempt, MCQ } from '../types';
@@ -23,56 +24,75 @@ interface Exam {
   duration_minutes: number;
 }
 
+type ExamStatus = 'not_started' | 'in_progress' | 'submitting' | 'completed';
+
 const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState }) => {
-  const [view, setView] = useState<'loading' | 'exam' | 'result' | 'leaderboard'>('loading');
+  const [examStatus, setExamStatus] = useState<ExamStatus>('not_started');
   const [exam, setExam] = useState<Exam | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState<number>(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
+  
+  // High-reliability timer and submission refs
+  const timerIntervalRef = useRef<number | null>(null);
+  const isSubmissionLocked = useRef(false);
 
+  // 1. Corrected Fetch Logic: Strictly guarded by 'not_started'
   const fetchExamData = useCallback(async () => {
+    if (examStatus !== 'not_started' || isSubmissionLocked.current) return;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return onClose();
 
-      // Fetch Exam and Questions
       const [examRes, questionsRes] = await Promise.all([
         supabase.from('exam_sys_exams').select('*').eq('id', examId).single(),
         supabase.from('exam_sys_questions').select('*').eq('exam_id', examId).order('order_index')
       ]);
 
-      if (examRes.error || questionsRes.error) throw new Error("Failed to load exam data");
+      if (examRes.error || questionsRes.error) throw new Error("Data load failed");
 
       setExam(examRes.data);
       setQuestions(questionsRes.data);
-
-      // Session Tracking
-      await supabase
-        .from('exam_sys_sessions')
-        .upsert({ 
-          user_id: user.id, 
-          exam_id: examId,
-          started_at: new Date().toISOString()
-        }, { onConflict: 'user_id,exam_id' });
-
       setTimeLeft(examRes.data.duration_minutes * 60);
-      setView('exam');
+      
+      // Atomic state transition to start
+      setExamStatus('in_progress');
+
+      await supabase.from('exam_sys_sessions').upsert({ 
+        user_id: user.id, 
+        exam_id: examId,
+        started_at: new Date().toISOString()
+      }, { onConflict: 'user_id,exam_id' });
+
     } catch (err) {
       console.error(err);
       onClose();
     }
-  }, [examId, onClose]);
+  }, [examId, onClose, examStatus]);
 
   useEffect(() => {
     fetchExamData();
-  }, [fetchExamData]);
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
 
-  const submitExam = async (isAuto = false) => {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
+  // 2. Corrected Submission Logic: Prevents loops and cleans up resources
+  const submitExam = useCallback(async (isAuto = false) => {
+    if (isSubmissionLocked.current || examStatus === 'completed' || examStatus === 'submitting') return;
+    
+    // Immediate lockout
+    isSubmissionLocked.current = true;
+    setExamStatus('submitting');
+    
+    // Stop timer immediately
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -84,7 +104,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
 
       const skippedCount = questions.filter(q => userAnswers[q.id] === undefined).length;
       const wrongCount = questions.length - correctCount - skippedCount;
-      const duration = (exam!.duration_minutes * 60) - timeLeft;
+      const duration = exam ? (exam.duration_minutes * 60) - timeLeft : 0;
 
       const submission = {
         user_id: user.id,
@@ -97,82 +117,73 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
         submitted_at: new Date().toISOString()
       };
 
-      // Changed to INSERT to support multiple retakes (requires SQL constraint removal)
-      // Since the unique constraint on (user_id, exam_id) is removed, we simply insert a new row for history.
       const { data, error } = await supabase
         .from('exam_sys_submissions')
         .insert(submission)
         .select()
         .single();
       
-      if (error) {
-        console.error("Submission Error:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      // 2. Update local history for "History" tab
       if (onUpdateState) {
-        const historyEntry: TestAttempt = {
-          id: `model-exam-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          subjectId: 'MODEL_EXAM', 
-          chapterId: examId,       
-          score: correctCount,
-          total: questions.length,
-          timeTakenSeconds: duration,
-          date: Date.now(),
-          questions: questions.map(q => ({
-            id: q.id,
-            question: q.question,
-            options: q.options,
-            correct_index: q.correct_index,
-            explanation: q.explanation
-          })) as any,
-          userAnswers: questions.map(q => userAnswers[q.id] ?? -1)
-        };
-
         onUpdateState(prev => ({
           ...prev,
-          testHistory: [historyEntry, ...(prev.testHistory || [])]
+          testHistory: [{
+            id: `model-exam-${Date.now()}`,
+            subjectId: 'MODEL_EXAM', 
+            chapterId: examId,       
+            score: correctCount,
+            total: questions.length,
+            timeTakenSeconds: duration,
+            date: Date.now(),
+            questions: questions.map(q => ({ ...q, id: q.id })) as any,
+            userAnswers: questions.map(q => userAnswers[q.id] ?? -1)
+          }, ...(prev.testHistory || [])]
         }));
       }
 
-      // 3. Clean up active session
       await supabase.from('exam_sys_sessions').delete().match({ user_id: user.id, exam_id: examId });
 
       setResult(data);
-      setView('result');
+      setExamStatus('completed');
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Submission failed. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      isSubmissionLocked.current = false;
+      setExamStatus('in_progress');
+      alert("Submission failed. Please check your connection and try again.");
     }
-  };
+  }, [examId, questions, userAnswers, exam, timeLeft, onUpdateState, examStatus]);
 
-  const handleRetake = () => {
-    setCurrentIndex(0);
-    setUserAnswers({});
-    setTimeLeft(0);
-    setResult(null);
-    setView('loading');
-    fetchExamData();
-  };
-
+  // 3. Corrected Timer Logic: Only runs while in_progress
   useEffect(() => {
-    if (view === 'exam' && timeLeft > 0) {
-      const timer = setInterval(() => {
+    if (examStatus === 'in_progress' && timeLeft > 0) {
+      timerIntervalRef.current = window.setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
-            clearInterval(timer);
+            clearInterval(timerIntervalRef.current!);
             submitExam(true);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-      return () => clearInterval(timer);
     }
-  }, [view, timeLeft]);
+
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [examStatus]); // Only depends on status, not timeLeft, to avoid resetting intervals
+
+  const handleRetake = () => {
+    // FIXED: Changed 'isSubmitting' to 'examStatus === "submitting"'
+    if (examStatus === 'submitting') return;
+    isSubmissionLocked.current = false;
+    setCurrentIndex(0);
+    setUserAnswers({});
+    setResult(null);
+    setExamStatus('not_started');
+    // useEffect will trigger fetchExamData again
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -180,17 +191,20 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  if (view === 'loading') {
+  // Rendering logic strictly gated by status
+  if (examStatus === 'not_started' || (examStatus === 'submitting' && !result)) {
     return (
       <div className="fixed inset-0 z-[200] bg-brand-bg flex flex-col items-center justify-center p-6 text-center">
         <Loader2 size={40} className="animate-spin text-brand-primary mb-4" />
-        <h2 className="font-black text-brand-text-p uppercase tracking-widest text-sm">Preparing Your Exam</h2>
+        <h2 className="font-black text-brand-text-p uppercase tracking-widest text-sm">
+          {examStatus === 'submitting' ? 'Submitting Responses...' : 'Preparing Your Exam'}
+        </h2>
         <p className="text-brand-text-s text-xs mt-2">Entering Secure Mode...</p>
       </div>
     );
   }
 
-  if (view === 'exam' && exam && questions.length > 0) {
+  if (examStatus === 'in_progress' && exam && questions.length > 0) {
     const q = questions[currentIndex];
     return (
       <div className="fixed inset-0 z-[200] bg-brand-bg overflow-y-auto pb-20">
@@ -248,7 +262,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     );
   }
 
-  if (view === 'result' && result) {
+  if (examStatus === 'completed' && result) {
     return (
       <div className="fixed inset-0 z-[200] bg-brand-bg flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-brand-surface p-8 rounded-[3rem] border border-brand-text-s/10 text-center shadow-2xl space-y-6">
@@ -276,9 +290,6 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
               <button onClick={handleRetake} className="w-full py-4 bg-brand-bg text-brand-primary border border-brand-primary/20 font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-xs hover:bg-brand-primary/5 transition-all">
                 <RefreshCw size={16} /> Retake Exam
               </button>
-              <button onClick={() => setView('leaderboard')} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl flex items-center justify-center gap-2 uppercase tracking-widest text-xs shadow-lg shadow-brand-primary/20">
-                <Trophy size={16} /> View Leaderboard
-              </button>
            </div>
            <button onClick={onClose} className="w-full text-brand-text-s font-black uppercase text-[10px] mt-2">Back to Dashboard</button>
         </div>
@@ -286,55 +297,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     );
   }
 
-  if (view === 'leaderboard') {
-    return <Leaderboard examId={examId} onClose={onClose} />;
-  }
-
   return null;
-};
-
-const Leaderboard: React.FC<{ examId: string; onClose: () => void }> = ({ examId, onClose }) => {
-  const [entries, setEntries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase
-      .from('exam_sys_submissions')
-      .select('score, time_taken_seconds, submitted_at, user_id')
-      .eq('exam_id', examId)
-      .order('score', { ascending: false })
-      .order('time_taken_seconds', { ascending: true })
-      .limit(10)
-      .then(({ data }) => {
-        setEntries(data || []);
-        setLoading(false);
-      });
-  }, [examId]);
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-brand-bg p-4 sm:p-8 flex flex-col items-center justify-center">
-      <div className="w-full max-w-xl bg-brand-surface rounded-[3rem] border border-brand-text-s/10 shadow-2xl flex flex-col max-h-[80vh]">
-         <div className="p-8 border-b border-brand-text-s/10 flex items-center justify-between">
-            <h2 className="text-xl font-black text-brand-text-p flex items-center gap-3"><Trophy className="text-brand-primary" /> Leaderboard</h2>
-            <button onClick={onClose} className="text-brand-text-s font-bold text-xs uppercase">Close</button>
-         </div>
-         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-           {loading ? <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-brand-primary" /></div> : entries.map((entry, idx) => (
-             <div key={idx} className={`flex items-center justify-between p-4 rounded-2xl ${idx === 0 ? 'bg-brand-primary/10 border border-brand-primary/20' : 'bg-brand-bg'}`}>
-               <div className="flex items-center gap-4">
-                 <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${idx === 0 ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-text-s'}`}>{idx + 1}</span>
-                 <span className="font-bold text-sm text-brand-text-p">Student ID: {entry.user_id.slice(0, 8)}...</span>
-               </div>
-               <div className="text-right">
-                 <p className="font-black text-brand-primary">{entry.score} Marks</p>
-                 <p className="text-[10px] font-bold text-brand-text-s uppercase">{entry.time_taken_seconds}s Taken</p>
-               </div>
-             </div>
-           ))}
-         </div>
-      </div>
-    </div>
-  );
 };
 
 export default ProExamSystem;

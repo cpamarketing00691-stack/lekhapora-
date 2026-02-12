@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserState, Subject, Chapter, MCQ, TestAttempt } from '../types';
 import { 
@@ -15,24 +16,27 @@ interface TestSectionProps {
   onTriggerModelExam?: (examId: string) => void;
 }
 
+type TestStatus = 'selection' | 'exam' | 'result' | 'history';
+
 const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, initialContext, clearContext, onTriggerModelExam }) => {
-  const [view, setView] = useState<'selection' | 'exam' | 'result' | 'history'>('selection');
+  const [testStatus, setTestStatus] = useState<TestStatus>('selection');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialContext?.subjectId || '');
   const [selectedChapterId, setSelectedChapterId] = useState<string>(initialContext?.chapterId || '');
   const [currentQuestions, setCurrentQuestions] = useState<MCQ[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<number[]>([]);
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes
+  const [timeLeft, setTimeLeft] = useState(1800); 
   const [isLoading, setIsLoading] = useState(false);
   const [historyAttempt, setHistoryAttempt] = useState<TestAttempt | null>(null);
   
-  // Model Exams State
   const [modelExams, setModelExams] = useState<any[]>([]);
   const [loadingExams, setLoadingExams] = useState(false);
 
-  const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
+  // Guards
+  const isSubmissionLocked = useRef(false);
+  const timerIntervalRef = useRef<number | null>(null);
 
-  const timerRef = useRef<number | null>(null);
+  const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
   useEffect(() => {
     const fetchModelExams = async () => {
@@ -49,9 +53,15 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     fetchModelExams();
   }, []);
 
-  /**
-   * Logical Normalization for Chapter Matching
-   */
+  useEffect(() => {
+    if (initialContext && testStatus === 'selection') {
+      setSelectedSubjectId(initialContext.subjectId);
+      setSelectedChapterId(initialContext.chapterId);
+      startExam(initialContext.subjectId, initialContext.chapterId);
+      clearContext();
+    }
+  }, [initialContext]);
+
   const normalize = (str: any): string => {
     if (!str) return '';
     const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -63,32 +73,22 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     return result.replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '').replace(/\s+/g, ' ').trim();
   };
 
-  useEffect(() => {
-    if (initialContext) {
-      setSelectedSubjectId(initialContext.subjectId);
-      setSelectedChapterId(initialContext.chapterId);
-      startExam(initialContext.subjectId, initialContext.chapterId);
-      clearContext();
-    }
-  }, [initialContext]);
-
   const startExam = async (subjIdArg?: string, chapIdArg?: string) => {
     const sId = subjIdArg || selectedSubjectId;
     const cId = chapIdArg || selectedChapterId;
     
-    if (!sId || !cId) return;
+    if (!sId || !cId || testStatus === 'exam') return;
     setIsLoading(true);
+    isSubmissionLocked.current = false;
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) throw new Error("Auth required");
 
       const currentSubject = userState.subjects.find(s => s.id === sId);
       const currentChapter = currentSubject?.chapters.find(c => c.id === cId);
 
-      if (!currentSubject || !currentChapter) {
-        throw new Error("Selection Invalid");
-      }
+      if (!currentSubject || !currentChapter) throw new Error("Invalid Selection");
 
       const { data: rawData, error } = await supabase
         .from('mcqs')
@@ -110,7 +110,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       }
 
       if (filtered.length === 0) {
-        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন নেই।", "No questions found in database for this chapter."));
+        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন নেই।", "No questions found for this chapter."));
         setIsLoading(false);
         return;
       }
@@ -127,7 +127,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       setUserAnswers(new Array(mappedQuestions.length).fill(-1));
       setCurrentIndex(0);
       setTimeLeft(1800);
-      setView('exam');
+      setTestStatus('exam');
     } catch (err: any) {
       console.error(err);
       alert(t("সার্ভার ত্রুটি। আবার চেষ্টা করো।", "Server error. Please try again."));
@@ -136,25 +136,15 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     }
   };
 
-  useEffect(() => {
-    if (view === 'exam' && timeLeft > 0) {
-      timerRef.current = window.setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            submitExam();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [view]);
-
   const submitExam = async () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (isSubmissionLocked.current) return;
+    isSubmissionLocked.current = true;
+    
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
     const correctCount = userAnswers.reduce((acc, ans, idx) => acc + (ans === currentQuestions[idx].correct_index ? 1 : 0), 0);
 
     const attempt: TestAttempt = {
@@ -193,8 +183,25 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         });
       }
     } catch (e) {}
-    setView('result');
+
+    setTestStatus('result');
   };
+
+  useEffect(() => {
+    if (testStatus === 'exam' && timeLeft > 0) {
+      timerIntervalRef.current = window.setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timerIntervalRef.current!);
+            submitExam();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+    }
+  }, [testStatus]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -208,14 +215,13 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   return (
     <div className="max-w-4xl mx-auto pb-20 animate-in fade-in duration-500">
       
-      {view === 'selection' && (
+      {testStatus === 'selection' && (
         <div className="space-y-8">
           <header>
             <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট ও প্র্যাকটিস', 'Test & Practice')}</h2>
             <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest mt-1">{t('তোমার প্রস্তুতির যাচাই করো', 'Evaluate your preparation level')}</p>
           </header>
 
-          {/* New Section: Professional Model Exams */}
           <section className="bg-brand-primary/5 p-6 rounded-[2.5rem] border border-brand-primary/20 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -321,12 +327,11 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                 {userState.testHistory && userState.testHistory.length > 0 ? userState.testHistory.map(att => {
                   const isModelExam = att.subjectId === 'MODEL_EXAM';
                   const subj = userState.subjects.find(s => s.id === att.subjectId);
-                  const examMeta = modelExams.find(e => e.id === att.chapterId);
                   
                   return (
                     <button 
                       key={att.id} 
-                      onClick={() => { setHistoryAttempt(att); setView('history'); }}
+                      onClick={() => { setHistoryAttempt(att); setTestStatus('history'); }}
                       className="w-full text-left p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5 group hover:border-brand-primary transition-all"
                     >
                       <div className="flex justify-between items-start mb-1">
@@ -338,7 +343,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                         </span>
                       </div>
                       <h4 className="text-xs font-bold text-brand-text-p truncate">
-                        {isModelExam ? (examMeta?.title || t('মডেল টেস্ট', 'Model Exam')) : (subj?.name || t('অজানা বিষয়', 'Unknown Subject'))}
+                        {isModelExam ? t('মডেল টেস্ট', 'Model Exam') : (subj?.name || t('অজানা বিষয়', 'Unknown Subject'))}
                       </h4>
                       <p className="text-[9px] font-medium text-brand-text-s truncate">
                         {isModelExam ? t('প্রফেশনাল এসেসমেন্ট', 'Professional Assessment') : (subj?.chapters.find(c => c.id === att.chapterId)?.name || '')}
@@ -357,7 +362,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         </div>
       )}
 
-      {view === 'exam' && (
+      {testStatus === 'exam' && (
         <div className="space-y-6">
           <header className="flex items-center justify-between bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm sticky top-0 z-50">
              <div className="flex items-center gap-4">
@@ -400,7 +405,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         </div>
       )}
 
-      {view === 'result' && (
+      {testStatus === 'result' && (
         <div className="max-w-2xl mx-auto space-y-8 py-10 animate-in zoom-in-95 duration-500">
            <div className="bg-brand-surface p-10 rounded-[3rem] border border-brand-text-s/10 text-center shadow-xl space-y-8 relative overflow-hidden">
               <Sparkles className="absolute -right-10 -bottom-10 opacity-10 text-brand-primary" size={200} />
@@ -419,17 +424,20 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                  </div>
               </div>
               <div className="pt-4 relative z-10">
-                <button onClick={() => setView('selection')} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-xs active:scale-95 transition-all">{t('ড্যাশবোর্ডে ফিরে যাও', 'Return to Selection')}</button>
-                <button onClick={() => { setHistoryAttempt(userState.testHistory[0]); setView('history'); }} className="w-full mt-3 py-4 bg-brand-bg text-brand-text-p border border-brand-text-s/10 font-black rounded-2xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('প্রশ্নগুলোর সমাধান দেখো', 'Review Questions')}</button>
+                <button onClick={() => { 
+                   isSubmissionLocked.current = false;
+                   setTestStatus('selection'); 
+                }} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-xs active:scale-95 transition-all">{t('ড্যাশবোর্ডে ফিরে যাও', 'Return to Selection')}</button>
+                <button onClick={() => { setHistoryAttempt(userState.testHistory[0]); setTestStatus('history'); }} className="w-full mt-3 py-4 bg-brand-bg text-brand-text-p border border-brand-text-s/10 font-black rounded-2xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('প্রশ্নগুলোর সমাধান দেখো', 'Review Questions')}</button>
               </div>
            </div>
         </div>
       )}
 
-      {view === 'history' && historyAttempt && (
+      {testStatus === 'history' && historyAttempt && (
         <div className="space-y-6">
           <header className="flex items-center justify-between">
-            <button onClick={() => setView('selection')} className="flex items-center gap-2 text-brand-text-s hover:text-brand-text-p font-black text-[10px] uppercase tracking-widest transition-all"><ChevronLeft size={16} /> {t('পিছনে', 'Back')}</button>
+            <button onClick={() => setTestStatus('selection')} className="flex items-center gap-2 text-brand-text-s hover:text-brand-text-p font-black text-[10px] uppercase tracking-widest transition-all"><ChevronLeft size={16} /> {t('পিছনে', 'Back')}</button>
             <h3 className="text-sm font-black text-brand-text-p uppercase tracking-widest">{t('রিভিউ ও সমাধান', 'Review & Solutions')}</h3>
             <div className="w-10"></div>
           </header>
@@ -455,7 +463,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
               );
             })}
           </div>
-          <button onClick={() => setView('selection')} className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('শেষ করো', 'Close Review')}</button>
+          <button onClick={() => setTestStatus('selection')} className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('শেষ করো', 'Close Review')}</button>
         </div>
       )}
     </div>

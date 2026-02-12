@@ -94,6 +94,7 @@ export interface Chapter {
   isCompleted: boolean;
   testScore?: number;
   difficulty?: Difficulty;
+  studyTimeSeconds?: number;
 }
 
 export interface Subject {

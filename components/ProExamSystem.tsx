@@ -38,14 +38,24 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
   // High-reliability timer and submission refs
   const timerIntervalRef = useRef<number | null>(null);
   const isSubmissionLocked = useRef(false);
+  
+  // 1. STABILITY REF: Prevents restart loop on remount/re-render
+  const hasInitializedRef = useRef(false);
 
-  // 1. Corrected Fetch Logic: Strictly guarded by 'not_started'
+  // 2. Corrected Fetch Logic: Strictly guarded by initialization ref and terminal status
   const fetchExamData = useCallback(async () => {
-    if (examStatus !== 'not_started' || isSubmissionLocked.current) return;
+    // GUARD: Block if already started, finished, or currently initializing
+    if (hasInitializedRef.current || examStatus !== 'not_started' || result) return;
+    
+    // Set ref immediately to block any other execution (Strict Mode safety)
+    hasInitializedRef.current = true;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return onClose();
+      if (!user) {
+        hasInitializedRef.current = false;
+        return onClose();
+      }
 
       const [examRes, questionsRes] = await Promise.all([
         supabase.from('exam_sys_exams').select('*').eq('id', examId).single(),
@@ -58,7 +68,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       setQuestions(questionsRes.data);
       setTimeLeft(examRes.data.duration_minutes * 60);
       
-      // Atomic state transition to start
+      // GUARD: Only start if the status wasn't changed by a race condition
       setExamStatus('in_progress');
 
       await supabase.from('exam_sys_sessions').upsert({ 
@@ -69,19 +79,24 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
 
     } catch (err) {
       console.error(err);
+      hasInitializedRef.current = false; // Reset to allow retry on error
       onClose();
     }
-  }, [examId, onClose, examStatus]);
+  }, [examId, onClose, examStatus, result]);
 
+  // 3. Mount Effect: Only triggers if not initialized
   useEffect(() => {
-    fetchExamData();
+    if (!hasInitializedRef.current && examStatus === 'not_started') {
+      fetchExamData();
+    }
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, []);
+  }, [fetchExamData, examStatus]);
 
-  // 2. Corrected Submission Logic: Prevents loops and cleans up resources
+  // 4. Corrected Submission Logic: Prevents loops and cleans up resources
   const submitExam = useCallback(async (isAuto = false) => {
+    // CRITICAL GUARD: Never submit if already completed or in progress of submitting
     if (isSubmissionLocked.current || examStatus === 'completed' || examStatus === 'submitting') return;
     
     // Immediate lockout
@@ -154,7 +169,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     }
   }, [examId, questions, userAnswers, exam, timeLeft, onUpdateState, examStatus]);
 
-  // 3. Corrected Timer Logic: Only runs while in_progress
+  // 5. Corrected Timer Logic: Strictly respects terminal states
   useEffect(() => {
     if (examStatus === 'in_progress' && timeLeft > 0) {
       timerIntervalRef.current = window.setInterval(() => {
@@ -172,17 +187,16 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [examStatus]); // Only depends on status, not timeLeft, to avoid resetting intervals
+  }, [examStatus, submitExam]);
 
   const handleRetake = () => {
-    // FIXED: Changed 'isSubmitting' to 'examStatus === "submitting"'
     if (examStatus === 'submitting') return;
+    hasInitializedRef.current = false;
     isSubmissionLocked.current = false;
     setCurrentIndex(0);
     setUserAnswers({});
     setResult(null);
     setExamStatus('not_started');
-    // useEffect will trigger fetchExamData again
   };
 
   const formatTime = (seconds: number) => {
@@ -191,7 +205,6 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Rendering logic strictly gated by status
   if (examStatus === 'not_started' || (examStatus === 'submitting' && !result)) {
     return (
       <div className="fixed inset-0 z-[200] bg-brand-bg flex flex-col items-center justify-center p-6 text-center">

@@ -215,6 +215,7 @@ const App: React.FC = () => {
       
       {activeModelExamId && (
         <ProExamSystem 
+          key={activeModelExamId} 
           examId={activeModelExamId} 
           onClose={() => setActiveModelExamId(null)} 
           onUpdateState={setUserState}

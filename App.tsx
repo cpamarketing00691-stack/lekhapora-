@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { UserState, Group, Religion, Medium, UserProfile, Subject, Language as LangType, ActiveTimerState, StudySession, Reminder, TestAttempt } from './types';
 import { CHAPTER_LISTS } from './constants';
@@ -33,7 +34,6 @@ const DEFAULT_STATE: UserState = {
 const calculateStreak = (history: StudySession[]): number => {
   if (!history || history.length === 0) return 0;
 
-  // Normalize all session start times to date strings for unique daily study check
   const studyDates = new Set(
     history.map(s => new Date(s.startTime).toDateString())
   );
@@ -45,13 +45,11 @@ const calculateStreak = (history: StudySession[]): number => {
   const todayStr = today.toDateString();
   const yesterdayStr = yesterday.toDateString();
 
-  // If no study today AND no study yesterday, the streak is broken (0)
   if (!studyDates.has(todayStr) && !studyDates.has(yesterdayStr)) {
     return 0;
   }
 
   let streakCount = 0;
-  // Start checking from today if studied today, otherwise start from yesterday
   let checkDate = new Date();
   if (!studyDates.has(todayStr)) {
     checkDate.setDate(checkDate.getDate() - 1);
@@ -71,30 +69,7 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const state = { ...DEFAULT_STATE, ...parsed };
-        
-        if (state.activeTimer) {
-          const now = Date.now();
-          const elapsedMs = now - state.activeTimer.lastTimestamp;
-          const deltaSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
-          
-          if (deltaSeconds > 0) {
-            const isFocus = state.activeTimer.isFocusActive;
-            state.activeTimer = {
-              ...state.activeTimer,
-              lastTimestamp: now, // Sync to current time
-              accumulatedFocusSeconds: isFocus 
-                ? state.activeTimer.accumulatedFocusSeconds + deltaSeconds 
-                : state.activeTimer.accumulatedFocusSeconds,
-              accumulatedBreakSeconds: !isFocus 
-                ? state.activeTimer.accumulatedBreakSeconds + deltaSeconds 
-                : state.activeTimer.accumulatedBreakSeconds
-            };
-          }
-        }
-        // Recalculate streak on load to ensure it's up to date with real-time
-        state.streaks = calculateStreak(state.studyHistory);
-        return state;
+        return { ...DEFAULT_STATE, ...parsed, isAuthenticated: false }; // Always start as unauth until session check
       } catch (e) {
         console.error("Local storage recovery failed:", e);
       }
@@ -106,63 +81,88 @@ const App: React.FC = () => {
   const [testContext, setTestContext] = useState<{ subjectId: string; chapterId: string } | null>(null);
   const [activeModelExamId, setActiveModelExamId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  
+  // Persistence Gates
+  const isDataFetched = useRef(false);
+  const lastSavedJson = useRef<string>("");
 
   useEffect(() => {
-    const initApp = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session) {
-          setUserState(prev => ({ ...prev, isAuthenticated: true }));
-          await backgroundSync(data.session.user.id);
-        }
-      } catch (error) {
-        console.error("Auth init failed:", error);
-      } finally {
+    // 1. Initial Session Check
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await backgroundSync(session.user.id);
+      } else {
         setIsInitialLoading(false);
       }
     };
-    initApp();
+
+    // 2. Auth Listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await backgroundSync(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        isDataFetched.current = false;
+        setUserState(DEFAULT_STATE);
+        localStorage.removeItem('hsc_study_tracker_state');
+      }
+    });
+
+    checkSession();
+    return () => subscription.unsubscribe();
   }, []);
 
   const backgroundSync = async (userId: string) => {
     try {
-      const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
+      const { data, error } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
         const cloudState = data.state as unknown as Partial<UserState>;
-        // Recalculate streak from synced history
-        const newStreak = cloudState.studyHistory ? calculateStreak(cloudState.studyHistory) : 0;
-        setUserState(prev => ({ ...prev, ...cloudState, streaks: newStreak, isAuthenticated: true }));
+        const mergedState = { ...DEFAULT_STATE, ...cloudState, isAuthenticated: true };
+        mergedState.streaks = calculateStreak(mergedState.studyHistory);
+        setUserState(mergedState);
+        lastSavedJson.current = JSON.stringify(cloudState);
+      } else {
+        setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
-    } catch (e) { console.warn("Background sync failed"); }
+    } catch (e) { 
+      console.warn("Background sync failed", e); 
+    } finally {
+      isDataFetched.current = true;
+      setIsInitialLoading(false);
+    }
   };
 
   const saveUserData = async (state: UserState) => {
+    // CRITICAL: Do not save until initial hydration is complete
+    if (!isDataFetched.current || !state.isAuthenticated) return;
+
+    const { isAuthenticated, ...stateToSave } = state;
+    const currentStateJson = JSON.stringify(stateToSave);
+    
+    // Optimization: Only save if state actually changed
+    if (currentStateJson === lastSavedJson.current) return;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { isAuthenticated, ...stateToSave } = state; 
+      
       await supabase.from('user_data').upsert({ 
         user_id: user.id, 
         state: stateToSave, 
         updated_at: new Date().toISOString() 
       }, { onConflict: 'user_id' });
+      
+      lastSavedJson.current = currentStateJson;
     } catch (e) { 
       console.warn("Cloud save failed:", e);
     }
   };
 
-  // Keep streaks in sync whenever studyHistory changes
+  // Sync effect
   useEffect(() => {
-    const newStreak = calculateStreak(userState.studyHistory);
-    if (newStreak !== userState.streaks) {
-      setUserState(prev => ({ ...prev, streaks: newStreak }));
-    }
-  }, [userState.studyHistory]);
-
-  useEffect(() => {
-    localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
     if (userState.isAuthenticated) {
-      const timeoutId = setTimeout(() => saveUserData(userState), 5000);
+      localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));
+      const timeoutId = setTimeout(() => saveUserData(userState), 2000);
       return () => clearTimeout(timeoutId);
     }
   }, [userState]);
@@ -192,12 +192,12 @@ const App: React.FC = () => {
     return (
       <div className="h-full w-full bg-brand-bg flex flex-col items-center justify-center gap-4">
         <Loader2 size={32} className="animate-spin text-brand-primary" />
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s animate-pulse">Initializing System...</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s animate-pulse">Synchronizing Session...</p>
       </div>
     );
   }
 
-  if (!userState.isAuthenticated) return <Auth onAuthSuccess={() => setUserState(prev => ({ ...prev, isAuthenticated: true }))} />;
+  if (!userState.isAuthenticated) return <Auth onAuthSuccess={() => { /* Handled by onAuthStateChange */ }} />;
   if (!userState.profile) return <Onboarding onComplete={handleProfileComplete} language={userState.language} />;
 
   return (
@@ -207,7 +207,11 @@ const App: React.FC = () => {
       {activeTab === 'tracker' && <Tracker userState={userState} onUpdateState={setUserState} />}
       {activeTab === 'syllabus' && <SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={handleTriggerTest} />}
       {activeTab === 'test' && <TestSection userState={userState} onUpdateState={setUserState} initialContext={testContext} clearContext={() => setTestContext(null)} onTriggerModelExam={(id) => setActiveModelExamId(id)} />}
-      {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={() => setUserState(DEFAULT_STATE)} />}
+      {activeTab === 'settings' && <Settings userState={userState} onUpdateState={setUserState} onLogout={async () => {
+        await supabase.auth.signOut();
+        setUserState(DEFAULT_STATE);
+        isDataFetched.current = false;
+      }} />}
       
       {activeModelExamId && (
         <ProExamSystem 

@@ -1,11 +1,11 @@
 
-import React, { useState, useRef, useMemo } from 'react';
-import { UserState, Subject, Chapter, Difficulty } from '../types';
+import React, { useState, useRef } from 'react';
+import { UserState, Subject, Chapter, Difficulty } from './types';
+// Fixed: Added 'Clock' to the imports from lucide-react to resolve the reference error on line 307.
 import { 
   Camera, Plus, Trash2, Calendar, CheckCircle2, 
-  Loader2, AlertTriangle, FileText, CheckCircle, 
-  Circle, LayoutGrid, Clock, Search, Tag, ArrowRight,
-  GraduationCap
+  Loader2, FileText, CheckCircle, 
+  Search, Tag, GraduationCap, Clock
 } from 'lucide-react';
 
 interface SyllabusManagerProps {
@@ -74,7 +74,7 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       paper: manualSubject.paper as 1 | 2,
       chapters
     };
-    onUpdateState(prev => ({
+    onUpdateState((prev: UserState) => ({
       ...prev,
       subjects: [...(Array.isArray(prev.subjects) ? prev.subjects : []), newSubject]
     }));
@@ -86,9 +86,9 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     if (!bulkRoutine.trim()) return;
     const lines = bulkRoutine.split('\n');
     let updatedCount = 0;
-    onUpdateState(prev => {
+    onUpdateState((prev: UserState) => {
       const rawSubjects = Array.isArray(prev.subjects) ? prev.subjects : [];
-      const updatedSubjects = rawSubjects.map(sub => {
+      const updatedSubjects = rawSubjects.map((sub: Subject) => {
         const foundLine = lines.find(line => {
           const l = line.toLowerCase();
           const sName = sub.name.toLowerCase();
@@ -122,29 +122,29 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
 
   const deleteSubject = (id: string) => {
     if (confirm(t("তুমি কি নিশ্চিত যে তুমি এই বিষয়টি ডিলিট করতে চাও?", "Are you sure you want to delete this subject?"))) {
-      onUpdateState(prev => ({
+      onUpdateState((prev: UserState) => ({
         ...prev,
-        subjects: Array.isArray(prev.subjects) ? prev.subjects.filter(s => s.id !== id) : []
+        subjects: Array.isArray(prev.subjects) ? prev.subjects.filter((s: Subject) => s.id !== id) : []
       }));
     }
   };
 
   const toggleAllChapters = (subjectId: string, completed: boolean) => {
-    onUpdateState(prev => ({
+    onUpdateState((prev: UserState) => ({
       ...prev,
-      subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === subjectId ? {
+      subjects: Array.isArray(prev.subjects) ? prev.subjects.map((s: Subject) => s.id === subjectId ? {
         ...s,
-        chapters: Array.isArray(s.chapters) ? s.chapters.map(c => ({ ...c, isCompleted: completed })) : []
+        chapters: Array.isArray(s.chapters) ? s.chapters.map((c: Chapter) => ({ ...c, isCompleted: completed })) : []
       } : s) : []
     }));
   };
 
   const updateDifficulty = (subjectId: string, chapterId: string, diff: Difficulty) => {
-    onUpdateState(prev => ({
+    onUpdateState((prev: UserState) => ({
       ...prev,
-      subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === subjectId ? {
+      subjects: Array.isArray(prev.subjects) ? prev.subjects.map((s: Subject) => s.id === subjectId ? {
         ...s,
-        chapters: Array.isArray(s.chapters) ? s.chapters.map(c => c.id === chapterId ? { ...c, difficulty: diff } : c) : []
+        chapters: Array.isArray(s.chapters) ? s.chapters.map((c: Chapter) => c.id === chapterId ? { ...c, difficulty: diff } : c) : []
       } : s) : []
     }));
   };
@@ -245,11 +245,11 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       )}
 
       <div className="grid grid-cols-1 gap-8 md:gap-10">
-        {Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => {
+        {Array.isArray(subjects) && subjects.length > 0 ? subjects.map((sub: Subject) => {
           const searchTerm = chapterSearch[sub.id]?.toLowerCase() || '';
           const chapters = Array.isArray(sub.chapters) ? sub.chapters : [];
-          const filteredChapters = chapters.filter(ch => ch.name.toLowerCase().includes(searchTerm));
-          const completedCount = chapters.filter(c => c.isCompleted).length;
+          const filteredChapters = chapters.filter((ch: Chapter) => ch.name.toLowerCase().includes(searchTerm));
+          const completedCount = chapters.filter((c: Chapter) => c.isCompleted).length;
           const totalCount = chapters.length;
           const progressPercent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
           return (
@@ -286,16 +286,16 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
               </div>
               <div className="bg-slate-50/50 dark:bg-slate-950/20 p-6 md:p-10 border-t border-slate-50 dark:border-slate-800">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                  {Array.isArray(filteredChapters) && filteredChapters.length > 0 ? filteredChapters.map(ch => (
+                  {Array.isArray(filteredChapters) && filteredChapters.length > 0 ? filteredChapters.map((ch: Chapter) => (
                     <div key={ch.id} className={`group/item flex flex-col p-4 md:p-6 rounded-[2rem] transition-all border-2 bg-white dark:bg-slate-900 ${ch.isCompleted ? 'border-emerald-50 dark:border-emerald-900/30' : 'border-transparent hover:border-slate-100 dark:hover:border-slate-700 shadow-sm'}`}>
                       <div className="flex items-start gap-3 mb-4">
                         <div className="relative pt-1 shrink-0">
                           <input type="checkbox" checked={ch.isCompleted} onChange={() => {
-                            onUpdateState(prev => ({
+                            onUpdateState((prev: UserState) => ({
                               ...prev,
-                              subjects: Array.isArray(prev.subjects) ? prev.subjects.map(s => s.id === sub.id ? {
+                              subjects: Array.isArray(prev.subjects) ? prev.subjects.map((s: Subject) => s.id === sub.id ? {
                                 ...s,
-                                chapters: Array.isArray(s.chapters) ? s.chapters.map(c => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c) : []
+                                chapters: Array.isArray(s.chapters) ? s.chapters.map((c: Chapter) => c.id === ch.id ? { ...c, isCompleted: !c.isCompleted } : c) : []
                               } : s) : []
                             }));
                           }} className="peer w-5 h-5 md:w-6 md:h-6 rounded-md border-2 border-slate-200 dark:border-slate-700 text-emerald-500 focus:ring-0 appearance-none checked:bg-emerald-500 checked:border-emerald-500 transition-all cursor-pointer" />

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Timer, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, Check, X, GraduationCap, Loader2, Sparkles, Trophy, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -35,26 +34,41 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [result, setResult] = useState<any>(null);
   
-  // High-reliability timer and submission refs
   const timerIntervalRef = useRef<number | null>(null);
   const isSubmissionLocked = useRef(false);
   
-  // 1. STABILITY REF: Prevents restart loop on remount/re-render
-  const hasInitializedRef = useRef(false);
+  // 1. MOUNT GUARD: Prevents redundant initialization attempts
+  const initializedRef = useRef(false);
 
-  // 2. Corrected Fetch Logic: Strictly guarded by initialization ref and terminal status
   const fetchExamData = useCallback(async () => {
-    // GUARD: Block if already started, finished, or currently initializing
-    if (hasInitializedRef.current || examStatus !== 'not_started' || result) return;
+    // 2. GUARD: Prevent fetch if already processing, or if we already have a result
+    if (initializedRef.current || examStatus !== 'not_started' || result) return;
     
-    // Set ref immediately to block any other execution (Strict Mode safety)
-    hasInitializedRef.current = true;
+    initializedRef.current = true;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        hasInitializedRef.current = false;
-        return onClose();
+      if (!user) return onClose();
+
+      // 3. REMOUNT RECOVERY: Check if user already submitted this exam
+      const { data: existingSubmission } = await supabase
+        .from('exam_sys_submissions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('exam_id', examId)
+        .maybeSingle();
+
+      if (existingSubmission) {
+        // If found, immediately show result instead of starting exam
+        const [examRes, questionsRes] = await Promise.all([
+          supabase.from('exam_sys_exams').select('*').eq('id', examId).single(),
+          supabase.from('exam_sys_questions').select('*').eq('exam_id', examId).order('order_index')
+        ]);
+        setExam(examRes.data);
+        setQuestions(questionsRes.data);
+        setResult(existingSubmission);
+        setExamStatus('completed');
+        return;
       }
 
       const [examRes, questionsRes] = await Promise.all([
@@ -68,7 +82,8 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       setQuestions(questionsRes.data);
       setTimeLeft(examRes.data.duration_minutes * 60);
       
-      // GUARD: Only start if the status wasn't changed by a race condition
+      // 4. CONDITIONAL START: Only set 'in_progress' if we aren't loading an existing result.
+      // Fix: Removed redundant comparison of incompatible states as early return ensures status is not 'completed' here.
       setExamStatus('in_progress');
 
       await supabase.from('exam_sys_sessions').upsert({ 
@@ -79,31 +94,27 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
 
     } catch (err) {
       console.error(err);
-      hasInitializedRef.current = false; // Reset to allow retry on error
+      initializedRef.current = false;
       onClose();
     }
   }, [examId, onClose, examStatus, result]);
 
-  // 3. Mount Effect: Only triggers if not initialized
+  // 5. STABILIZED MOUNT EFFECT: Only triggers fetch if initializedRef is false
   useEffect(() => {
-    if (!hasInitializedRef.current && examStatus === 'not_started') {
+    if (!initializedRef.current && examStatus === 'not_started' && !result) {
       fetchExamData();
     }
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [fetchExamData, examStatus]);
+  }, [fetchExamData, examStatus, result]);
 
-  // 4. Corrected Submission Logic: Prevents loops and cleans up resources
   const submitExam = useCallback(async (isAuto = false) => {
-    // CRITICAL GUARD: Never submit if already completed or in progress of submitting
     if (isSubmissionLocked.current || examStatus === 'completed' || examStatus === 'submitting') return;
     
-    // Immediate lockout
     isSubmissionLocked.current = true;
     setExamStatus('submitting');
     
-    // Stop timer immediately
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
@@ -165,11 +176,9 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
       console.error(err);
       isSubmissionLocked.current = false;
       setExamStatus('in_progress');
-      alert("Submission failed. Please check your connection and try again.");
     }
   }, [examId, questions, userAnswers, exam, timeLeft, onUpdateState, examStatus]);
 
-  // 5. Corrected Timer Logic: Strictly respects terminal states
   useEffect(() => {
     if (examStatus === 'in_progress' && timeLeft > 0) {
       timerIntervalRef.current = window.setInterval(() => {
@@ -183,7 +192,6 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
         });
       }, 1000);
     }
-
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
@@ -191,7 +199,7 @@ const ProExamSystem: React.FC<ProExamProps> = ({ examId, onClose, onUpdateState 
 
   const handleRetake = () => {
     if (examStatus === 'submitting') return;
-    hasInitializedRef.current = false;
+    initializedRef.current = false;
     isSubmissionLocked.current = false;
     setCurrentIndex(0);
     setUserAnswers({});

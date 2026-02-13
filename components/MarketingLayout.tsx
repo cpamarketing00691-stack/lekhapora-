@@ -8,7 +8,8 @@ interface Props {
   isAuthenticated: boolean;
 }
 
-const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
+// Changed to named export to ensure compatibility and resolve "no default export" error in App.tsx
+export const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
@@ -86,5 +87,3 @@ const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
     </div>
   );
 };
-
-export default MarketingLayout;

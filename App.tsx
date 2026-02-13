@@ -6,7 +6,8 @@ import { UserState } from './types';
 import { CHAPTER_LISTS } from './constants';
 
 // Layouts
-import MarketingLayout from './components/MarketingLayout';
+// Updated to use named import to match the exported component and resolve the reported error on line 9
+import { MarketingLayout } from './components/MarketingLayout';
 import { Layout } from './components/Layout';
 
 // Public Pages
@@ -49,12 +50,42 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    const initSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await syncUserData(session.user.id);
+  const syncUserData = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_data')
+        .select('state')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (data?.state) {
+        setUserState({ ...DEFAULT_STATE, ...data.state, isAuthenticated: true });
       } else {
+        setUserState(prev => ({ ...prev, isAuthenticated: true }));
+      }
+    } catch (e) {
+      console.error("Sync Error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Safety timeout to prevent infinite loading if Supabase or network hangs
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
+    const initSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await syncUserData(session.user.id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Auth Init Error:", err);
         setLoading(false);
       }
     };
@@ -65,29 +96,24 @@ const AppContent: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
-        navigate('/loging');
+        // Only navigate if we're not already on a public page
+        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register'];
+        if (!publicPaths.includes(location.pathname)) {
+          navigate('/loging');
+        }
       }
     });
 
     initSession();
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
+  }, []);
 
-  const syncUserData = async (userId: string) => {
-    try {
-      const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
-      if (data?.state) {
-        setUserState({ ...DEFAULT_STATE, ...data.state, isAuthenticated: true });
-      } else {
-        setUserState(prev => ({ ...prev, isAuthenticated: true }));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Save state periodically when authenticated
   useEffect(() => {
-    if (userState.isAuthenticated) {
+    if (userState.isAuthenticated && userState.profile) {
       const timeoutId = setTimeout(async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -116,19 +142,22 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
-      {/* Marketing / Public Routes */}
+      {/* Public Routes - Wrapped in MarketingLayout */}
       <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
-        <Route path="/" element={<Navigate to="/about" replace />} />
         <Route path="/about" element={<Home />} />
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
-        <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
-        <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
+        {/* Landing Page Redirect */}
+        <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      {/* Dashboard Routes (Protected) */}
+      {/* Auth Routes */}
+      <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
+
+      {/* Protected Dashboard Routes */}
       <Route 
         path="/" 
         element={
@@ -175,7 +204,7 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      {/* 404 Fallback */}
+      {/* Catch All - Redirect to landing if public, or dashboard if auth */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
     </Routes>
   );

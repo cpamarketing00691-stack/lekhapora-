@@ -71,10 +71,10 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    // Safety timeout to prevent infinite loading if network or Supabase hangs
+    // Safety timeout: Never stay on loading screen more than 3 seconds
     const safetyTimeout = setTimeout(() => {
-      setLoading(false);
-    }, 2500);
+      if (loading) setLoading(false);
+    }, 3000);
 
     const initSession = async () => {
       try {
@@ -96,10 +96,13 @@ const AppContent: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
-        // Only navigate if we're not on a public path
-        const publicPaths = ['/', '/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging', '/login'];
-        if (!publicPaths.includes(location.pathname)) {
-          navigate('/loging');
+        
+        // Define public routes where user shouldn't be redirected to login
+        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging'];
+        const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path));
+        
+        if (!isPublicPath) {
+          navigate('/about');
         }
       }
     });
@@ -113,21 +116,21 @@ const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-brand-bg transition-colors duration-500">
-        <div className="flex flex-col items-center gap-6">
-          <div className="relative w-16 h-16">
-            <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
-          </div>
-          <p className="font-black text-brand-primary uppercase tracking-[0.3em] text-[10px] animate-pulse">Initializing Lekhapora...</p>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg transition-colors duration-500">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
+          <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
+        <p className="mt-6 font-black text-brand-primary uppercase tracking-[0.3em] text-[10px] animate-pulse">
+          Lekhapora Loading...
+        </p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* Public Routes - Landing is /about */}
+      {/* Public Marketing Routes */}
       <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<About />} />
         <Route path="/faq" element={<FAQ />} />
@@ -137,12 +140,12 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      {/* Auth Routes */}
+      {/* Auth-Specific Routes */}
       <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/login" element={<Navigate to="/loging" replace />} />
       <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
 
-      {/* Protected Dashboard Routes */}
+      {/* Protected App Routes */}
       <Route 
         path="/" 
         element={
@@ -169,14 +172,14 @@ const AppContent: React.FC = () => {
             ) : (
               <Layout 
                 userProfile={userState.profile} 
-                activeTab={location.pathname.replace('/', '') || 'dashboard'} 
+                activeTab={location.pathname.split('/')[1] || 'dashboard'} 
                 onTabChange={(tabId) => navigate(`/${tabId}`)} 
                 language={userState.language} 
                 userState={userState}
               />
             )
           ) : (
-            <Navigate to="/loging" replace />
+            <Navigate to="/about" replace />
           )
         }
       >
@@ -189,7 +192,7 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      {/* Catch All - Redirect to landing if public, or dashboard if auth */}
+      {/* 404 Catch-all */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
     </Routes>
   );

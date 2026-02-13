@@ -53,10 +53,12 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const getFriendlyErrorMessage = (error: any) => {
     if (!error) return null;
     const message = error.message || "";
+    // Supabase specific error handling
     if (message.includes("Invalid login credentials")) return "ইমেইল বা পাসওয়ার্ড ভুল। আবার চেষ্টা করো।";
     if (message.includes("User already registered")) return "এই ইমেইল দিয়ে আগে থেকেই অ্যাকাউন্ট খোলা আছে।";
     if (message.includes("Email not confirmed")) return "দয়া করে তোমার ইমেইল ভেরিফাই করো। ইনবক্স বা স্প্যাম চেক করো।";
     if (message.includes(RETRY_EXHAUSTED_429_MESSAGE)) return "অতিরিক্ত চেষ্টার জন্য ব্লক করা হয়েছে। কিছুক্ষণ পর চেষ্টা করো।";
+    if (message.includes("rate_limit")) return "অতিরিক্ত রিকোয়েস্ট পাঠানো হয়েছে। একটু পর আবার চেষ্টা করো।";
     return "ত্রুটি: " + message;
   };
 
@@ -117,7 +119,9 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       if (mode === 'signin') {
         const { data, error } = await retryWithDelay(() => supabase.auth.signInWithPassword({ email, password }));
         if (error) throw error;
-        if (data.user) onAuthSuccess();
+        if (data.user) {
+          onAuthSuccess();
+        }
       } else if (mode === 'signup') {
         if (password.length < 6) throw new Error("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।");
         if (!name.trim()) throw new Error("দয়া করে তোমার নাম লিখো।");
@@ -143,13 +147,17 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     }
   };
 
+  const isForgot = mode === 'forgot';
+  const isSignin = mode === 'signin';
+  const isSignup = mode === 'signup';
+
   return (
     <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4 selection:bg-brand-primary/20">
       <div className="w-full max-w-md bg-brand-surface rounded-[2.5rem] p-8 sm:p-10 shadow-2xl shadow-brand-primary/10 border border-brand-text-s/10 animate-in fade-in zoom-in-95 duration-500">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black text-brand-primary italic">HSC TRACKER</h1>
           <p className="text-brand-text-s font-black uppercase tracking-widest text-[10px] mt-2">
-            {mode === 'signin' ? 'Welcome Back' : mode === 'signup' ? 'Create New Account' : 'Reset Password'}
+            {isSignin ? 'Welcome Back' : isSignup ? 'Create New Account' : 'Reset Password'}
           </p>
         </div>
 
@@ -160,8 +168,8 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           </div>
         )}
 
-        <form className="space-y-4" onSubmit={mode === 'forgot' ? handleForgotPassword : handleSubmit}>
-          {mode === 'signup' && (
+        <form className="space-y-4" onSubmit={isForgot ? handleForgotPassword : handleSubmit}>
+          {isSignup && (
             <div className="space-y-1 animate-in slide-in-from-top-2 duration-300">
               <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Name</label>
               <div className="relative">
@@ -171,7 +179,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your Full Name" 
-                  autoFocus={mode === 'signup'}
+                  autoFocus={isSignup}
                   className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
                 />
               </div>
@@ -187,17 +195,17 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com" 
-                autoFocus={mode !== 'signup'}
+                autoFocus={!isSignup}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
               />
             </div>
           </div>
 
-          {mode !== 'forgot' && (
+          {!isForgot && (
             <div className="space-y-1">
               <div className="flex justify-between items-center ml-1">
                 <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Password</label>
-                {mode === 'signin' && (
+                {isSignin && (
                   <button type="button" onClick={() => setMode('forgot')} className="text-[9px] font-black uppercase text-brand-primary tracking-tighter hover:underline">Forgot?</button>
                 )}
               </div>
@@ -220,12 +228,12 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
             disabled={loading}
             className="w-full bg-brand-primary hover:scale-[1.02] active:scale-95 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl shadow-brand-primary/20 mt-4 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : (mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link')}
+            {loading ? <Loader2 className="animate-spin" size={20} /> : (isSignin ? 'Sign In' : isSignup ? 'Create Account' : 'Send Reset Link')}
             {!loading && <ArrowRight size={18} />}
           </button>
         </form>
 
-        {mode !== 'forgot' && (
+        {!isForgot && (
           <>
             <div className="relative flex items-center gap-4 my-6">
               <div className="flex-1 h-px bg-brand-text-s/10"></div>
@@ -245,12 +253,12 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         )}
 
         <div className="mt-8 text-center flex flex-col gap-3">
-          {mode !== 'forgot' ? (
+          {!isForgot ? (
             <button 
-              onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+              onClick={() => setMode(isSignin ? 'signup' : 'signin')}
               className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s hover:text-brand-primary transition-colors"
             >
-              {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+              {isSignin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
             </button>
           ) : (
             <button 

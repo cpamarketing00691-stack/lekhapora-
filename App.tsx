@@ -1,13 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { UserState, UserProfile, Subject, Chapter } from './types';
+import { UserState, Subject, Chapter } from './types';
 import { CHAPTER_LISTS } from './constants';
 
 // Layouts
 import { MarketingLayout } from './components/MarketingLayout';
-import { Layout } from './components/Layout';
+import PanelLayout from './layouts/PanelLayout';
 
 // Public Pages
 import About from './pages/About';
@@ -17,15 +17,19 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
 import Login from './pages/Login';
 import Register from './pages/Register';
-
-// Dashboard Components
-import Dashboard from './components/Dashboard';
-import Tracker from './components/Tracker';
-import SyllabusManager from './components/SyllabusManager';
-import TestSection from './components/TestSection';
-import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
-import StudyCalendar from './components/StudyCalendar';
+
+// Lazy Loaded Panels
+const DashboardPanel = lazy(() => import('./panels/DashboardPanel'));
+const SyllabusPanel = lazy(() => import('./panels/SyllabusPanel'));
+const TrackerPanel = lazy(() => import('./panels/TrackerPanel'));
+const ExamsPanel = lazy(() => import('./panels/ExamsPanel'));
+const CalendarPanel = lazy(() => import('./panels/CalendarPanel'));
+const AIPanel = lazy(() => import('./panels/AIPanel'));
+const AnalyticsPanel = lazy(() => import('./panels/AnalyticsPanel'));
+const SettingsPanel = lazy(() => import('./panels/SettingsPanel'));
+const OCRPanel = lazy(() => import('./panels/OCRPanel'));
+const SystemPanel = lazy(() => import('./panels/SystemPanel'));
 
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
@@ -70,9 +74,7 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    const safetyTimeout = setTimeout(() => {
-      setLoading(false);
-    }, 2500);
+    const safetyTimeout = setTimeout(() => setLoading(false), 3000);
 
     const initSession = async () => {
       try {
@@ -83,7 +85,6 @@ const AppContent: React.FC = () => {
           setLoading(false);
         }
       } catch (err) {
-        console.error("Auth Init Error:", err);
         setLoading(false);
       }
     };
@@ -94,7 +95,6 @@ const AppContent: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
-        
         const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging', '/login'];
         if (!publicPaths.some(p => location.pathname.includes(p))) {
           navigate('/about');
@@ -116,13 +116,14 @@ const AppContent: React.FC = () => {
           <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
           <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
-        <p className="mt-4 font-black text-brand-primary uppercase tracking-[0.3em] text-[9px] animate-pulse">Initializing...</p>
+        <p className="mt-4 font-black text-brand-primary uppercase tracking-[0.3em] text-[9px] animate-pulse italic">Lekhapora Modular Init...</p>
       </div>
     );
   }
 
   return (
     <Routes>
+      {/* Public Marketing */}
       <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<About />} />
         <Route path="/faq" element={<FAQ />} />
@@ -132,70 +133,85 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      {/* Authentication */}
+      <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Login />} />
       <Route path="/login" element={<Navigate to="/loging" replace />} />
-      <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Register />} />
 
+      {/* Onboarding */}
       <Route 
-        path="/" 
+        path="/onboarding" 
+        element={
+          userState.isAuthenticated && !userState.profile ? (
+            <Onboarding 
+              language={userState.language}
+              onComplete={(profile) => {
+                const { selectedSubjectNames, ...p } = profile;
+                const finalSubjects: Subject[] = [];
+                selectedSubjectNames.forEach((name, idx) => {
+                  [1, 2].forEach(paperNum => {
+                    const chapters: Chapter[] = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
+                      id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
+                      name: ch,
+                      isCompleted: false
+                    }));
+                    finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
+                  });
+                });
+                setUserState(prev => ({ ...prev, profile: p, subjects: finalSubjects }));
+                navigate('/app/dashboard');
+              }} 
+            />
+          ) : <Navigate to="/app/dashboard" replace />
+        }
+      />
+
+      {/* Main Panel Dashboard */}
+      <Route 
+        path="/app/*" 
         element={
           userState.isAuthenticated ? (
-            !userState.profile ? (
-              <Onboarding 
-                language={userState.language}
-                onComplete={(profile) => {
-                  const { selectedSubjectNames, ...p } = profile;
-                  const finalSubjects: Subject[] = [];
-                  selectedSubjectNames.forEach((name, idx) => {
-                    [1, 2].forEach(paperNum => {
-                      const chapters: Chapter[] = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
-                        id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
-                        name: ch,
-                        isCompleted: false
-                      }));
-                      finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
-                    });
-                  });
-                  setUserState(prev => ({ ...prev, profile: p, subjects: finalSubjects }));
-                }} 
-              />
-            ) : (
-              <Layout 
-                userProfile={userState.profile} 
-                activeTab={location.pathname.split('/').pop() || 'dashboard'} 
-                onTabChange={(tabId) => navigate(`/${tabId}`)} 
-                language={userState.language} 
-                userState={userState}
-              />
+            !userState.profile ? <Navigate to="/onboarding" replace /> : (
+              <PanelLayout userState={userState} onUpdateState={setUserState}>
+                <Suspense fallback={<PanelLoader />}>
+                  <Routes>
+                    <Route path="dashboard" element={<DashboardPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="syllabus" element={<SyllabusPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="tracker" element={<TrackerPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="exams" element={<ExamsPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="calendar" element={<CalendarPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="ai" element={<AIPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="analytics" element={<AnalyticsPanel userState={userState} />} />
+                    <Route path="settings" element={<SettingsPanel userState={userState} onUpdateState={setUserState} onLogout={() => supabase.auth.signOut()} />} />
+                    <Route path="ocr" element={<OCRPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="system" element={<SystemPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route index element={<Navigate to="dashboard" replace />} />
+                  </Routes>
+                </Suspense>
+              </PanelLayout>
             )
-          ) : (
-            <Navigate to="/about" replace />
-          )
+          ) : <Navigate to="/about" replace />
         }
-      >
-        <Route path="dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-        <Route path="calendar" element={<StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={(tab) => navigate(`/${tab}`)} />} />
-        <Route path="tracker" element={<Tracker userState={userState} onUpdateState={setUserState} />} />
-        <Route path="syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-        <Route path="test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />
-        <Route path="settings" element={<Settings userState={userState} onUpdateState={setUserState} onLogout={async () => await supabase.auth.signOut()} />} />
-        <Route index element={<Navigate to="/dashboard" replace />} />
-      </Route>
+      />
 
-      <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
+      <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/app/dashboard" : "/about"} replace />} />
     </Routes>
   );
 };
 
-// Basename detection for nested SCF URLs
+const PanelLoader = () => (
+  <div className="h-full w-full flex items-center justify-center opacity-50">
+    <Loader2 className="animate-spin text-brand-primary" size={24} />
+  </div>
+);
+
 const getBasename = () => {
   const path = window.location.pathname;
   const parts = path.split('/').filter(Boolean);
-  if (parts.length > 0 && parts[0].length > 20) {
-    return `/${parts[0]}`;
-  }
-  return '';
+  return (parts.length > 0 && parts[0].length > 20) ? `/${parts[0]}` : '';
 };
+
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   return (

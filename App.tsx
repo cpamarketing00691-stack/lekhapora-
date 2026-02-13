@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { UserState } from './types';
+import { CHAPTER_LISTS } from './constants';
 
 // Layouts
 import MarketingLayout from './components/MarketingLayout';
@@ -26,7 +27,6 @@ import TestSection from './components/TestSection';
 import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
 import StudyCalendar from './components/StudyCalendar';
-import { CHAPTER_LISTS } from './constants';
 
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
@@ -42,63 +42,6 @@ const DEFAULT_STATE: UserState = {
   activeTimer: null,
   reminders: [],
   notificationsEnabled: false
-};
-
-const DashboardRoutes: React.FC<{ userState: UserState; setUserState: React.Dispatch<React.SetStateAction<UserState>> }> = ({ userState, setUserState }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const getActiveTab = () => {
-    const path = location.pathname.replace('/', '');
-    return path || 'dashboard';
-  };
-
-  const handleTabChange = (tabId: string) => {
-    navigate(`/${tabId}`);
-  };
-
-  if (!userState.profile) {
-    return <Onboarding 
-      language={userState.language}
-      onComplete={(profile) => {
-        const { selectedSubjectNames, ...p } = profile;
-        const finalSubjects: any[] = [];
-        selectedSubjectNames.forEach((name, idx) => {
-          [1, 2].forEach(paperNum => {
-            const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
-              id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
-              name: ch,
-              isCompleted: false
-            }));
-            finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
-          });
-        });
-        setUserState(prev => ({ ...prev, profile: p, subjects: finalSubjects }));
-      }} 
-    />;
-  }
-
-  return (
-    <Routes>
-      <Route element={
-        <Layout 
-          userProfile={userState.profile} 
-          activeTab={getActiveTab()} 
-          onTabChange={handleTabChange} 
-          language={userState.language} 
-          userState={userState}
-        />
-      }>
-        <Route path="/" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-        <Route path="dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-        <Route path="calendar" element={<StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={handleTabChange} />} />
-        <Route path="tracker" element={<Tracker userState={userState} onUpdateState={setUserState} />} />
-        <Route path="syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-        <Route path="test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />
-        <Route path="settings" element={<Settings userState={userState} onUpdateState={setUserState} onLogout={async () => await supabase.auth.signOut()} />} />
-      </Route>
-    </Routes>
-  );
 };
 
 const App: React.FC = () => {
@@ -172,7 +115,7 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Marketing and Public Routes */}
+        {/* Marketing / Public Routes */}
         <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
@@ -185,11 +128,52 @@ const App: React.FC = () => {
         </Route>
 
         {/* Dashboard Routes (Protected) */}
-        <Route path="/*" element={
-          userState.isAuthenticated ? 
-          <DashboardRoutes userState={userState} setUserState={setUserState} /> : 
-          <Navigate to="/login" />
-        } />
+        <Route path="/" element={
+          userState.isAuthenticated ? (
+            !userState.profile ? (
+              <Onboarding 
+                language={userState.language}
+                onComplete={(profile) => {
+                  const { selectedSubjectNames, ...p } = profile;
+                  const finalSubjects: any[] = [];
+                  selectedSubjectNames.forEach((name, idx) => {
+                    [1, 2].forEach(paperNum => {
+                      const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
+                        id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
+                        name: ch,
+                        isCompleted: false
+                      }));
+                      finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
+                    });
+                  });
+                  setUserState(prev => ({ ...prev, profile: p, subjects: finalSubjects }));
+                }} 
+              />
+            ) : (
+              <Layout 
+                userProfile={userState.profile} 
+                activeTab={window.location.pathname.split('/')[1] || 'dashboard'} 
+                onTabChange={(tabId) => window.location.assign(`/${tabId}`)} 
+                language={userState.language} 
+                userState={userState}
+              />
+            )
+          ) : (
+            <Navigate to="/login" />
+          )
+        }>
+          <Route path="dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
+          <Route path="calendar" element={<StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={(tab) => window.location.assign(`/${tab}`)} />} />
+          <Route path="tracker" element={<Tracker userState={userState} onUpdateState={setUserState} />} />
+          <Route path="syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
+          <Route path="test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />
+          <Route path="settings" element={<Settings userState={userState} onUpdateState={setUserState} onLogout={async () => await supabase.auth.signOut()} />} />
+          {/* Default redirect for / when profile exists */}
+          <Route index element={<Navigate to="/dashboard" />} />
+        </Route>
+
+        {/* 404 Fallback */}
+        <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/"} />} />
       </Routes>
     </BrowserRouter>
   );

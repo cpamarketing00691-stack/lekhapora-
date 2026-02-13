@@ -11,7 +11,6 @@ import { Layout } from './components/Layout';
 
 // Public Pages
 import Home from './pages/Home';
-import About from './pages/About';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -117,13 +116,13 @@ const App: React.FC = () => {
       <Routes>
         {/* Marketing / Public Routes */}
         <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<About />} />
+          <Route path="/" element={<Navigate to="/about" replace />} />
+          <Route path="/about" element={<Home />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<Terms />} />
-          <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
+          <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
           <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
         </Route>
 
@@ -159,7 +158,7 @@ const App: React.FC = () => {
               />
             )
           ) : (
-            <Navigate to="/login" />
+            <Navigate to="/loging" />
           )
         }>
           <Route path="dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
@@ -168,12 +167,11 @@ const App: React.FC = () => {
           <Route path="syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
           <Route path="test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />
           <Route path="settings" element={<Settings userState={userState} onUpdateState={setUserState} onLogout={async () => await supabase.auth.signOut()} />} />
-          {/* Default redirect for / when profile exists */}
           <Route index element={<Navigate to="/dashboard" />} />
         </Route>
 
         {/* 404 Fallback */}
-        <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/"} />} />
+        <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} />} />
       </Routes>
     </BrowserRouter>
   );

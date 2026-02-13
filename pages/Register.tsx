@@ -29,7 +29,7 @@ const Register: React.FC = () => {
       });
       if (error) throw error;
       alert("Registration successful! Check your email to confirm your account.");
-      navigate('/login');
+      navigate('/loging');
     } catch (err: any) {
       setError(err.message || "Registration failed. Please check your information.");
     } finally {
@@ -42,7 +42,7 @@ const Register: React.FC = () => {
       <BackgroundGrid />
       <div className="w-full max-w-md bg-brand-surface p-10 md:p-14 rounded-[3.5rem] shadow-2xl border border-brand-text-s/10 relative z-10 animate-in zoom-in-95 duration-500">
         <div className="text-center mb-12">
-          <Link to="/" className="text-3xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
+          <Link to="/about" className="text-3xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
           <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest mt-3">Start Your A+ Journey</p>
         </div>
 
@@ -100,7 +100,7 @@ const Register: React.FC = () => {
 
         <div className="mt-10 pt-10 border-t border-brand-text-s/10 text-center">
           <p className="text-xs font-bold text-brand-text-s">
-            Already registered? <Link to="/login" className="text-brand-primary hover:underline font-black ml-1">Sign In</Link>
+            Already registered? <Link to="/loging" className="text-brand-primary hover:underline font-black ml-1">Sign In</Link>
           </p>
         </div>
       </div>

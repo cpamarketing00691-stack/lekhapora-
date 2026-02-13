@@ -13,7 +13,7 @@ const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
   const location = useLocation();
 
   const navLinks = [
-    { name: 'About', path: '/about' },
+    { name: 'Home', path: '/about' },
     { name: 'FAQ', path: '/faq' },
     { name: 'Contact', path: '/contact' },
   ];
@@ -25,7 +25,7 @@ const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
       {/* Navbar */}
       <nav className="sticky top-0 z-[100] w-full bg-brand-bg/80 backdrop-blur-md border-b border-brand-text-s/10">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" className="text-2xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
+          <Link to="/about" className="text-2xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
           
           <div className="hidden md:flex items-center gap-10">
             {navLinks.map((link) => (
@@ -33,7 +33,7 @@ const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
                 {link.name}
               </Link>
             ))}
-            <Link to={isAuthenticated ? "/dashboard" : "/login"} className="px-6 py-2.5 bg-brand-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all">
+            <Link to={isAuthenticated ? "/dashboard" : "/loging"} className="px-6 py-2.5 bg-brand-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 transition-all">
               {isAuthenticated ? 'Go to Dashboard' : 'Login'}
             </Link>
           </div>
@@ -47,7 +47,7 @@ const MarketingLayout: React.FC<Props> = ({ isAuthenticated }) => {
             {navLinks.map((link) => (
               <Link key={link.path} to={link.path} onClick={() => setIsOpen(false)} className="block text-lg font-bold text-brand-text-p">{link.name}</Link>
             ))}
-            <Link to={isAuthenticated ? "/dashboard" : "/login"} onClick={() => setIsOpen(false)} className="block w-full py-4 bg-brand-primary text-white text-center rounded-2xl font-black uppercase tracking-widest">
+            <Link to={isAuthenticated ? "/dashboard" : "/loging"} onClick={() => setIsOpen(false)} className="block w-full py-4 bg-brand-primary text-white text-center rounded-2xl font-black uppercase tracking-widest">
               {isAuthenticated ? 'Dashboard' : 'Login'}
             </Link>
           </div>

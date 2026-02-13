@@ -6,12 +6,12 @@ import { UserState } from './types';
 import { CHAPTER_LISTS } from './constants';
 
 // Layouts
-// Updated to use named import to match the exported component and resolve the reported error on line 9
 import { MarketingLayout } from './components/MarketingLayout';
 import { Layout } from './components/Layout';
 
 // Public Pages
 import Home from './pages/Home';
+import About from './pages/About';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
 import PrivacyPolicy from './pages/PrivacyPolicy';
@@ -71,10 +71,10 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    // Safety timeout to prevent infinite loading if Supabase or network hangs
+    // Safety timeout to prevent infinite loading if network or Supabase hangs
     const safetyTimeout = setTimeout(() => {
       setLoading(false);
-    }, 5000);
+    }, 3000);
 
     const initSession = async () => {
       try {
@@ -96,7 +96,7 @@ const AppContent: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
-        // Only navigate if we're not already on a public page
+        // Navigate to login only if not on a public page
         const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register'];
         if (!publicPaths.includes(location.pathname)) {
           navigate('/loging');
@@ -111,30 +111,15 @@ const AppContent: React.FC = () => {
     };
   }, []);
 
-  // Save state periodically when authenticated
-  useEffect(() => {
-    if (userState.isAuthenticated && userState.profile) {
-      const timeoutId = setTimeout(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { isAuthenticated, ...stateToSave } = userState;
-          await supabase.from('user_data').upsert({ 
-            user_id: user.id, 
-            state: stateToSave, 
-            updated_at: new Date().toISOString() 
-          });
-        }
-      }, 3000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [userState]);
-
   if (loading) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-brand-bg">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-black text-brand-primary uppercase tracking-widest text-[10px]">Initializing Lekhapora...</p>
+      <div className="h-screen w-full flex items-center justify-center bg-brand-bg transition-colors duration-500">
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <p className="font-black text-brand-primary uppercase tracking-[0.3em] text-[10px] animate-pulse">Initializing Lekhapora...</p>
         </div>
       </div>
     );
@@ -142,19 +127,19 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
-      {/* Public Routes - Wrapped in MarketingLayout */}
+      {/* Public Routes */}
       <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
-        <Route path="/about" element={<Home />} />
+        <Route path="/about" element={<About />} />
         <Route path="/faq" element={<FAQ />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
-        {/* Landing Page Redirect */}
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
       {/* Auth Routes */}
       <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/login" element={<Navigate to="/loging" replace />} />
       <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
 
       {/* Protected Dashboard Routes */}
@@ -204,7 +189,7 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      {/* Catch All - Redirect to landing if public, or dashboard if auth */}
+      {/* Catch All */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
     </Routes>
   );

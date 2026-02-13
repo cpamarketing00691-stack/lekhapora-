@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>HSC Study Tracker</title>
-    <!-- Updated Icon to app-icon.svg for PWA standards -->
+    <title>Lekhapora - Smart HSC Preparation</title>
     <link rel="icon" type="image/svg+xml" href="/app-icon.svg">
     <link rel="apple-touch-icon" href="/app-icon.svg">
     <link rel="manifest" href="/manifest.json">
@@ -13,9 +12,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="application-name" content="HSC Tracker">
-    <meta name="apple-mobile-web-app-title" content="HSC Tracker">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script type="importmap">
 {
   "imports": {
@@ -23,45 +20,23 @@
     "react/": "https://esm.sh/react@19.0.0/",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?external=react,react-dom",
     "lucide-react": "https://esm.sh/lucide-react@0.475.0?external=react",
     "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
     "framer-motion": "https://esm.sh/framer-motion@11.11.11?external=react,react-dom",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.0.2",
+    "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.1.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
     "web-push": "https://esm.sh/web-push@^3.6.7",
-    "webworker": "https://esm.sh/webworker@^0.8.4",
-    "@google/genai": "https://esm.sh/@google/genai@^1.41.0"
+    "webworker": "https://esm.sh/webworker@^0.8.4"
   }
 }
 </script>
 </head>
-<body class="light">
+<body class="light bg-brand-bg font-sans selection:bg-brand-primary/20">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
-    <script>
-      // Global PWA Installation handler
-      window.deferredPrompt = null;
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        window.deferredPrompt = e;
-        window.dispatchEvent(new CustomEvent('pwa-install-ready'));
-      });
-
-      if ('serviceWorker' in navigator) {
-        // Prevent Service Worker registration in AI Studio / Preview environments to avoid origin errors
-        const isPreview = window.location.hostname.includes('googleusercontent.com') || 
-                          window.location.hostname.includes('webcontainer.io');
-
-        if (!isPreview) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-              .then(registration => console.debug('Service Worker registered'))
-              .catch(error => console.warn('Service Worker registration failed:', error));
-          });
-        }
-      }
-    </script>
 </body>
 </html>

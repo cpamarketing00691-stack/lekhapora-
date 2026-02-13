@@ -4,7 +4,7 @@ import { UserState, Subject, Task, TaskSource, Reminder } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 import { TrendingUp, Activity, History, BookOpen, Clock, X, GraduationCap, ListTodo, Plus, Trash2, CheckCircle, Circle, Sparkles, PlayCircle, Flame, Target, Info, ChevronRight, Bell, BellOff, Calendar, AlertCircle, RefreshCw, Loader2, Download, ChevronLeft, LayoutGrid, Award } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { checkNotificationPermission, generateICS, registerPushNotifications } from '../lib/push-service';
+import { checkNotificationPermission, generateICS } from '../lib/push-service';
 
 interface DashboardProps {
   userState: UserState;
@@ -77,9 +77,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     const completedChapters = rawSubjects.reduce((acc, curr) => acc + (curr.chapters?.filter(c => c.isCompleted).length || 0), 0);
     const completionRate = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
 
-    const dailyGoalSeconds = 6 * 3600; 
+    const dailyGoalSeconds = 6 * 3600; // 6 hours goal
     const studyProgress = Math.min(100, Math.round((todayFocusSeconds / dailyGoalSeconds) * 100));
     const score = Math.round((studyProgress * 0.4) + (completionRate * 0.5) + ((userState.streaks || 0) * 2));
+
+    const focusData = [
+      { name: 'Today', value: studyProgress, fill: 'var(--brand-primary)' }
+    ];
 
     return {
       totalFocusSeconds: allSessions.reduce((acc, curr) => acc + curr.durationSeconds, 0),
@@ -90,7 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
       studyProgress,
       score: Math.min(100, score),
       readiness: score > 85 ? t('চমৎকার', 'Excellent') : score > 60 ? t('ভালো', 'Good') : t('চলমান', 'Steady'),
-      focusRadialData: [{ name: 'Today', value: studyProgress, fill: 'var(--brand-primary)' }]
+      focusRadialData: focusData
     };
   }, [userState.studyHistory, userState.subjects, userState.streaks, userState.activeTimer, userState.language]);
 
@@ -163,23 +167,58 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     setIsReminderModalOpen(true);
   };
 
+  const quickAddReminder = async (exam: any) => {
+    const title = `${t('পরীক্ষা প্রস্তুতি:', 'Exam Prep:')} ${exam.name}`;
+    const examDate = new Date(exam.originalDate);
+    // Set for 8 AM of the exam date
+    examDate.setHours(8, 0, 0, 0);
+
+    const reminder: Reminder = {
+      id: `rem-quick-${Date.now()}`,
+      title,
+      time: examDate.getTime(),
+      isTriggered: false,
+      isDone: false,
+      repeatType: 'none'
+    };
+
+    onUpdateState(prev => ({ 
+      ...prev, 
+      reminders: [...(prev.reminders || []), reminder] 
+    }));
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('reminders').insert({
+          user_id: user.id,
+          title: title,
+          reminder_datetime: examDate.toISOString(),
+          is_done: false,
+          is_triggered: false,
+          repeat_type: 'none'
+        });
+      }
+    } catch (e) {}
+  };
+
   const addReminder = async () => {
     if (!newReminder.title.trim() || !newReminder.time || isAddingReminder) return;
     setIsAddingReminder(true);
     
     try {
       await checkNotificationPermission();
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error(t("লগইন সেশন পাওয়া যায়নি।", "Session not found."));
 
-      await registerPushNotifications(user.id);
-
       const reminderTime = new Date(newReminder.time).getTime();
+      const datetime = new Date(newReminder.time).toISOString();
       
       const { error: dbError } = await supabase.from('reminders').insert({
         user_id: user.id,
         title: newReminder.title.trim(),
-        time: reminderTime,
+        reminder_datetime: datetime,
         is_done: false,
         is_triggered: false,
         repeat_type: newReminder.repeatType
@@ -215,22 +254,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
     }
   };
 
-  const deleteReminder = async (id: string, title: string) => {
-    if (!confirm(t("রিমাইন্ডারটি কি মুছে ফেলতে চাও?", "Delete this reminder?"))) return;
-    
-    onUpdateState(prev => ({
-      ...prev,
-      reminders: (prev.reminders || []).filter(r => r.id !== id)
-    }));
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('reminders').delete().eq('user_id', user.id).eq('title', title);
-      }
-    } catch (e) {}
-  };
-
   const toggleTask = (id: string) => {
     onUpdateState(prev => ({
       ...prev,
@@ -245,6 +268,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
 
   return (
     <div className="space-y-6 pb-24 animate-in fade-in duration-700">
+      {/* Dynamic PWA Install Button Section */}
       {canInstall && (
         <div className="bg-brand-primary text-white p-6 rounded-[2.5rem] shadow-xl shadow-brand-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-4 border border-white/10">
            <div className="flex items-center gap-5">
@@ -256,7 +280,10 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                  <p className="text-[10px] font-bold opacity-80 uppercase tracking-tighter">{t('হোমস্ক্রিনে অ্যাড করে অফলাইনেও পড়াশোনা করো', 'Add to home screen for better access')}</p>
               </div>
            </div>
-           <button onClick={handleInstallApp} className="w-full sm:w-auto px-8 py-3 bg-white text-brand-primary rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all">
+           <button 
+             onClick={handleInstallApp} 
+             className="w-full sm:w-auto px-8 py-3 bg-white text-brand-primary rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all"
+           >
              {t('ইনস্টল', 'Install Now')}
            </button>
         </div>
@@ -332,9 +359,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                 const total = sub.chapters?.length || 0;
                 const done = sub.chapters?.filter(c => c.isCompleted).length || 0;
                 const perc = total > 0 ? Math.round((done / total) * 100) : 0;
+                
                 return (
                   <div key={sub.id} className="bg-brand-bg/40 p-5 rounded-3xl border border-brand-text-s/10 group hover:border-brand-primary transition-all relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity"><GraduationCap size={40} /></div>
+                    <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                      <GraduationCap size={40} />
+                    </div>
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h4 className="text-xs font-black text-brand-text-p uppercase tracking-tight">{sub.name}</h4>
@@ -342,9 +372,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                       </div>
                       <span className="text-sm font-black text-brand-primary">{perc}%</span>
                     </div>
+                    
                     <div className="space-y-2">
                       <div className="h-2 w-full bg-brand-bg rounded-full overflow-hidden shadow-inner">
-                        <div className={`h-full bg-gradient-to-r from-brand-primary to-brand-secondary rounded-full transition-all duration-1000`} style={{ width: `${perc}%` }} />
+                        <div 
+                          className={`h-full bg-gradient-to-r from-brand-primary to-brand-secondary rounded-full transition-all duration-1000`} 
+                          style={{ width: `${perc}%` }} 
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[9px] font-black uppercase text-brand-text-s tracking-widest">
+                        <span>{done} {t('অধ্যায়', 'Chapters')}</span>
+                        <span>{total} {t('মোট', 'Total')}</span>
                       </div>
                     </div>
                   </div>
@@ -352,38 +390,62 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
               })}
             </div>
           </section>
+
+          <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
+            <h3 className="text-lg font-black mb-6 flex items-center gap-3"><History size={20} className="text-brand-secondary" /> {t('পড়াশোনার ইতিহাস', 'Weekly Activity')}</h3>
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={userState.studyHistory.slice(-7).map(s => ({
+                  name: new Date(s.startTime).toLocaleDateString([], { weekday: 'short' }),
+                  minutes: Math.round(s.durationSeconds / 60)
+                }))}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
+                  <Tooltip cursor={{ fill: 'rgba(0,0,0,0.02)' }} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }} />
+                  <Bar dataKey="minutes" fill="var(--brand-primary)" radius={[6, 6, 0, 0]} barSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
         </div>
 
         <div className="space-y-6">
-          <section className="space-y-3">
-            <h3 className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('আসন্ন পরীক্ষা', 'Exam Countdowns')}</h3>
-            {countdowns.map((cd, idx) => (
-              <div key={idx} className={`p-5 rounded-3xl border flex items-center justify-between shadow-sm transition-all group ${cd.type === 'hsc' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-p'}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-2xl ${cd.type === 'hsc' ? 'bg-white/20' : 'bg-brand-primary/10 text-brand-primary'}`}><Calendar size={20} /></div>
-                  <div>
-                    <p className="text-xs font-black truncate max-w-[120px]">{cd.name}</p>
-                    <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{cd.type === 'hsc' ? 'National Board' : 'College Exam'}</p>
+          {countdowns.length > 0 && (
+            <section className="space-y-3">
+              <h3 className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">{t('আসন্ন পরীক্ষা', 'Exam Countdowns')}</h3>
+              {countdowns.map((cd, idx) => (
+                <div key={idx} className={`p-5 rounded-3xl border flex items-center justify-between shadow-sm transition-all group ${cd.type === 'hsc' ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-p'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-2xl ${cd.type === 'hsc' ? 'bg-white/20' : 'bg-brand-primary/10 text-brand-primary'}`}><Calendar size={20} /></div>
+                    <div>
+                      <p className="text-xs font-black truncate max-w-[120px]">{cd.name}</p>
+                      <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{cd.type === 'hsc' ? 'National Board' : 'College Exam'}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="text-right">
+                      <p className="text-2xl font-black leading-none">{cd.days}</p>
+                      <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{t('দিন বাকি', 'Days Left')}</p>
+                    </div>
+                    <button 
+                      onClick={() => openReminderForExam(cd)}
+                      className={`p-1.5 rounded-lg transition-all active:scale-90 ${cd.type === 'hsc' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-brand-bg hover:bg-brand-primary/10 text-brand-primary'}`}
+                      title={t('রিমাইন্ডার সেট করো', 'Set Reminder')}
+                    >
+                      <Bell size={14} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="text-right">
-                    <p className="text-2xl font-black leading-none">{cd.days}</p>
-                    <p className={`text-[8px] font-bold uppercase ${cd.type === 'hsc' ? 'text-white/60' : 'text-brand-text-s'}`}>{t('দিন বাকি', 'Days Left')}</p>
-                  </div>
-                  <button onClick={() => openReminderForExam(cd)} className={`p-1.5 rounded-lg transition-all active:scale-90 ${cd.type === 'hsc' ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-brand-bg hover:bg-brand-primary/10 text-brand-primary'}`}>
-                    <Bell size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </section>
+              ))}
+            </section>
+          )}
 
           <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-black flex items-center gap-3"><ListTodo size={20} className="text-brand-primary" /> {t('ডেইলি টাস্ক', 'Today\'s Task')}</h3>
               <button onClick={() => setIsTaskModalOpen(true)} className="p-2 bg-brand-primary text-white rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all"><Plus size={16} /></button>
             </div>
+            
             <div className="space-y-3">
               {userState.dailyTasks?.length > 0 ? userState.dailyTasks.map(task => (
                 <div key={task.id} className={`p-4 rounded-2xl border transition-all ${task.isCompleted ? 'bg-emerald-500/5 border-emerald-500/20 shadow-sm' : 'bg-brand-bg/50 border-brand-text-s/10 hover:border-brand-primary/30'}`}>
@@ -393,11 +455,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                     </button>
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs font-bold leading-tight ${task.isCompleted ? 'line-through opacity-50' : 'text-brand-text-p'}`}>{task.name}</p>
+                      <p className="text-[9px] font-black uppercase text-brand-text-s mt-1 tracking-tighter opacity-80">{getSubjectName(task.subjectId)}</p>
                     </div>
-                    <button onClick={() => openReminderForTask(task)} className="text-brand-text-s hover:text-brand-primary transition-colors"><Bell size={16} /></button>
+                    <div className="flex flex-col gap-2">
+                       <button onClick={() => onUpdateState(prev => ({ ...prev, dailyTasks: prev.dailyTasks.filter(t => t.id !== task.id) }))} className="text-brand-text-s hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                       {!task.isCompleted && (
+                         <button 
+                           onClick={() => openReminderForTask(task)} 
+                           className="text-brand-text-s hover:text-brand-primary transition-colors"
+                           title={t('রিমাইন্ডার সেট করো', 'Set Reminder')}
+                         >
+                           <Bell size={16} />
+                         </button>
+                       )}
+                    </div>
                   </div>
                 </div>
-              )) : <div className="py-8 text-center opacity-30 text-[10px] uppercase font-black">{t('কোনো টাস্ক নেই', 'No tasks')}</div>}
+              )) : (
+                <div className="py-8 text-center bg-brand-bg/30 rounded-3xl border border-dashed border-brand-text-s/20">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-text-s opacity-50">{t('কোনো টাস্ক নেই', 'No tasks planned')}</p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -406,19 +484,55 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
               <h3 className="text-lg font-black flex items-center gap-3"><Bell size={20} className="text-orange-500" /> {t('রিমাইন্ডার', 'Alerts')}</h3>
               <button onClick={() => setIsReminderModalOpen(true)} className="p-2 bg-orange-500 text-white rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all"><Plus size={16} /></button>
             </div>
+            
             <div className="space-y-3">
+              {suggestedReminders.length > 0 && (
+                <div className="mb-4 p-4 bg-brand-primary/5 rounded-3xl border border-dashed border-brand-primary/20 space-y-3">
+                  <p className="text-[8px] font-black uppercase text-brand-primary tracking-widest">{t('পরামর্শ', 'Suggested for You')}</p>
+                  {suggestedReminders.map((s, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => quickAddReminder(s)}
+                      className="w-full flex items-center justify-between p-3 bg-white dark:bg-brand-bg rounded-2xl hover:scale-[1.02] active:scale-95 transition-all group shadow-sm"
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <GraduationCap size={14} className="text-brand-primary shrink-0" />
+                        <span className="text-[10px] font-bold text-brand-text-p truncate">{s.name}</span>
+                      </div>
+                      <Plus size={14} className="text-brand-primary group-hover:rotate-90 transition-transform" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {activeReminders.length > 0 ? activeReminders.map(rem => (
-                <div key={rem.id} className="p-4 bg-white dark:bg-brand-surface rounded-2xl border border-brand-text-s/10 flex items-center justify-between group">
+                <div key={rem.id} className="p-4 bg-white dark:bg-brand-surface rounded-2xl border border-brand-text-s/10 flex items-center justify-between group hover:border-orange-500/50 transition-all">
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-brand-text-p truncate">{rem.title}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Clock size={10} className="text-brand-text-s" />
-                      <span className="text-[9px] font-black text-brand-text-s uppercase">{new Date(rem.time).toLocaleString()}</span>
+                      <span className="text-[9px] font-black text-brand-text-s uppercase">
+                        {new Date(rem.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
                   </div>
-                  <button onClick={() => deleteReminder(rem.id, rem.title)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={16} /></button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={async () => {
+                      onUpdateState(prev => ({ ...prev, reminders: (prev.reminders || []).map(r => r.id === rem.id ? { ...r, isDone: true } : r) }));
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) {
+                           await supabase.from('reminders').update({ is_done: true }).eq('title', rem.title).eq('user_id', user.id);
+                        }
+                      } catch (e) {}
+                    }} className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"><CheckCircle size={18} /></button>
+                  </div>
                 </div>
-              )) : <div className="py-8 text-center opacity-30 text-[10px] uppercase font-black">{t('কোনো রিমাইন্ডার নেই', 'Quiet for now')}</div>}
+              )) : (
+                <div className="py-8 text-center opacity-30">
+                  <p className="text-[10px] font-black uppercase tracking-widest">{t('কোনো রিমাইন্ডার নেই', 'Quiet for now')}</p>
+                </div>
+              )}
             </div>
           </section>
         </div>
@@ -433,7 +547,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
             </div>
             <div className="space-y-4">
               <input type="text" value={newTask.name} onChange={e => setNewTask({...newTask, name: e.target.value})} placeholder={t("টাস্কের নাম লিখো", "e.g. Physics Math Ch 3")} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none ring-2 ring-transparent focus:ring-brand-primary/20 transition-all" />
-              <button onClick={addTask} className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[11px] mt-4">{t('টাস্ক যোগ করো', 'Confirm Task')}</button>
+              <select value={newTask.subjectId} onChange={e => setNewTask({...newTask, subjectId: e.target.value, chapterId: ''})} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none cursor-pointer">
+                <option value="">{t('বিষয় (ঐচ্ছিক)', 'Subject (Optional)')}</option>
+                {userState.subjects.map(s => <option key={s.id} value={s.id}>{s.name} (P{s.paper})</option>)}
+              </select>
+              {newTask.subjectId && (
+                <select value={newTask.chapterId} onChange={e => setNewTask({...newTask, chapterId: e.target.value})} className="w-full px-5 py-4 bg-brand-bg border-0 rounded-2xl font-bold outline-none animate-in slide-in-from-top-2 cursor-pointer">
+                  <option value="">{t('অধ্যায় (ঐচ্ছিক)', 'Chapter (Optional)')}</option>
+                  {userState.subjects.find(s => s.id === newTask.subjectId)?.chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                </select>
+              )}
+              <button onClick={addTask} className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[11px] mt-4 hover:scale-[1.02] active:scale-95 transition-all">{t('টাস্ক যোগ করো', 'Confirm Task')}</button>
             </div>
           </div>
         </div>
@@ -454,6 +578,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                 <option value="daily">{t('প্রতিদিন', 'Repeat Daily')}</option>
                 <option value="weekly">{t('প্রতি সপ্তাহে', 'Repeat Weekly')}</option>
               </select>
+
               <div className="flex items-center justify-between p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5">
                 <div className="flex items-center gap-3">
                   <Calendar className="text-brand-primary" size={18} />
@@ -463,7 +588,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userState, onUpdateState, onTrigg
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${syncToCalendar ? 'left-7' : 'left-1'}`} />
                 </button>
               </div>
-              <button onClick={addReminder} disabled={isAddingReminder} className="w-full py-5 bg-orange-500 text-white font-black rounded-2xl shadow-xl shadow-orange-500/20 uppercase tracking-widest text-[11px] mt-4 disabled:opacity-50">
+
+              <button 
+                onClick={addReminder} 
+                disabled={isAddingReminder}
+                className="w-full py-5 bg-orange-500 text-white font-black rounded-2xl shadow-xl shadow-orange-500/20 uppercase tracking-widest text-[11px] mt-4 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+              >
                 {isAddingReminder ? <Loader2 className="animate-spin mx-auto" size={20} /> : t('সেভ করো', 'Save Alert')}
               </button>
             </div>

@@ -69,7 +69,7 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return { ...DEFAULT_STATE, ...parsed, isAuthenticated: false }; // Always start as unauth until session check
+        return { ...DEFAULT_STATE, ...parsed, isAuthenticated: false };
       } catch (e) {
         console.error("Local storage recovery failed:", e);
       }
@@ -82,29 +82,34 @@ const App: React.FC = () => {
   const [activeModelExamId, setActiveModelExamId] = useState<string | null>(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   
-  // Persistence Gates
   const isDataFetched = useRef(false);
   const lastSavedJson = useRef<string>("");
 
   useEffect(() => {
-    // 1. Initial Session Check
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await backgroundSync(session.user.id);
-      } else {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (session) {
+          await backgroundSync(session.user.id);
+        } else {
+          setIsInitialLoading(false);
+        }
+      } catch (err) {
+        console.error("Session check error:", err);
         setIsInitialLoading(false);
       }
     };
 
-    // 2. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         await backgroundSync(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         isDataFetched.current = false;
         setUserState(DEFAULT_STATE);
         localStorage.removeItem('hsc_study_tracker_state');
+        setIsInitialLoading(false);
       }
     });
 
@@ -115,6 +120,11 @@ const App: React.FC = () => {
   const backgroundSync = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
+      
+      if (error) {
+        console.warn("Cloud fetching error, falling back to local:", error);
+      }
+
       if (data?.state) {
         const cloudState = data.state as unknown as Partial<UserState>;
         const mergedState = { ...DEFAULT_STATE, ...cloudState, isAuthenticated: true };
@@ -122,10 +132,13 @@ const App: React.FC = () => {
         setUserState(mergedState);
         lastSavedJson.current = JSON.stringify(cloudState);
       } else {
+        // First time user or no cloud data
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
     } catch (e) { 
-      console.warn("Background sync failed", e); 
+      console.warn("Background sync critical failure", e); 
+      // Ensure we still mark authenticated if local session exists
+      setUserState(prev => ({ ...prev, isAuthenticated: true }));
     } finally {
       isDataFetched.current = true;
       setIsInitialLoading(false);
@@ -133,32 +146,29 @@ const App: React.FC = () => {
   };
 
   const saveUserData = async (state: UserState) => {
-    // CRITICAL: Do not save until initial hydration is complete
     if (!isDataFetched.current || !state.isAuthenticated) return;
 
     const { isAuthenticated, ...stateToSave } = state;
     const currentStateJson = JSON.stringify(stateToSave);
     
-    // Optimization: Only save if state actually changed
     if (currentStateJson === lastSavedJson.current) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
-      await supabase.from('user_data').upsert({ 
+      const { error } = await supabase.from('user_data').upsert({ 
         user_id: user.id, 
         state: stateToSave, 
         updated_at: new Date().toISOString() 
       }, { onConflict: 'user_id' });
       
-      lastSavedJson.current = currentStateJson;
+      if (!error) lastSavedJson.current = currentStateJson;
     } catch (e) { 
       console.warn("Cloud save failed:", e);
     }
   };
 
-  // Sync effect
   useEffect(() => {
     if (userState.isAuthenticated) {
       localStorage.setItem('hsc_study_tracker_state', JSON.stringify(userState));

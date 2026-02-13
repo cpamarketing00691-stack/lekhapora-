@@ -1,25 +1,17 @@
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { UserState, Subject, Chapter } from './types';
 import { CHAPTER_LISTS } from './constants';
 
 // Layouts
-import { MarketingLayout } from './components/MarketingLayout';
+import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
 import PanelLayout from './layouts/PanelLayout';
 
-// Public Pages
-import About from './pages/About';
-import FAQ from './pages/FAQ';
-import Contact from './pages/Contact';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import Terms from './pages/Terms';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Onboarding from './components/Onboarding';
-
-// Lazy Loaded Panels
+// Modular Panels
+const AboutPanel = lazy(() => import('./panels/AboutPanel'));
+const AuthPanel = lazy(() => import('./panels/AuthPanel'));
 const DashboardPanel = lazy(() => import('./panels/DashboardPanel'));
 const SyllabusPanel = lazy(() => import('./panels/SyllabusPanel'));
 const TrackerPanel = lazy(() => import('./panels/TrackerPanel'));
@@ -30,6 +22,10 @@ const AnalyticsPanel = lazy(() => import('./panels/AnalyticsPanel'));
 const SettingsPanel = lazy(() => import('./panels/SettingsPanel'));
 const OCRPanel = lazy(() => import('./panels/OCRPanel'));
 const SystemPanel = lazy(() => import('./panels/SystemPanel'));
+
+// Components
+import Onboarding from './components/Onboarding';
+import { Loader2 } from 'lucide-react';
 
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
@@ -46,6 +42,12 @@ const DEFAULT_STATE: UserState = {
   reminders: [],
   notificationsEnabled: false
 };
+
+const PanelLoader = () => (
+  <div className="h-full w-full flex items-center justify-center opacity-50 bg-brand-bg/50">
+    <Loader2 className="animate-spin text-brand-primary" size={32} />
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const [userState, setUserState] = useState<UserState>(DEFAULT_STATE);
@@ -95,7 +97,7 @@ const AppContent: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
-        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging', '/login'];
+        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/login'];
         if (!publicPaths.some(p => location.pathname.includes(p))) {
           navigate('/about');
         }
@@ -116,29 +118,25 @@ const AppContent: React.FC = () => {
           <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
           <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
-        <p className="mt-4 font-black text-brand-primary uppercase tracking-[0.3em] text-[9px] animate-pulse italic">Lekhapora Modular Init...</p>
+        <p className="mt-4 font-black text-brand-primary uppercase tracking-[0.3em] text-[9px] animate-pulse italic">Lekhapora Architect Init...</p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* Public Marketing */}
-      <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
-        <Route path="/about" element={<About />} />
-        <Route path="/faq" element={<FAQ />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<Terms />} />
+      {/* Public Pages Layout */}
+      <Route element={<PublicLayout isAuthenticated={userState.isAuthenticated} />}>
+        <Route path="/about" element={<Suspense fallback={<PanelLoader />}><AboutPanel userState={userState} /></Suspense>} />
+        <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelLoader />}><AuthPanel mode="signin" /></Suspense>} />
+        <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelLoader />}><AuthPanel mode="signup" /></Suspense>} />
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      {/* Authentication */}
-      <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Login />} />
-      <Route path="/login" element={<Navigate to="/loging" replace />} />
-      <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Register />} />
+      {/* Legacy Redirection */}
+      <Route path="/loging" element={<Navigate to="/login" replace />} />
 
-      {/* Onboarding */}
+      {/* Onboarding Flow */}
       <Route 
         path="/onboarding" 
         element={
@@ -166,7 +164,7 @@ const AppContent: React.FC = () => {
         }
       />
 
-      {/* Main Panel Dashboard */}
+      {/* Protected App Dashboard Layout */}
       <Route 
         path="/app/*" 
         element={
@@ -185,33 +183,28 @@ const AppContent: React.FC = () => {
                     <Route path="settings" element={<SettingsPanel userState={userState} onUpdateState={setUserState} onLogout={() => supabase.auth.signOut()} />} />
                     <Route path="ocr" element={<OCRPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="system" element={<SystemPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="about" element={<AboutPanel userState={userState} isAppPanel />} />
                     <Route index element={<Navigate to="dashboard" replace />} />
                   </Routes>
                 </Suspense>
               </PanelLayout>
             )
-          ) : <Navigate to="/about" replace />
+          ) : <Navigate to="/login" state={{ from: location }} replace />
         }
       />
 
+      {/* 404 Fallback */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/app/dashboard" : "/about"} replace />} />
     </Routes>
   );
 };
 
-const PanelLoader = () => (
-  <div className="h-full w-full flex items-center justify-center opacity-50">
-    <Loader2 className="animate-spin text-brand-primary" size={24} />
-  </div>
-);
-
+// Basename detection for multi-tenant / sub-path environments
 const getBasename = () => {
   const path = window.location.pathname;
   const parts = path.split('/').filter(Boolean);
   return (parts.length > 0 && parts[0].length > 20) ? `/${parts[0]}` : '';
 };
-
-import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   return (

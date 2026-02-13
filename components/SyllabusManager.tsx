@@ -2,12 +2,10 @@
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter, Difficulty } from '../types';
 import { 
-  Camera, Plus, Trash2, Calendar, CheckCircle2, 
-  Loader2, FileText, CheckCircle, 
-  Search, Tag, GraduationCap, Clock, X
+  Camera, Plus, Trash2, CheckCircle2, 
+  Loader2, X
 } from 'lucide-react';
 
-// Using esm.sh for Tesseract integration
 const TESSERACT_URL = "https://esm.sh/tesseract.js@5.0.5";
 
 interface SyllabusManagerProps {
@@ -19,63 +17,35 @@ interface SyllabusManagerProps {
 const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateState, onTriggerTest }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
-  const [chapterSearch, setChapterSearch] = useState<Record<string, string>>({}); 
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [manualSubject, setManualSubject] = useState({ name: '', paper: 1, chapters: '' });
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
-  // OCR Logic
-  const preprocessImage = (canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      const threshold = 128;
-      const val = avg > threshold ? 255 : 0; // Binarization
-      data[i] = data[i + 1] = data[i + 2] = val;
-    }
-    ctx.putImageData(imageData, 0, 0);
-  };
-
   const handleOCR = async (file: File) => {
     setIsProcessing(true);
     try {
-      const { createWorker } = await import(TESSERACT_URL);
-      const worker = await createWorker('eng+ben');
+      const tesseract: any = await import(TESSERACT_URL);
+      const worker = await tesseract.createWorker('eng+ben');
       
       const img = new Image();
       img.src = URL.createObjectURL(file);
-      await new Promise(resolve => img.onload = resolve);
+      await new Promise((resolve) => { img.onload = resolve; });
 
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0);
-      preprocessImage(canvas);
-
-      const { data: { text } } = await worker.recognize(canvas);
+      const { data: { text } } = await worker.recognize(img);
       await worker.terminate();
 
-      // Simple extraction logic: find lines that look like chapters or subjects
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+      const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 3);
       
       if (lines.length > 0) {
-        setManualSubject(prev => ({
-          ...prev,
-          chapters: lines.join('\n')
-        }));
+        setManualSubject(prev => ({ ...prev, chapters: lines.join('\n') }));
         setShowManualAdd(true);
-        alert(t("ওসিআর সফল হয়েছে! বিষয় এবং চ্যাপ্টারগুলো চেক করো।", "OCR successful! Please review the detected content."));
       } else {
         throw new Error("No text detected");
       }
     } catch (error) {
       console.error("OCR Error:", error);
-      alert(t("স্ক্যান করতে সমস্যা হয়েছে। দয়া করে পরিষ্কার ছবি আপলোড করো।", "Scanning failed. Please upload a clearer image."));
+      alert(t("স্ক্যান করতে সমস্যা হয়েছে। পরিষ্কার ছবি ব্যবহার করো।", "Scan failed. Use a clearer image."));
     } finally {
       setIsProcessing(false);
     }
@@ -96,38 +66,39 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         name: name.trim(),
         isCompleted: false
       }));
+    
     const newSubject: Subject = {
       id: `manual-sub-${Date.now()}`,
       name: manualSubject.name,
       paper: manualSubject.paper as 1 | 2,
       chapters
     };
+
     onUpdateState((prev: UserState) => ({
       ...prev,
-      subjects: [...(Array.isArray(prev.subjects) ? prev.subjects : []), newSubject]
+      subjects: [...(prev.subjects || []), newSubject]
     }));
+
     setManualSubject({ name: '', paper: 1, chapters: '' });
     setShowManualAdd(false);
   };
 
-  const updateDifficulty = (subjectId: string, chapterId: string, diff: Difficulty) => {
-    onUpdateState((prev: UserState) => ({
-      ...prev,
-      subjects: Array.isArray(prev.subjects) ? prev.subjects.map((s: Subject) => s.id === subjectId ? {
-        ...s,
-        chapters: Array.isArray(s.chapters) ? s.chapters.map((c: Chapter) => c.id === chapterId ? { ...c, difficulty: diff } : c) : []
-      } : s) : []
-    }));
+  const deleteSubject = (id: string) => {
+    if (confirm(t("তুমি কি নিশ্চিত?", "Are you sure?"))) {
+      onUpdateState((prev: UserState) => ({
+        ...prev,
+        subjects: prev.subjects.filter((s: Subject) => s.id !== id)
+      }));
+    }
   };
 
-  // Fix: Added toggleAllChapters function to handle "Mark All Done" feature.
   const toggleAllChapters = (subjectId: string, completed: boolean) => {
     onUpdateState((prev: UserState) => ({
       ...prev,
-      subjects: Array.isArray(prev.subjects) ? prev.subjects.map((s: Subject) => s.id === subjectId ? {
+      subjects: prev.subjects.map((s: Subject) => s.id === subjectId ? {
         ...s,
-        chapters: Array.isArray(s.chapters) ? s.chapters.map((c: Chapter) => ({ ...c, isCompleted: completed })) : []
-      } : s) : []
+        chapters: s.chapters.map((c: Chapter) => ({ ...c, isCompleted: completed }))
+      } : s)
     }));
   };
 
@@ -138,63 +109,74 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl md:text-4xl font-black tracking-tight">{t('সিলেবাস গাইড', 'Syllabus Guide')}</h2>
-          <p className="text-slate-500 font-medium text-xs md:text-sm mt-1">{t('তোমার NCTB সিলেবাস এবং পরীক্ষার তারিখ ম্যানেজ করো।', 'Manage your NCTB syllabus and exam timeline.')}</p>
+          <p className="text-slate-500 font-medium text-xs md:text-sm mt-1">{t('তোমার NCTB সিলেবাস ম্যানেজ করো।', 'Manage your NCTB syllabus.')}</p>
         </div>
         
         <div className="flex flex-wrap gap-2 md:gap-3">
-          <button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="group flex flex-1 sm:flex-none items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 bg-brand-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl transition-all disabled:opacity-50">
-            {isProcessing ? <Loader2 className="animate-spin" size={16} /> : <Camera size={16} />}
-            {t('সিলেবাস স্ক্যান', 'Scan Syllabus')}
+          <button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-brand-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg disabled:opacity-50">
+            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+            {t('স্ক্যান', 'Scan')}
           </button>
-          
-          <button onClick={() => setShowManualAdd(!showManualAdd)} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 md:px-6 md:py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${showManualAdd ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
+          <button onClick={() => setShowManualAdd(!showManualAdd)} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${showManualAdd ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
             <Plus size={16} />
             {t('ম্যানুয়াল অ্যাড', 'Manual Add')}
           </button>
         </div>
       </div>
 
-      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageUpload} />
+      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
 
       {showManualAdd && (
-        <div className="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-[2rem] border-2 border-dashed border-brand-primary/20 animate-in zoom-in-95 duration-300">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-black text-lg flex items-center gap-3"><Plus className="text-brand-primary" />{t('বিষয় যোগ করো', 'Add Subject')}</h3>
-            <button onClick={() => setShowManualAdd(false)} className="text-slate-400"><X /></button>
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border-2 border-dashed border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95 duration-300 relative">
+          <button onClick={() => setShowManualAdd(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-rose-500"><X size={20}/></button>
+          <div className="mb-8">
+            <h3 className="font-black text-xl flex items-center gap-3"><Plus className="text-emerald-500" />{t('নতুন বিষয় যোগ করো', 'Add New Subject')}</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <input type="text" value={manualSubject.name} onChange={e => setManualSubject({...manualSubject, name: e.target.value})} placeholder="Subject Name" className="w-full px-5 py-3 bg-brand-bg rounded-xl font-bold outline-none" />
-            <select value={manualSubject.paper} onChange={e => setManualSubject({...manualSubject, paper: parseInt(e.target.value)})} className="w-full px-5 py-3 bg-brand-bg rounded-xl font-bold outline-none">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+            <input type="text" value={manualSubject.name} onChange={e => setManualSubject({...manualSubject, name: e.target.value})} placeholder="Subject Name" className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl font-bold outline-none" />
+            <select value={manualSubject.paper} onChange={e => setManualSubject({...manualSubject, paper: parseInt(e.target.value)})} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl font-bold outline-none">
               <option value={1}>1st Paper</option>
               <option value={2}>2nd Paper</option>
             </select>
           </div>
-          <textarea value={manualSubject.chapters} onChange={e => setManualSubject({...manualSubject, chapters: e.target.value})} placeholder="Chapters (one per line)" className="w-full px-5 py-4 bg-brand-bg rounded-xl font-bold min-h-[120px] outline-none mb-4" />
-          <button onClick={handleManualAdd} className="w-full bg-brand-primary text-white font-black py-4 rounded-xl shadow-xl uppercase tracking-widest text-xs">{t('সেভ করো', 'Save Subject')}</button>
+          <textarea value={manualSubject.chapters} onChange={e => setManualSubject({...manualSubject, chapters: e.target.value})} placeholder="Chapters (One per line)" className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-emerald-500 rounded-2xl font-bold min-h-[120px] outline-none mb-6" />
+          <button onClick={handleManualAdd} className="w-full bg-emerald-500 text-white font-black py-4 rounded-2xl shadow-xl uppercase tracking-widest text-xs">{t('সেভ করো', 'Save Subject')}</button>
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-8">
         {subjects.map((sub: Subject) => (
-          <div key={sub.id} className="bg-brand-surface rounded-[2.5rem] p-6 border border-brand-text-s/10">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-black">{sub.name} (P{sub.paper})</h3>
-              <button onClick={() => toggleAllChapters(sub.id, true)} className="text-[10px] font-black text-brand-primary uppercase tracking-widest">Mark All Done</button>
+          <div key={sub.id} className="bg-white dark:bg-slate-900 rounded-[3rem] p-8 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-brand-primary rounded-2xl flex items-center justify-center text-white font-black text-xl">{sub.name[0]}</div>
+                <div>
+                  <h3 className="text-2xl font-black">{sub.name}</h3>
+                  <span className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">{t('পত্র', 'Paper')} {sub.paper}</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => toggleAllChapters(sub.id, true)} className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest">{t('সব শেষ', 'All Done')}</button>
+                <button onClick={() => deleteSubject(sub.id)} className="p-2 text-slate-300 hover:text-rose-500"><Trash2 size={18} /></button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sub.chapters.map((ch: Chapter) => (
-                <div key={ch.id} className={`p-4 rounded-2xl border bg-white ${ch.isCompleted ? 'border-emerald-200' : 'border-transparent'}`}>
-                  <div className="flex items-start gap-3">
-                    <input type="checkbox" checked={ch.isCompleted} onChange={() => {
-                       onUpdateState((prev: UserState) => ({
-                         ...prev,
-                         subjects: prev.subjects.map(s => s.id === sub.id ? {
-                           ...s, chapters: s.chapters.map(c => c.id === ch.id ? {...c, isCompleted: !c.isCompleted} : c)
-                         } : s)
-                       }));
-                    }} className="w-5 h-5 accent-emerald-500" />
-                    <span className={`text-sm font-bold ${ch.isCompleted ? 'line-through text-emerald-600' : ''}`}>{ch.name}</span>
-                  </div>
+                <div key={ch.id} className={`p-5 rounded-[2rem] border transition-all flex items-start gap-3 ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent'}`}>
+                  <input 
+                    type="checkbox" 
+                    checked={ch.isCompleted} 
+                    onChange={() => {
+                      onUpdateState((prev: UserState) => ({
+                        ...prev,
+                        subjects: prev.subjects.map((s: Subject) => s.id === sub.id ? {
+                          ...s, chapters: s.chapters.map((c: Chapter) => c.id === ch.id ? {...c, isCompleted: !c.isCompleted} : c)
+                        } : s)
+                      }));
+                    }} 
+                    className="w-5 h-5 accent-emerald-500 rounded-lg cursor-pointer mt-0.5" 
+                  />
+                  <span className={`text-sm font-bold ${ch.isCompleted ? 'line-through text-emerald-600' : 'text-slate-600'}`}>{ch.name}</span>
                 </div>
               ))}
             </div>

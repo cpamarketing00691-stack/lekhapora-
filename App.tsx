@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { UserState } from './types';
+import { UserState, UserProfile, Subject, Chapter } from './types';
 import { CHAPTER_LISTS } from './constants';
 
 // Layouts
@@ -10,7 +10,6 @@ import { MarketingLayout } from './components/MarketingLayout';
 import { Layout } from './components/Layout';
 
 // Public Pages
-import Home from './pages/Home';
 import About from './pages/About';
 import FAQ from './pages/FAQ';
 import Contact from './pages/Contact';
@@ -71,10 +70,9 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    // Safety timeout: Never stay on loading screen more than 3 seconds
     const safetyTimeout = setTimeout(() => {
-      if (loading) setLoading(false);
-    }, 3000);
+      setLoading(false);
+    }, 2500);
 
     const initSession = async () => {
       try {
@@ -97,11 +95,8 @@ const AppContent: React.FC = () => {
         setUserState(DEFAULT_STATE);
         setLoading(false);
         
-        // Define public routes where user shouldn't be redirected to login
-        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging'];
-        const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path));
-        
-        if (!isPublicPath) {
+        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging', '/login'];
+        if (!publicPaths.some(p => location.pathname.includes(p))) {
           navigate('/about');
         }
       }
@@ -116,21 +111,18 @@ const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg transition-colors duration-500">
-        <div className="relative w-16 h-16">
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg">
+        <div className="relative w-12 h-12">
           <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
           <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
-        <p className="mt-6 font-black text-brand-primary uppercase tracking-[0.3em] text-[10px] animate-pulse">
-          Lekhapora Loading...
-        </p>
+        <p className="mt-4 font-black text-brand-primary uppercase tracking-[0.3em] text-[9px] animate-pulse">Initializing...</p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* Public Marketing Routes */}
       <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<About />} />
         <Route path="/faq" element={<FAQ />} />
@@ -140,12 +132,10 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      {/* Auth-Specific Routes */}
       <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/login" element={<Navigate to="/loging" replace />} />
       <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
 
-      {/* Protected App Routes */}
       <Route 
         path="/" 
         element={
@@ -155,10 +145,10 @@ const AppContent: React.FC = () => {
                 language={userState.language}
                 onComplete={(profile) => {
                   const { selectedSubjectNames, ...p } = profile;
-                  const finalSubjects: any[] = [];
+                  const finalSubjects: Subject[] = [];
                   selectedSubjectNames.forEach((name, idx) => {
                     [1, 2].forEach(paperNum => {
-                      const chapters = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
+                      const chapters: Chapter[] = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
                         id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
                         name: ch,
                         isCompleted: false
@@ -172,7 +162,7 @@ const AppContent: React.FC = () => {
             ) : (
               <Layout 
                 userProfile={userState.profile} 
-                activeTab={location.pathname.split('/')[1] || 'dashboard'} 
+                activeTab={location.pathname.split('/').pop() || 'dashboard'} 
                 onTabChange={(tabId) => navigate(`/${tabId}`)} 
                 language={userState.language} 
                 userState={userState}
@@ -192,15 +182,24 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      {/* 404 Catch-all */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
     </Routes>
   );
 };
 
+// Basename detection for nested SCF URLs
+const getBasename = () => {
+  const path = window.location.pathname;
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length > 0 && parts[0].length > 20) {
+    return `/${parts[0]}`;
+  }
+  return '';
+};
+
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={getBasename()}>
       <AppContent />
     </BrowserRouter>
   );

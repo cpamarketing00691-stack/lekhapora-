@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { UserState, StudySession, Mood, Task, Subject } from '../types';
+import { UserState, StudySession, Mood, Task, Subject, Chapter } from '../types';
 import { 
   Play, Pause, Square, Clock, Brain, Coffee, 
   Zap as FocusIcon, AlertCircle, Sparkles, 
-  BookOpen, ListTodo, GraduationCap, ChevronDown, 
-  CheckCircle2, Target, History, Layout
+  Target
 } from 'lucide-react';
 
 interface TrackerProps {
@@ -20,7 +20,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [isRevision, setIsRevision] = useState(false);
   const [currentMood, setCurrentMood] = useState<Mood>('Focused');
   
-  // UI ONLY: Sub-second ticker to make the display feel alive and smooth
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 100);
@@ -31,10 +30,9 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const timer = userState.activeTimer;
 
-  // Sync selection state with active timer to allow seamless tab switching
   useEffect(() => {
     if (timer) {
-      const currentSubject = userState.subjects.find(s => s.id === timer.subjectId);
+      const currentSubject = userState.subjects.find((s: Subject) => s.id === timer.subjectId);
       if (currentSubject) {
         setSelectedSubjectName(currentSubject.name);
         setSelectedPaper(currentSubject.paper);
@@ -45,7 +43,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     }
   }, [!!timer, timer?.subjectId]);
 
-  // Precise duration calculation for the UI
   const { displayFocusSeconds, displayBreakSeconds } = useMemo(() => {
     if (!timer) return { displayFocusSeconds: 0, displayBreakSeconds: 0 };
     const diffSecs = Math.max(0, Math.floor((now - timer.lastTimestamp) / 1000));
@@ -56,18 +53,18 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   }, [timer, now]);
 
   const subjectNames = useMemo(() => {
-    const names = new Set(userState.subjects.map(s => s.name));
+    const names = new Set(userState.subjects.map((s: Subject) => s.name));
     return Array.from(names).sort();
   }, [userState.subjects]);
 
   const targetSubject = useMemo(() => {
-    return userState.subjects.find(s => s.name === selectedSubjectName && s.paper === selectedPaper);
+    return userState.subjects.find((s: Subject) => s.name === selectedSubjectName && s.paper === selectedPaper);
   }, [selectedSubjectName, selectedPaper, userState.subjects]);
 
   const chapters = useMemo(() => targetSubject?.chapters || [], [targetSubject]);
 
   const availableTasks = useMemo(() => {
-    return userState.dailyTasks.filter(task => 
+    return userState.dailyTasks.filter((task: Task) => 
       !task.isCompleted && (!targetSubject || task.subjectId === targetSubject.id)
     );
   }, [userState.dailyTasks, targetSubject]);
@@ -85,7 +82,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       return;
     }
     
-    onUpdateState(prev => {
+    onUpdateState((prev: UserState) => {
       const nowTs = Date.now();
       if (!prev.activeTimer) {
         return {
@@ -121,7 +118,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   };
 
   const handlePause = () => {
-    onUpdateState(prev => {
+    onUpdateState((prev: UserState) => {
       if (!prev.activeTimer) return prev;
       const nowTs = Date.now();
       const elapsedMs = nowTs - prev.activeTimer.lastTimestamp;
@@ -164,20 +161,34 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       isRevision: timer.isRevision
     };
 
-    onUpdateState(prev => {
-      const updatedTasks = prev.dailyTasks.map(task => 
+    onUpdateState((prev: UserState) => {
+      const updatedTasks = prev.dailyTasks.map((task: Task) => 
         task.id === timer.taskId ? { ...task, isCompleted: true } : task
       );
+
+      const updatedSubjects = prev.subjects.map((sub: Subject) => {
+        if (sub.id !== timer.subjectId) return sub;
+        return {
+          ...sub,
+          chapters: sub.chapters.map((ch: Chapter) => {
+            if (ch.id !== timer.chapterId) return ch;
+            return {
+              ...ch,
+              studyTimeSeconds: (ch.studyTimeSeconds || 0) + finalFocus
+            };
+          })
+        };
+      });
 
       return {
         ...prev,
         studyHistory: [...(prev.studyHistory || []), session],
         dailyTasks: updatedTasks,
+        subjects: updatedSubjects,
         activeTimer: null
       };
     });
 
-    // Reset local selection states
     setSelectedChapterId('');
     setActiveTaskId('');
   };
@@ -196,14 +207,10 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
         <p className="text-brand-text-s text-[10px] font-black uppercase tracking-[0.2em] italic">{t('একাগ্রতার সাথে তোমার লক্ষ্য অর্জন করো', 'Focus Deeply on Your Goals')}</p>
       </header>
 
-      {/* Main Study Control Card */}
       <div className="bg-brand-surface rounded-[3rem] p-8 sm:p-12 shadow-2xl border border-brand-text-s/10 relative overflow-hidden transition-all duration-500">
-        
-        {/* Background Visual Aid */}
         <div className={`absolute top-0 left-0 h-1 bg-brand-primary transition-all duration-300`} 
              style={{ width: timer ? `${(displayFocusSeconds % 60) * 1.66}%` : '0%' }} />
 
-        {/* Selection Area - Only visible when timer is NOT running or paused */}
         <div className={`space-y-4 mb-10 transition-all duration-500 ${timer ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -214,7 +221,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-3 text-xs font-bold outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="">{t('বিষয় বেছে নাও', 'Choose Subject')}</option>
-                {subjectNames.map(name => <option key={name} value={name}>{name}</option>)}
+                {subjectNames.map((name: string) => <option key={name} value={name}>{name}</option>)}
               </select>
             </div>
             <div className="space-y-1">
@@ -239,7 +246,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-3 text-xs font-bold outline-none transition-all appearance-none cursor-pointer disabled:opacity-30"
               >
                 <option value="">{t('চ্যাপ্টার বেছে নাও', 'Choose Chapter')}</option>
-                {chapters.map(ch => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
+                {chapters.map((ch: Chapter) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}
               </select>
             </div>
             <div className="space-y-1">
@@ -250,7 +257,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-3 text-xs font-bold outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="">{t('টাস্ক বেছে নাও', 'Choose Task')}</option>
-                {availableTasks.map(task => <option key={task.id} value={task.id}>{task.name}</option>)}
+                {availableTasks.map((task: Task) => <option key={task.id} value={task.id}>{task.name}</option>)}
               </select>
             </div>
           </div>
@@ -266,7 +273,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
         </div>
 
-        {/* Timer Display */}
         <div className="text-center py-6">
           <div 
             className={`font-black tracking-tighter tabular-nums leading-none select-none transition-all duration-700 drop-shadow-md ${timer?.isFocusActive === false ? 'text-brand-secondary scale-95 opacity-50' : 'text-brand-text-p'}`}
@@ -296,7 +302,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           </div>
         </div>
 
-        {/* Action Controls */}
         <div className="flex flex-col items-center gap-10 mt-6">
           <div className="flex items-center justify-center gap-12">
             {!timer?.isFocusActive ? (
@@ -338,7 +343,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
         </div>
       </div>
 
-      {/* Active Context Card */}
       {timer && (
         <div className="bg-brand-surface/80 backdrop-blur-md border border-brand-text-s/10 p-6 rounded-[2.5rem] flex items-center gap-5 animate-in slide-in-from-top-4 shadow-sm">
            <div className="w-14 h-14 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary shrink-0 border border-brand-primary/20 shadow-inner">
@@ -348,8 +352,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
              <h4 className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সেশন চলছে', 'Active Session')}</h4>
              <p className="text-base font-black text-brand-text-p truncate">
                {selectedSubjectName} (P{selectedPaper})
-               {selectedChapterId && ` • ${targetSubject?.chapters.find(c => c.id === selectedChapterId)?.name}`}
-               {timer.taskId && ` • ${userState.dailyTasks.find(t => t.id === timer.taskId)?.name}`}
+               {selectedChapterId && ` • ${targetSubject?.chapters.find((c: Chapter) => c.id === selectedChapterId)?.name}`}
+               {timer.taskId && ` • ${userState.dailyTasks.find((t: Task) => t.id === timer.taskId)?.name}`}
              </p>
              <p className="text-[9px] font-bold text-brand-text-s uppercase mt-1">{t('শুরু:', 'Started:')} {new Date(timer.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
            </div>

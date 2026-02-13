@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { UserState, UserProfile } from './types';
+import { UserState } from './types';
 
 // Layouts
 import MarketingLayout from './components/MarketingLayout';
@@ -18,7 +18,7 @@ import Terms from './pages/Terms';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
-// Dashboard Pages
+// Dashboard Components
 import Dashboard from './components/Dashboard';
 import Tracker from './components/Tracker';
 import SyllabusManager from './components/SyllabusManager';
@@ -48,7 +48,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initial Session Check
     const initSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -61,7 +60,7 @@ const App: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session) {
         await syncUserData(session.user.id);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
       }
@@ -84,7 +83,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Auto-save logic
   useEffect(() => {
     if (userState.isAuthenticated) {
       const timeoutId = setTimeout(async () => {
@@ -107,7 +105,7 @@ const App: React.FC = () => {
       <div className="h-screen w-full flex items-center justify-center bg-brand-bg">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-black text-brand-primary uppercase tracking-widest text-xs">Lekhapora is loading...</p>
+          <p className="font-black text-brand-primary uppercase tracking-widest text-[10px]">Initializing Lekhapora...</p>
         </div>
       </div>
     );
@@ -116,7 +114,7 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Marketing Routes */}
+        {/* Public Marketing Routes */}
         <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
@@ -126,7 +124,7 @@ const App: React.FC = () => {
           <Route path="/terms" element={<Terms />} />
         </Route>
 
-        {/* Auth Routes */}
+        {/* Standalone Auth Routes */}
         <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
         <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
 

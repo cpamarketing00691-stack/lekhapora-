@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -13,7 +13,7 @@ const Register: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  React.useEffect(() => {
+  useEffect(() => {
     document.title = "Register - Lekhapora";
   }, []);
 
@@ -24,17 +24,14 @@ const Register: React.FC = () => {
     
     try {
       const { error } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          data: { full_name: name }
-        }
+        email, password,
+        options: { data: { full_name: name } }
       });
       if (error) throw error;
-      alert("Registration successful! Check your email to verify your account.");
+      alert("Success! Please check your email to verify your account.");
       navigate('/login');
     } catch (err: any) {
-      setError(err.message || "Failed to register");
+      setError(err.message || "Failed to register. Please check your details.");
     } finally {
       setLoading(false);
     }
@@ -43,11 +40,10 @@ const Register: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6 relative">
       <BackgroundGrid />
-      
-      <div className="w-full max-w-md bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl border border-brand-text-s/10 relative z-10">
-        <div className="text-center mb-10 space-y-2">
-          <Link to="/" className="text-3xl font-black text-brand-primary italic">LEKHAPORA</Link>
-          <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest">Join the Platform</p>
+      <div className="w-full max-w-md bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl border border-brand-text-s/10 relative z-10 animate-in zoom-in-95 duration-500">
+        <div className="text-center mb-10">
+          <Link to="/" className="text-3xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
+          <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest mt-2">Join the Future of Learning</p>
         </div>
 
         {error && (
@@ -62,10 +58,7 @@ const Register: React.FC = () => {
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
               <input 
-                type="text" 
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                type="text" required value={name} onChange={(e) => setName(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all"
                 placeholder="Sharif Ahmed"
               />
@@ -77,12 +70,9 @@ const Register: React.FC = () => {
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
               <input 
-                type="email" 
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all"
-                placeholder="your@email.com"
+                placeholder="you@example.com"
               />
             </div>
           </div>
@@ -92,11 +82,7 @@ const Register: React.FC = () => {
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
               <input 
-                type="password" 
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all"
                 placeholder="••••••••"
               />
@@ -104,8 +90,7 @@ const Register: React.FC = () => {
           </div>
 
           <button 
-            type="submit" 
-            disabled={loading}
+            type="submit" disabled={loading}
             className="w-full py-5 bg-brand-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-brand-primary/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
           >
             {loading ? <Loader2 className="animate-spin" size={20} /> : 'Create Account'}
@@ -115,8 +100,7 @@ const Register: React.FC = () => {
 
         <div className="mt-8 pt-8 border-t border-brand-text-s/10 text-center">
           <p className="text-xs font-bold text-brand-text-s">
-            Already have an account?{' '}
-            <Link to="/login" className="text-brand-primary hover:underline font-black">Login</Link>
+            Already have an account? <Link to="/login" className="text-brand-primary hover:underline font-black">Sign In</Link>
           </p>
         </div>
       </div>

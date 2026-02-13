@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Lock, Mail, ArrowRight, Loader2, UserPlus, Chrome, HelpCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { AuthResponse } from '@supabase/supabase-js';
@@ -39,6 +39,11 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Clear errors when switching modes
+  useEffect(() => {
+    setErrorMsg(null);
+  }, [mode]);
+
   const validateEmail = (email: string) => {
     return String(email)
       .toLowerCase()
@@ -48,38 +53,51 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   const getFriendlyErrorMessage = (error: any) => {
     if (!error) return null;
     const message = error.message || "";
-    if (message.includes("Invalid login credentials")) return "Email বা পাসওয়ার্ড ভুল। আবার চেষ্টা করো।";
-    if (message.includes("User already registered")) return "এই Email দিয়ে আগে থেকেই অ্যাকাউন্ট খোলা আছে।";
-    if (message.includes("Email not confirmed")) return "দয়া করে তোমার Email ভেরিফাই করো। Inbox বা Spam চেক করো।";
-    if (message.includes(RETRY_EXHAUSTED_429_MESSAGE)) return "অতিরিক্ত চেষ্টার জন্য ব্লক করা হয়েছে। ৫ মিনিট পর চেষ্টা করো।";
+    if (message.includes("Invalid login credentials")) return "ইমেইল বা পাসওয়ার্ড ভুল। আবার চেষ্টা করো।";
+    if (message.includes("User already registered")) return "এই ইমেইল দিয়ে আগে থেকেই অ্যাকাউন্ট খোলা আছে।";
+    if (message.includes("Email not confirmed")) return "দয়া করে তোমার ইমেইল ভেরিফাই করো। ইনবক্স বা স্প্যাম চেক করো।";
+    if (message.includes(RETRY_EXHAUSTED_429_MESSAGE)) return "অতিরিক্ত চেষ্টার জন্য ব্লক করা হয়েছে। কিছুক্ষণ পর চেষ্টা করো।";
     return "ত্রুটি: " + message;
   };
 
   const handleGoogleSignIn = async () => {
     setErrorMsg(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) setErrorMsg(getFriendlyErrorMessage(error));
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { 
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setErrorMsg(getFriendlyErrorMessage(err));
+    }
   };
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!validateEmail(email)) {
-      setErrorMsg("সঠিক Email অ্যাড্রেস লিখো।");
+      setErrorMsg("সঠিক ইমেইল অ্যাড্রেস লিখো।");
       return;
     }
     setLoading(true);
     setErrorMsg(null);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setLoading(false);
-    if (error) {
-      setErrorMsg(getFriendlyErrorMessage(error));
-    } else {
-      alert("পাসওয়ার্ড রিসেট লিঙ্ক তোমার Email-এ পাঠানো হয়েছে।");
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      alert("পাসওয়ার্ড রিসেট লিঙ্ক তোমার ইমেইলে পাঠানো হয়েছে।");
       setMode('signin');
+    } catch (err: any) {
+      setErrorMsg(getFriendlyErrorMessage(err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -89,7 +107,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     setErrorMsg(null);
 
     if (!validateEmail(email)) {
-      setErrorMsg("সঠিক Email অ্যাড্রেস লিখো।");
+      setErrorMsg("সঠিক ইমেইল অ্যাড্রেস লিখো।");
       return;
     }
 
@@ -102,17 +120,19 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         if (data.user) onAuthSuccess();
       } else if (mode === 'signup') {
         if (password.length < 6) throw new Error("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।");
+        if (!name.trim()) throw new Error("দয়া করে তোমার নাম লিখো।");
+        
         const { data, error } = await retryWithDelay(() => supabase.auth.signUp({ 
           email, 
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { full_name: name }
+            data: { full_name: name.trim() }
           }
         }));
         if (error) throw error;
         if (data.user) {
-          alert("অ্যাকাউন্ট তৈরি হয়েছে! দয়া করে Email কনফার্ম করো।");
+          alert("অ্যাকাউন্ট তৈরি হয়েছে! দয়া করে ইমেইল কনফার্ম করো।");
           setMode('signin');
         }
       }
@@ -124,7 +144,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4">
+    <div className="min-h-screen bg-brand-bg flex items-center justify-center p-4 selection:bg-brand-primary/20">
       <div className="w-full max-w-md bg-brand-surface rounded-[2.5rem] p-8 sm:p-10 shadow-2xl shadow-brand-primary/10 border border-brand-text-s/10 animate-in fade-in zoom-in-95 duration-500">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black text-brand-primary italic">HSC TRACKER</h1>
@@ -140,7 +160,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           </div>
         )}
 
-        <form className="space-y-4" onSubmit={mode === 'forgot' ? (e) => { e.preventDefault(); handleForgotPassword(); } : handleSubmit}>
+        <form className="space-y-4" onSubmit={mode === 'forgot' ? handleForgotPassword : handleSubmit}>
           {mode === 'signup' && (
             <div className="space-y-1 animate-in slide-in-from-top-2 duration-300">
               <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Name</label>
@@ -151,7 +171,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Your Full Name" 
-                  required={mode === 'signup'}
+                  autoFocus={mode === 'signup'}
                   className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
                 />
               </div>
@@ -167,7 +187,7 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com" 
-                required
+                autoFocus={mode !== 'signup'}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
               />
             </div>
@@ -188,7 +208,6 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" 
-                  required={mode !== 'forgot'}
                   minLength={6}
                   className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
                 />
@@ -226,14 +245,20 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         )}
 
         <div className="mt-8 text-center flex flex-col gap-3">
-          <button 
-            onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setErrorMsg(null); }}
-            className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s hover:text-brand-primary transition-colors"
-          >
-            {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-          </button>
-          {mode === 'forgot' && (
-            <button onClick={() => setMode('signin')} className="text-[9px] font-black uppercase text-brand-primary">Back to Sign In</button>
+          {mode !== 'forgot' ? (
+            <button 
+              onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+              className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-text-s hover:text-brand-primary transition-colors"
+            >
+              {mode === 'signin' ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+            </button>
+          ) : (
+            <button 
+              onClick={() => setMode('signin')}
+              className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-primary hover:underline transition-all"
+            >
+              Back to Sign In
+            </button>
           )}
         </div>
       </div>

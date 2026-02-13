@@ -1,4 +1,3 @@
-
 {
   "name": "lekhapora-saas",
   "private": true,
@@ -12,12 +11,12 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.48.1",
     "@google/genai": "^1.41.0",
-    "framer-motion": "^11.11.11",
-    "lucide-react": "^0.475.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^6.22.3",
-    "recharts": "^2.15.0",
+    "framer-motion": "^12.34.0",
+    "lucide-react": "^0.563.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.0",
+    "recharts": "^3.7.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0",
     "typescript": "^5.7.2",
@@ -25,11 +24,13 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1"
+    "tailwindcss": "^3.4.1",
+    "tesseract.js": "^5.0.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/node": "^20.11.0"
+    "@types/node": "^20.11.0",
+    "terser": "^5.31.0"
   }
 }

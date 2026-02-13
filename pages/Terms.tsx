@@ -1,48 +1,36 @@
 
-import React, { useEffect } from 'react';
-import BackgroundGrid from '../components/BackgroundGrid';
+import React from 'react';
 
 const Terms: React.FC = () => {
-  useEffect(() => {
-    document.title = "Terms of Service - Lekhapora";
+  React.useEffect(() => {
+    document.title = "Terms & Conditions - Lekhapora";
   }, []);
 
   return (
-    <div className="relative min-h-screen pb-20">
-      <BackgroundGrid />
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-4xl mx-auto bg-brand-surface p-12 md:p-16 rounded-[3rem] border border-brand-text-s/10 shadow-sm">
-          <h1 className="text-4xl font-black text-brand-text-p mb-8">Terms of Service</h1>
-          <div className="prose prose-slate max-w-none space-y-8 text-brand-text-s font-medium leading-relaxed">
-            <p>Last updated: June 2026</p>
-            
-            <section>
-              <h2 className="text-2xl font-black text-brand-text-p mb-4">1. Acceptance of Terms</h2>
-              <p>By accessing or using Lekhapora, you agree to be bound by these Terms of Service and all applicable laws and regulations in Bangladesh.</p>
-            </section>
+    <div className="py-20 px-6 max-w-4xl mx-auto space-y-12">
+      <h1 className="text-4xl md:text-6xl font-black text-brand-text-p">TERMS & CONDITIONS</h1>
+      
+      <div className="prose prose-slate max-w-none space-y-10 text-brand-text-s font-medium leading-relaxed">
+        <section className="space-y-4">
+          <h2 className="text-2xl font-black text-brand-text-p uppercase tracking-widest">1. Acceptance</h2>
+          <p>By accessing Lekhapora, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.</p>
+        </section>
 
-            <section>
-              <h2 className="text-2xl font-black text-brand-text-p mb-4">2. User Responsibilities</h2>
-              <p>You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to use the service only for lawful educational purposes.</p>
-            </section>
+        <section className="space-y-4">
+          <h2 className="text-2xl font-black text-brand-text-p uppercase tracking-widest">2. User Responsibilities</h2>
+          <p>You are responsible for maintaining the confidentiality of your account credentials. You agree not to engage in any automated scraping, reverse engineering, or prohibited commercial use of our test data.</p>
+        </section>
 
-            <section>
-              <h2 className="text-2xl font-black text-brand-text-p mb-4">3. Intellectual Property</h2>
-              <p>The content, features, and functionality of the Lekhapora platform are the exclusive property of Lekhapora and are protected by international copyright and trademark laws.</p>
-            </section>
+        <section className="space-y-4">
+          <h2 className="text-2xl font-black text-brand-text-p uppercase tracking-widest">3. Intellectual Property</h2>
+          <p>All content on Lekhapora including MCQs, study trackers, and UI design are the intellectual property of Lekhapora and are protected by copyright laws.</p>
+        </section>
 
-            <section>
-              <h2 className="text-2xl font-black text-brand-text-p mb-4">4. Limitation of Liability</h2>
-              <p>Lekhapora is provided "as is" without warranty of any kind. We do not guarantee that the service will be uninterrupted or error-free. We are not liable for any study results or board exam outcomes.</p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-black text-brand-text-p mb-4">5. Termination</h2>
-              <p>We reserve the right to terminate or suspend your account immediately, without prior notice, for conduct that we believe violates these Terms or is harmful to other users.</p>
-            </section>
-          </div>
-        </div>
-      </section>
+        <section className="space-y-4">
+          <h2 className="text-2xl font-black text-brand-text-p uppercase tracking-widest">4. Termination</h2>
+          <p>We reserve the right to suspend or terminate accounts that violate our community guidelines or intellectual property rights without prior notice.</p>
+        </section>
+      </div>
     </div>
   );
 };

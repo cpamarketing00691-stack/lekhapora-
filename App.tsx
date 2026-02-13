@@ -25,6 +25,7 @@ import SyllabusManager from './components/SyllabusManager';
 import TestSection from './components/TestSection';
 import Settings from './components/Settings';
 import Onboarding from './components/Onboarding';
+import StudyCalendar from './components/StudyCalendar';
 import { CHAPTER_LISTS } from './constants';
 
 const DEFAULT_STATE: UserState = {
@@ -152,6 +153,7 @@ const App: React.FC = () => {
           <DashboardLayout userState={userState} setUserState={setUserState} />
         }>
           <Route path="/dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
+          <Route path="/calendar" element={<StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={() => {}} />} />
           <Route path="/tracker" element={<Tracker userState={userState} onUpdateState={setUserState} />} />
           <Route path="/syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
           <Route path="/test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />

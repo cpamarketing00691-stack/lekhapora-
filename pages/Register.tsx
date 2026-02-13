@@ -14,7 +14,7 @@ const Register: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = "Register - Lekhapora";
+    document.title = "Join Lekhapora - Smart Preparation";
   }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -28,10 +28,10 @@ const Register: React.FC = () => {
         options: { data: { full_name: name } }
       });
       if (error) throw error;
-      alert("Success! Please check your email to verify your account.");
+      alert("Registration successful! Check your email to confirm your account.");
       navigate('/login');
     } catch (err: any) {
-      setError(err.message || "Failed to register. Please check your details.");
+      setError(err.message || "Registration failed. Please check your information.");
     } finally {
       setLoading(false);
     }
@@ -40,14 +40,14 @@ const Register: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6 relative">
       <BackgroundGrid />
-      <div className="w-full max-w-md bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl border border-brand-text-s/10 relative z-10 animate-in zoom-in-95 duration-500">
-        <div className="text-center mb-10">
+      <div className="w-full max-w-md bg-brand-surface p-10 md:p-14 rounded-[3.5rem] shadow-2xl border border-brand-text-s/10 relative z-10 animate-in zoom-in-95 duration-500">
+        <div className="text-center mb-12">
           <Link to="/" className="text-3xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
-          <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest mt-2">Join the Future of Learning</p>
+          <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest mt-3">Start Your A+ Journey</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold border border-red-100">
+          <div className="mb-8 p-4 bg-rose-500/10 text-rose-600 rounded-2xl text-xs font-bold border border-rose-500/20">
             {error}
           </div>
         )}
@@ -66,19 +66,19 @@ const Register: React.FC = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Email</label>
+            <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
               <input 
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all"
-                placeholder="you@example.com"
+                placeholder="you@email.com"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Password</label>
+            <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1">Secure Password</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
               <input 
@@ -98,9 +98,9 @@ const Register: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-8 pt-8 border-t border-brand-text-s/10 text-center">
+        <div className="mt-10 pt-10 border-t border-brand-text-s/10 text-center">
           <p className="text-xs font-bold text-brand-text-s">
-            Already have an account? <Link to="/login" className="text-brand-primary hover:underline font-black">Sign In</Link>
+            Already registered? <Link to="/login" className="text-brand-primary hover:underline font-black ml-1">Sign In</Link>
           </p>
         </div>
       </div>

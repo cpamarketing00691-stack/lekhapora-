@@ -26,7 +26,7 @@ const Login: React.FC = () => {
       if (error) throw error;
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || "Invalid credentials. Please try again.");
+      setError(err.message || "Invalid email or password. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -35,14 +35,14 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6 relative">
       <BackgroundGrid />
-      <div className="w-full max-w-md bg-white rounded-[3rem] p-10 md:p-12 shadow-2xl border border-brand-text-s/10 relative z-10 animate-in zoom-in-95 duration-500">
-        <div className="text-center mb-10">
+      <div className="w-full max-w-md bg-brand-surface p-10 md:p-14 rounded-[3.5rem] shadow-2xl border border-brand-text-s/10 relative z-10 animate-in zoom-in-95 duration-500">
+        <div className="text-center mb-12">
           <Link to="/" className="text-3xl font-black text-brand-primary italic tracking-tight">LEKHAPORA</Link>
-          <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest mt-2">Welcome Back, Scholar</p>
+          <p className="text-brand-text-s font-black uppercase text-[10px] tracking-widest mt-3">Welcome Back, Scholar</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold border border-red-100 animate-in slide-in-from-top-2">
+          <div className="mb-8 p-4 bg-rose-500/10 text-rose-600 rounded-2xl text-xs font-bold border border-rose-500/20">
             {error}
           </div>
         )}
@@ -55,7 +55,7 @@ const Login: React.FC = () => {
               <input 
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all"
-                placeholder="you@example.com"
+                placeholder="you@email.com"
               />
             </div>
           </div>
@@ -63,7 +63,7 @@ const Login: React.FC = () => {
           <div className="space-y-2">
             <div className="flex justify-between items-center ml-1">
               <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Password</label>
-              <button type="button" className="text-[9px] font-black uppercase text-brand-primary hover:underline">Forgot Password?</button>
+              <button type="button" className="text-[9px] font-black uppercase text-brand-primary hover:underline">Forgot?</button>
             </div>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-s" size={18} />
@@ -84,9 +84,9 @@ const Login: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-8 pt-8 border-t border-brand-text-s/10 text-center">
+        <div className="mt-10 pt-10 border-t border-brand-text-s/10 text-center">
           <p className="text-xs font-bold text-brand-text-s">
-            New to Lekhapora? <Link to="/register" className="text-brand-primary hover:underline font-black">Create Account</Link>
+            New to Lekhapora? <Link to="/register" className="text-brand-primary hover:underline font-black ml-1">Create Account</Link>
           </p>
         </div>
       </div>

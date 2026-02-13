@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { UserState } from './types';
 import { CHAPTER_LISTS } from './constants';
@@ -43,9 +43,11 @@ const DEFAULT_STATE: UserState = {
   notificationsEnabled: false
 };
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [userState, setUserState] = useState<UserState>(DEFAULT_STATE);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const initSession = async () => {
@@ -63,12 +65,13 @@ const App: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
+        navigate('/loging');
       }
     });
 
     initSession();
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const syncUserData = async (userId: string) => {
     try {
@@ -112,22 +115,23 @@ const App: React.FC = () => {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Marketing / Public Routes */}
-        <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
-          <Route path="/" element={<Navigate to="/about" replace />} />
-          <Route path="/about" element={<Home />} />
-          <Route path="/faq" element={<FAQ />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
-          <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} />
-        </Route>
+    <Routes>
+      {/* Marketing / Public Routes */}
+      <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
+        <Route path="/" element={<Navigate to="/about" replace />} />
+        <Route path="/about" element={<Home />} />
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/loging" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />} />
+      </Route>
 
-        {/* Dashboard Routes (Protected) */}
-        <Route path="/" element={
+      {/* Dashboard Routes (Protected) */}
+      <Route 
+        path="/" 
+        element={
           userState.isAuthenticated ? (
             !userState.profile ? (
               <Onboarding 
@@ -151,28 +155,36 @@ const App: React.FC = () => {
             ) : (
               <Layout 
                 userProfile={userState.profile} 
-                activeTab={window.location.pathname.split('/')[1] || 'dashboard'} 
-                onTabChange={(tabId) => window.location.assign(`/${tabId}`)} 
+                activeTab={location.pathname.replace('/', '') || 'dashboard'} 
+                onTabChange={(tabId) => navigate(`/${tabId}`)} 
                 language={userState.language} 
                 userState={userState}
               />
             )
           ) : (
-            <Navigate to="/loging" />
+            <Navigate to="/loging" replace />
           )
-        }>
-          <Route path="dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-          <Route path="calendar" element={<StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={(tab) => window.location.assign(`/${tab}`)} />} />
-          <Route path="tracker" element={<Tracker userState={userState} onUpdateState={setUserState} />} />
-          <Route path="syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
-          <Route path="test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />
-          <Route path="settings" element={<Settings userState={userState} onUpdateState={setUserState} onLogout={async () => await supabase.auth.signOut()} />} />
-          <Route index element={<Navigate to="/dashboard" />} />
-        </Route>
+        }
+      >
+        <Route path="dashboard" element={<Dashboard userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
+        <Route path="calendar" element={<StudyCalendar userState={userState} onUpdateState={setUserState} onTabChange={(tab) => navigate(`/${tab}`)} />} />
+        <Route path="tracker" element={<Tracker userState={userState} onUpdateState={setUserState} />} />
+        <Route path="syllabus" element={<SyllabusManager userState={userState} onUpdateState={setUserState} onTriggerTest={() => {}} />} />
+        <Route path="test" element={<TestSection userState={userState} onUpdateState={setUserState} initialContext={null} clearContext={() => {}} />} />
+        <Route path="settings" element={<Settings userState={userState} onUpdateState={setUserState} onLogout={async () => await supabase.auth.signOut()} />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+      </Route>
 
-        {/* 404 Fallback */}
-        <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} />} />
-      </Routes>
+      {/* 404 Fallback */}
+      <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
+    </Routes>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 };

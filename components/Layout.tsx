@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { UserProfile, Language, UserState } from '../types';
 import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays, Bell, X } from 'lucide-react';
 import BackgroundGrid from './BackgroundGrid';
@@ -13,15 +13,14 @@ interface LayoutProps {
   onTabChange: (tab: any) => void;
   language: Language;
   userState: UserState;
-  // Added children to the props definition to fix type errors when used as a wrapper
   children?: React.ReactNode;
 }
 
-// Destructured children from props to use it in the component body
 export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabChange, language, userState, children }) => {
   const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
   const [activeAlert, setActiveAlert] = React.useState<string | null>(null);
   const checkedReminders = useRef<Set<string>>(new Set());
+  const navigate = useNavigate();
 
   const t = (bn: string, en: string) => language === 'bn' ? bn : en;
 
@@ -94,7 +93,7 @@ export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabCha
       <CollapsibleSidebar 
         userProfile={userProfile}
         activeTab={activeTab}
-        onTabChange={onTabChange}
+        onTabChange={(tabId) => navigate(`/${tabId}`)}
         language={language}
         isDark={isDark}
         toggleTheme={toggleTheme}
@@ -113,7 +112,6 @@ export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabCha
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth scrollbar-hide">
           <div className="max-w-6xl mx-auto h-full">
-            {/* Render children if provided (e.g. from DashboardLayout), otherwise default to Outlet for layout routing */}
             {children || <Outlet />}
           </div>
         </div>
@@ -122,7 +120,7 @@ export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabCha
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => onTabChange(item.id)}
+              onClick={() => navigate(`/${item.id}`)}
               className={`flex flex-col items-center gap-1.5 p-1.5 transition-all active:scale-95 ${
                 activeTab === item.id ? 'text-brand-primary' : 'text-brand-text-s'
               }`}

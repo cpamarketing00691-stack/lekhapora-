@@ -1,21 +1,24 @@
+
 import React, { useEffect, useRef } from 'react';
+import { Outlet } from 'react-router-dom';
 import { UserProfile, Language, UserState } from '../types';
 import { Home, Timer, BookOpen, Sun, Moon, Settings, GraduationCap, CalendarDays, Bell, X } from 'lucide-react';
 import BackgroundGrid from './BackgroundGrid';
 import { CollapsibleSidebar } from './CollapsibleSidebar';
 import { showLocalNotification } from '../lib/push-service';
-import { supabase } from '../lib/supabase';
 
 interface LayoutProps {
-  children: React.ReactNode;
   userProfile: UserProfile;
   activeTab: string;
   onTabChange: (tab: any) => void;
   language: Language;
   userState: UserState;
+  // Added children to the props definition to fix type errors when used as a wrapper
+  children?: React.ReactNode;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab, onTabChange, language, userState }) => {
+// Destructured children from props to use it in the component body
+export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabChange, language, userState, children }) => {
   const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
   const [activeAlert, setActiveAlert] = React.useState<string | null>(null);
   const checkedReminders = useRef<Set<string>>(new Set());
@@ -39,27 +42,23 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
     }
   }, [isDark]);
 
-  // Background Reminder Checker
   useEffect(() => {
     const checkReminders = () => {
       const now = Date.now();
       const reminders = userState.reminders || [];
       
       reminders.forEach(rem => {
-        // If due within the last 5 minutes and not already triggered/done in this session
         if (!rem.isDone && !checkedReminders.current.has(rem.id) && rem.time <= now && rem.time > now - 300000) {
           showLocalNotification(t('পড়াশোনার সময়!', 'Study Reminder!'), rem.title);
           setActiveAlert(rem.title);
           checkedReminders.current.add(rem.id);
-          
-          // Optionally auto-dismiss alert after 10s
           setTimeout(() => setActiveAlert(null), 10000);
         }
       });
     };
 
-    const interval = setInterval(checkReminders, 60000); // Check every minute
-    checkReminders(); // Initial check
+    const interval = setInterval(checkReminders, 60000);
+    checkReminders();
     return () => clearInterval(interval);
   }, [userState.reminders, language]);
 
@@ -76,10 +75,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-brand-bg text-brand-text-p transition-colors selection:bg-brand-primary/20 overflow-hidden relative">
-      {/* Background Grid */}
       <BackgroundGrid />
 
-      {/* In-App Toast Alert */}
       {activeAlert && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-md animate-in slide-in-from-top-4 duration-500">
            <div className="bg-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 backdrop-blur-md">
@@ -94,7 +91,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         </div>
       )}
 
-      {/* Collapsible Sidebar - Desktop */}
       <CollapsibleSidebar 
         userProfile={userProfile}
         activeTab={activeTab}
@@ -105,7 +101,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
         navItems={navItems}
       />
 
-      {/* Main Content Area */}
       <main className="relative z-10 flex-1 flex flex-col min-w-0 h-full md:h-screen">
         <header className="flex items-center justify-between px-5 py-3.5 bg-brand-surface/80 backdrop-blur-md border-b border-brand-text-s/10 md:hidden sticky top-0 z-50 transition-colors">
           <h1 className="font-black text-brand-primary italic tracking-tight text-sm">HSC TRACKER</h1>
@@ -118,11 +113,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, userProfile, activeTab
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 pb-32 md:pb-8 scroll-smooth scrollbar-hide">
           <div className="max-w-6xl mx-auto h-full">
-            {children}
+            {/* Render children if provided (e.g. from DashboardLayout), otherwise default to Outlet for layout routing */}
+            {children || <Outlet />}
           </div>
         </div>
 
-        {/* Mobile Nav */}
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] flex items-center justify-around bg-brand-surface/90 backdrop-blur-xl border-t border-brand-text-s/10 px-4 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgb(0,0,0,0.05)] transition-colors">
           {navItems.map((item) => (
             <button

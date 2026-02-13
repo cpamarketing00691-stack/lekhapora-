@@ -26,3 +26,17 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   subscription JSONB NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Reminders Table for Cron Job
+CREATE TABLE IF NOT EXISTS reminders (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id),
+  title TEXT NOT NULL,
+  time BIGINT NOT NULL, -- Unix timestamp in milliseconds
+  is_done BOOLEAN DEFAULT FALSE,
+  is_triggered BOOLEAN DEFAULT FALSE,
+  repeat_type TEXT DEFAULT 'none', -- 'none', 'daily', 'weekly'
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reminders_active ON reminders (time, is_triggered, is_done);

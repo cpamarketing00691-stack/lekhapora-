@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
 
@@ -16,20 +17,18 @@ webpush.setVapidDetails(
 );
 
 export default async function handler(req: any, res: any) {
-  // Logic to prevent unauthorized calls could be added here (e.g., secret token)
-  
   try {
     const now = Date.now();
-    const fiveMinutesAgo = now - (5 * 60 * 1000);
+    const tenMinutesAgo = now - (10 * 60 * 1000);
 
-    // 1. Fetch due and untriggered reminders from the last 5 minutes
+    // 1. Fetch due and untriggered reminders
     const { data: reminders, error: reminderError } = await supabaseAdmin
       .from('reminders')
-      .select('*, user_id')
+      .select('*')
       .eq('is_done', false)
       .eq('is_triggered', false)
       .lte('time', now)
-      .gte('time', fiveMinutesAgo);
+      .gte('time', tenMinutesAgo);
 
     if (reminderError) throw reminderError;
 
@@ -50,9 +49,9 @@ export default async function handler(req: any, res: any) {
       if (subData?.subscription) {
         try {
           const payload = JSON.stringify({
-            title: 'পড়ার সময় হয়েছে!',
+            title: 'Lekhapora Reminder!',
             body: reminder.title,
-            url: '/?tab=dashboard'
+            url: '/dashboard'
           });
 
           await webpush.sendNotification(subData.subscription, payload);
@@ -63,6 +62,19 @@ export default async function handler(req: any, res: any) {
             .update({ is_triggered: true })
             .eq('id', reminder.id);
             
+          // 4. If recurring, we would create the next instance here
+          if (reminder.repeat_type === 'daily' || reminder.repeat_type === 'weekly') {
+            const nextTime = reminder.time + (reminder.repeat_type === 'daily' ? 86400000 : 604800000);
+            await supabaseAdmin.from('reminders').insert({
+                user_id: reminder.user_id,
+                title: reminder.title,
+                time: nextTime,
+                repeat_type: reminder.repeat_type,
+                is_done: false,
+                is_triggered: false
+            });
+          }
+
           results.push({ id: reminder.id, status: 'sent' });
         } catch (err) {
           console.error(`Failed to send push to user ${reminder.user_id}:`, err);

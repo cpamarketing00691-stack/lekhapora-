@@ -1,11 +1,10 @@
+
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-<circle cx="256" cy="256" r="256" fill="#5B7DBE"/>
-<g transform="translate(0, -30)">
-<path d="M256 100L420 170L256 240L92 170L256 100Z" fill="white"/>
-<path d="M414 172V230" stroke="white" stroke-width="6" stroke-linecap="round"/>
-<circle cx="414" cy="235" r="6" fill="white"/>
-<path d="M190 270C160 270 150 290 150 310V320C150 340 130 350 130 350C130 350 150 360 150 380V390C150 410 160 430 190 430" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M322 270C352 270 362 290 362 310V320C362 340 382 350 382 350C382 350 362 360 362 380V390C362 410 352 430 322 430" stroke="white" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-</g>
-<text x="256" y="460" fill="white" font-family="Inter, sans-serif" font-weight="bold" font-size="54" text-anchor="middle">StudyKori.app</text>
+  <circle cx="256" cy="256" r="256" fill="#5B7DBE"/>
+  <g transform="translate(0, -20)">
+    <path d="M256 120L400 180L256 240L112 180L256 120Z" fill="white"/>
+    <path d="M180 280C160 280 150 295 150 310V320C150 340 130 350 130 350C130 350 150 360 150 380V390C150 405 160 420 180 420" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M332 280C352 280 362 295 362 310V320C362 340 382 350 382 350C382 350 362 360 362 380V390C362 405 352 420 332 420" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="256" y="470" fill="white" font-family="sans-serif" font-weight="900" font-size="48" text-anchor="middle">LEKHAPORA</text>
 </svg>

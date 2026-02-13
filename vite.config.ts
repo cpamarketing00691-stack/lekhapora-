@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -6,16 +7,16 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    sourcemap: false,
     rollupOptions: {
-      input: {
-        main: './index.html',
-        'service-worker': './service-worker.ts'
-      },
       output: {
-        entryFileNames: (assetInfo) => {
-          return assetInfo.name === 'service-worker' ? '[name].js' : 'assets/[name]-[hash].js';
-        }
-      }
-    }
-  }
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
+  },
+  server: {
+    port: 3000,
+  },
 });

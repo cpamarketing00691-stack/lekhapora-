@@ -1,22 +1,30 @@
-import { GoogleGenAI } from "@google/genai";
 
-// Guideline: Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+import { Language } from '../types';
 
-export const getGeminiResponse = async (message: string, history: { role: 'user' | 'model'; parts: { text: string }[] }[], systemInstruction: string) => {
+export const getGeminiResponse = async (
+  message: string, 
+  history: { role: 'user' | 'model'; parts: { text: string }[] }[], 
+  systemInstruction: string,
+  userId: string
+) => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: [...history, { role: 'user', parts: [{ text: message }] }],
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
+    const response = await fetch('/api/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        history,
+        userId,
+        systemInstruction
+      })
     });
-    // Guideline: The GenerateContentResponse object features a text property (not a method).
-    return response.text;
+
+    if (!response.ok) throw new Error('Failed to fetch from AI route');
+    
+    const data = await response.json();
+    return data.reply;
   } catch (error) {
-    console.error("Gemini Error:", error);
+    console.error("Gemini Proxy Error:", error);
     return "দুঃখিত দোস্ত, আমি এই মুহূর্তে কানেক্ট করতে পারছি না। দয়া করে পরে চেষ্টা কর।";
   }
 };

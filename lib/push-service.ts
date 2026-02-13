@@ -1,4 +1,6 @@
-// Push service module for handling local browser notifications.
+
+// VAPID Public Key - Ideally from process.env but usually constant for frontend
+const PUBLIC_VAPID_KEY = "BOQS5jGeY1uyMDkK7BocruEAkQVcWx3sSPe7VBVvoj_UpNT5FZmr52hu9izrT9i6M5J2ScIJhOd6AYhzWHRiAyI";
 
 export async function checkNotificationPermission() {
   if (!('Notification' in window)) return 'unsupported';
@@ -8,29 +10,52 @@ export async function checkNotificationPermission() {
   return Notification.permission;
 }
 
-export function showLocalNotification(title: string, body: string) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
-    // Fallback if not supported or not granted
-    console.log(`In-app alert: ${title} - ${body}`);
-    return;
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
   }
+  return outputArray;
+}
 
-  const notification = new Notification(title, {
-    body: body,
-    icon: '/app-icon.png',
-    badge: '/app-icon.png',
-  });
+export async function registerPushNotifications(userId: string) {
+  try {
+    const permission = await checkNotificationPermission();
+    if (permission !== 'granted') return;
 
-  notification.onclick = () => {
-    window.focus();
-    notification.close();
-  };
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+      });
+    }
+
+    // Persist to backend
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, subscription })
+    });
+
+  } catch (error) {
+    console.error("Push registration failed:", error);
+  }
+}
+
+export function showLocalNotification(title: string, body: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  new Notification(title, { body, icon: '/app-icon.svg' });
 }
 
 export function generateICS(title: string, date: number) {
   const startDate = new Date(date);
-  const endDate = new Date(date + 30 * 60 * 1000); // Default 30 min duration
-
+  const endDate = new Date(date + 30 * 60 * 1000); 
   const format = (d: Date) => d.toISOString().replace(/-|:|\.\d+/g, "");
   
   const ical = [

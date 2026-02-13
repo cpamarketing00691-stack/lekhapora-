@@ -1,11 +1,14 @@
 {
   "name": "HSC Study Tracker (NCTB)",
   "description": "A comprehensive study tracking application for Bangladesh HSC students with religious awareness, and strict progress tracking.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "camera"
+  ],
   "nativePermissions": [
     "INTERNET",
     "RECEIVE_BOOT_COMPLETED",
     "WAKE_LOCK",
-    "FOREGROUND_SERVICE"
+    "FOREGROUND_SERVICE",
+    "CAMERA"
   ]
 }

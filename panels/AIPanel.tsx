@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import { UserState, Task, TaskSource } from '../types';
 import { Send, Loader2, Bot, User, Sparkles, Zap, Trash2, BrainCircuit } from 'lucide-react';
 import { getGeminiResponse } from '../services/gemini';
@@ -9,17 +9,40 @@ interface AIPanelProps {
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
 }
 
+const ChatMessage = memo(({ m, isBn }: { m: { role: 'user' | 'model'; text: string }, isBn: boolean }) => (
+  <div className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+    <div className={`max-w-[85%] sm:max-w-[70%] flex gap-4 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${m.role === 'user' ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-primary border border-brand-text-s/10'}`}>
+         {m.role === 'user' ? <User size={20}/> : <Sparkles size={20}/>}
+       </div>
+       <div className={`px-6 py-4 rounded-[2rem] text-sm font-medium leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-brand-primary text-white' : 'bg-white dark:bg-brand-bg text-brand-text-p'}`}>
+         {m.text}
+       </div>
+    </div>
+  </div>
+));
+
 const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'model'; text: string; action?: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
+  const isBn = userState.language === 'bn';
+  const t = (bn: string, en: string) => isBn ? bn : en;
+
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, []);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages, isLoading]);
+    scrollToBottom();
+  }, [messages, isLoading, scrollToBottom]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -35,11 +58,10 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
         parts: [{ text: m.text }]
       }));
 
-      const context = `Student Info: Group: ${userState.profile?.group}, Board: ${userState.profile?.board}, Language Preference: ${userState.language}. Current Streak: ${userState.streaks}. Current Mood: ${userState.currentMood}.`;
+      const context = `Student Info: Group: ${userState.profile?.group}, Board: ${userState.profile?.board}, Language: ${userState.language}. Streak: ${userState.streaks}. Mood: ${userState.currentMood}.`;
       
       const response = await getGeminiResponse(userMsg, history, context, userState.profile?.fullName || 'student-uid');
       
-      // Parse potential JSON actions
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       let cleanResponse = response;
       
@@ -69,8 +91,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
   };
 
   return (
-    <div className="h-[calc(100vh-12rem)] flex flex-col bg-brand-surface/40 backdrop-blur-md rounded-[3.5rem] border border-brand-text-s/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
-      {/* AI Header */}
+    <div className="h-[calc(100vh-14rem)] flex flex-col bg-brand-surface/40 backdrop-blur-md rounded-[3.5rem] border border-brand-text-s/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
       <header className="px-8 py-6 border-b border-brand-text-s/5 bg-brand-bg/50 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
            <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary shadow-inner">
@@ -80,15 +101,14 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
               <h3 className="font-black text-brand-text-p uppercase tracking-widest">{t('লেখাপড়া বন্ধু', 'Study Friend')}</h3>
               <div className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span className="text-[9px] font-black text-brand-text-s uppercase tracking-tighter">Gemini 3.1 Pro Powered</span>
+                <span className="text-[9px] font-black text-brand-text-s uppercase tracking-tighter">Gemini 3.1 Pro Engine</span>
               </div>
            </div>
         </div>
         <button onClick={() => setMessages([])} className="p-2.5 text-brand-text-s hover:text-rose-500 transition-colors"><Trash2 size={20}/></button>
       </header>
 
-      {/* Chat Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 scroll-smooth scrollbar-hide">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-30">
              <BrainCircuit size={64} className="text-brand-primary" />
@@ -99,18 +119,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
           </div>
         )}
         
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2`}>
-            <div className={`max-w-[85%] sm:max-w-[70%] flex gap-4 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${m.role === 'user' ? 'bg-brand-primary text-white' : 'bg-brand-surface text-brand-primary border border-brand-text-s/10'}`}>
-                 {m.role === 'user' ? <User size={20}/> : <Sparkles size={20}/>}
-               </div>
-               <div className={`px-6 py-4 rounded-[2rem] text-sm font-medium leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-brand-primary text-white' : 'bg-white dark:bg-brand-bg text-brand-text-p'}`}>
-                 {m.text}
-               </div>
-            </div>
-          </div>
-        ))}
+        {messages.map((m, i) => <ChatMessage key={i} m={m} isBn={isBn} />)}
         
         {isLoading && (
           <div className="flex justify-start animate-pulse">
@@ -124,7 +133,6 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
         )}
       </div>
 
-      {/* Input Area */}
       <footer className="p-8 pt-0 shrink-0">
         <div className="relative group">
           <input 
@@ -143,10 +151,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState, onUpdateState }) => {
             {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
           </button>
         </div>
-        <p className="text-center text-[9px] font-black uppercase text-brand-text-s mt-4 tracking-[0.2em]">Always double check critical information.</p>
       </footer>
     </div>
   );
 };
 
-export default AIPanel;
+export default memo(AIPanel);

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { UserState } from '../types';
 import StudyCalendar from '../components/StudyCalendar';
 import { useNavigate } from 'react-router-dom';
@@ -23,4 +23,4 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ userState, onUpdateState 
   );
 };
 
-export default CalendarPanel;
+export default memo(CalendarPanel);

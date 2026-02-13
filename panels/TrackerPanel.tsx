@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { UserState } from '../types';
 import Tracker from '../components/Tracker';
 
@@ -16,4 +16,4 @@ const TrackerPanel: React.FC<TrackerPanelProps> = ({ userState, onUpdateState })
   );
 };
 
-export default TrackerPanel;
+export default memo(TrackerPanel);

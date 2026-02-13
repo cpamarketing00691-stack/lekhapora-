@@ -10,7 +10,8 @@ interface DashboardPanelProps {
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
 }
 
-const SubjectMiniCard = memo(({ sub, t }: { sub: Subject, t: (bn: string, en: string) => string }) => {
+// 1. Memoized Card to prevent redraws on parent ticks
+const SubjectMiniCard = memo(({ sub, t }: { sub: Subject, t: any }) => {
   const perc = useMemo(() => {
     const total = sub.chapters.length;
     const done = sub.chapters.filter(c => c.isCompleted).length;
@@ -36,9 +37,11 @@ const SubjectMiniCard = memo(({ sub, t }: { sub: Subject, t: (bn: string, en: st
 const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
+  // 2. Heavy Stats Memoized with specific deps
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    const todayFocus = userState.studyHistory
+    const sessions = userState.studyHistory || [];
+    const todayFocus = sessions
       .filter(s => new Date(s.startTime).toISOString().split('T')[0] === today)
       .reduce((acc, curr) => acc + curr.durationSeconds, 0);
 
@@ -66,20 +69,20 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <section className="bg-brand-primary p-10 rounded-[3.5rem] shadow-2xl shadow-brand-primary/30 text-white relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-8">
+      <section className="bg-brand-primary p-8 sm:p-10 rounded-[3.5rem] shadow-2xl shadow-brand-primary/30 text-white relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-8">
         <div className="relative z-10 max-w-lg">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest mb-4">
             <Flame size={12} className="animate-pulse" /> {userState.streaks} {t('দিনের স্ট্রিক!', 'Day Streak!')}
           </div>
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter leading-[0.9] mb-4">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter leading-[0.9] mb-4">
             {t('পড়া শুরু করো,', 'Keep Pushing,')}<br />
             <span className="text-white/60 italic">{userState.profile?.fullName}!</span>
           </h2>
-          <p className="text-white/80 font-medium leading-relaxed">
+          <p className="text-white/80 text-sm sm:text-base font-medium leading-relaxed">
             {t('তোমার আজকের লক্ষ্য হচ্ছে ৬ ঘণ্টা মনোযোগ দিয়ে পড়া।', 'Your goal today is 6 hours of focused study.')}
           </p>
         </div>
-        <div className="w-40 h-40 relative shrink-0">
+        <div className="w-32 h-32 sm:w-40 sm:h-40 relative shrink-0 mx-auto md:mx-0">
           <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart innerRadius="80%" outerRadius="100%" data={stats.radialData} startAngle={90} endAngle={450}>
                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
@@ -104,7 +107,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
                     </div>
                   </div>
                   <div className="h-1.5 w-full bg-brand-bg rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500 transition-all duration-700" style={{ width: `${stats.progress}%` }} />
+                    <div className="h-full bg-orange-500" style={{ width: `${stats.progress}%` }} />
                   </div>
                </div>
 
@@ -154,12 +157,13 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
             <section className="bg-brand-surface p-8 rounded-[3rem] border border-brand-text-s/10 shadow-sm">
                <h3 className="text-xl font-black flex items-center gap-3 mb-8"><Bell size={24} className="text-orange-500"/> {t('রিমাইন্ডার', 'Alerts')}</h3>
                <div className="space-y-3">
-                  {userState.reminders && userState.reminders.length > 0 ? userState.reminders.filter(r => !r.isDone).slice(0, 3).map(rem => (
+                  {(userState.reminders || []).filter(r => !r.isDone).slice(0, 3).map(rem => (
                     <div key={rem.id} className="p-4 bg-brand-bg rounded-2xl flex flex-col gap-1 border border-brand-text-s/5">
                        <p className="text-xs font-black text-brand-text-p truncate">{rem.title}</p>
                        <p className="text-[9px] font-bold text-brand-text-s uppercase">{new Date(rem.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
-                  )) : (
+                  ))}
+                  {(!userState.reminders || userState.reminders.length === 0) && (
                     <div className="py-6 text-center opacity-30 text-[10px] font-black uppercase tracking-widest">{t('শান্ত দুপুর!', 'Quiet for now')}</div>
                   )}
                </div>
@@ -170,4 +174,4 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
   );
 };
 
-export default DashboardPanel;
+export default memo(DashboardPanel);

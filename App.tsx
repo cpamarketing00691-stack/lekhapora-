@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { UserState, Subject, Chapter } from './types';
@@ -9,7 +9,7 @@ import { CHAPTER_LISTS } from './constants';
 import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
 import PanelLayout from './layouts/PanelLayout';
 
-// Modular Panels
+// Optimized Panel Loading
 const AboutPanel = lazy(() => import('./panels/AboutPanel'));
 const AuthPanel = lazy(() => import('./panels/AuthPanel'));
 const DashboardPanel = lazy(() => import('./panels/DashboardPanel'));
@@ -25,7 +25,8 @@ const SystemPanel = lazy(() => import('./panels/SystemPanel'));
 
 // Components
 import Onboarding from './components/Onboarding';
-import { Loader2 } from 'lucide-react';
+
+const STATE_CACHE_KEY = 'lekhapora_user_state_v1';
 
 const DEFAULT_STATE: UserState = {
   isAuthenticated: false,
@@ -43,10 +44,9 @@ const DEFAULT_STATE: UserState = {
   notificationsEnabled: false
 };
 
-// High-speed Skeleton Loader
 const PanelSkeleton = () => (
-  <div className="w-full space-y-6 animate-pulse p-2">
-    <div className="h-12 bg-brand-surface rounded-3xl w-1/3 mb-10" />
+  <div className="w-full h-screen animate-pulse p-8 space-y-6">
+    <div className="h-12 bg-brand-surface rounded-3xl w-1/4 mb-10" />
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div className="h-48 bg-brand-surface rounded-[2.5rem] col-span-2" />
       <div className="h-48 bg-brand-surface rounded-[2.5rem]" />
@@ -56,12 +56,25 @@ const PanelSkeleton = () => (
 );
 
 const AppContent: React.FC = () => {
-  const [userState, setUserState] = useState<UserState>(DEFAULT_STATE);
+  // 1. Initial State from Cache (Fastest Path)
+  const [userState, setUserState] = useState<UserState>(() => {
+    const cached = localStorage.getItem(STATE_CACHE_KEY);
+    if (cached) {
+      try {
+        return { ...JSON.parse(cached), isAuthenticated: false }; // Set auth false until verified
+      } catch (e) {
+        return DEFAULT_STATE;
+      }
+    }
+    return DEFAULT_STATE;
+  });
+
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const syncUserData = async (userId: string) => {
+  // 2. Optimized Sync
+  const syncUserData = useCallback(async (userId: string) => {
     try {
       const { data } = await supabase
         .from('user_data')
@@ -70,7 +83,9 @@ const AppContent: React.FC = () => {
         .maybeSingle();
       
       if (data?.state) {
-        setUserState({ ...DEFAULT_STATE, ...data.state, isAuthenticated: true });
+        const newState = { ...DEFAULT_STATE, ...data.state, isAuthenticated: true };
+        setUserState(newState);
+        localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(newState));
       } else {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
@@ -79,43 +94,40 @@ const AppContent: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const initSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) await syncUserData(session.user.id);
-        else setLoading(false);
-      } catch (err) {
-        setLoading(false);
-      }
-    };
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        await syncUserData(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        setUserState(DEFAULT_STATE);
-        setLoading(false);
-        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/login'];
-        if (!publicPaths.some(p => location.pathname.includes(p))) {
-          navigate('/about');
-        }
-      }
-    });
-
-    initSession();
-    return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    let authSubscription: any;
+
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await syncUserData(session.user.id);
+      } else {
+        setLoading(false);
+      }
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session) {
+          await syncUserData(session.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          localStorage.removeItem(STATE_CACHE_KEY);
+          setUserState(DEFAULT_STATE);
+          if (location.pathname.startsWith('/app')) navigate('/about');
+          setLoading(false);
+        }
+      });
+      authSubscription = subscription;
+    };
+
+    init();
+    return () => authSubscription?.unsubscribe();
+  }, [syncUserData, navigate]);
+
+  if (loading && !userState.profile) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg">
-        <div className="relative w-10 h-10">
-          <div className="absolute inset-0 border-2 border-brand-primary/20 rounded-full" />
-          <div className="absolute inset-0 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
-        </div>
+      <div className="h-screen w-full flex items-center justify-center bg-brand-bg">
+        <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -148,7 +160,9 @@ const AppContent: React.FC = () => {
                     finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
                   });
                 });
-                setUserState(prev => ({ ...prev, profile: p, subjects: finalSubjects }));
+                const newState = { ...userState, profile: p, subjects: finalSubjects };
+                setUserState(newState);
+                localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(newState));
                 navigate('/app/dashboard');
               }} 
             />
@@ -174,28 +188,20 @@ const AppContent: React.FC = () => {
                     <Route path="settings" element={<SettingsPanel userState={userState} onUpdateState={setUserState} onLogout={() => supabase.auth.signOut()} />} />
                     <Route path="ocr" element={<OCRPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="system" element={<SystemPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="about" element={<AboutPanel userState={userState} isAppPanel />} />
                     <Route index element={<Navigate to="dashboard" replace />} />
                   </Routes>
                 </Suspense>
               </PanelLayout>
             )
-          ) : <Navigate to="/login" state={{ from: location }} replace />
+          ) : <Navigate to="/login" replace />
         }
       />
-      <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/app/dashboard" : "/about"} replace />} />
     </Routes>
   );
 };
 
-const getBasename = () => {
-  const path = window.location.pathname;
-  const parts = path.split('/').filter(Boolean);
-  return (parts.length > 0 && parts[0].length > 20) ? `/${parts[0]}` : '';
-};
-
 const App: React.FC = () => (
-  <BrowserRouter basename={getBasename()}>
+  <BrowserRouter>
     <AppContent />
   </BrowserRouter>
 );

@@ -1,14 +1,37 @@
 
-import React, { useMemo } from 'react';
-import { UserState, Subject, Chapter, Task } from '../types';
+import React, { useMemo, memo } from 'react';
+import { UserState, Subject } from '../types';
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts';
-import { Clock, Target, LayoutGrid, Flame, ArrowRight, BookOpen, GraduationCap, ListTodo, Plus, Calendar, Bell } from 'lucide-react';
+import { Clock, Target, LayoutGrid, Flame, ArrowRight, ListTodo, Plus, Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface DashboardPanelProps {
   userState: UserState;
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
 }
+
+const SubjectMiniCard = memo(({ sub, t }: { sub: Subject, t: (bn: string, en: string) => string }) => {
+  const perc = useMemo(() => {
+    const total = sub.chapters.length;
+    const done = sub.chapters.filter(c => c.isCompleted).length;
+    return total > 0 ? Math.round((done / total) * 100) : 0;
+  }, [sub.chapters]);
+
+  return (
+    <div className="p-5 bg-brand-bg/40 rounded-3xl border border-brand-text-s/5 group hover:border-brand-primary transition-all">
+      <div className="flex justify-between items-start mb-3">
+        <div>
+          <p className="text-xs font-black uppercase text-brand-text-p tracking-tight">{sub.name}</p>
+          <p className="text-[9px] font-bold text-brand-text-s">Paper {sub.paper}</p>
+        </div>
+        <span className="text-sm font-black text-brand-primary">{perc}%</span>
+      </div>
+      <div className="h-1.5 w-full bg-brand-bg rounded-full overflow-hidden shadow-inner">
+        <div className="h-full bg-brand-primary" style={{ width: `${perc}%` }} />
+      </div>
+    </div>
+  );
+});
 
 const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
@@ -42,8 +65,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      {/* Welcome Banner */}
+    <div className="space-y-8 animate-in fade-in duration-500">
       <section className="bg-brand-primary p-10 rounded-[3.5rem] shadow-2xl shadow-brand-primary/30 text-white relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-8">
         <div className="relative z-10 max-w-lg">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-[9px] font-black uppercase tracking-widest mb-4">
@@ -54,25 +76,22 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
             <span className="text-white/60 italic">{userState.profile?.fullName}!</span>
           </h2>
           <p className="text-white/80 font-medium leading-relaxed">
-            {t('তোমার আজকের লক্ষ্য হচ্ছে ৬ ঘণ্টা মনোযোগ দিয়ে পড়া। ইতিমধ্যে তুমি ভালো করছ!', 'Your goal today is 6 hours of focused study. You are already making great progress!')}
+            {t('তোমার আজকের লক্ষ্য হচ্ছে ৬ ঘণ্টা মনোযোগ দিয়ে পড়া।', 'Your goal today is 6 hours of focused study.')}
           </p>
         </div>
-        <div className="w-48 h-48 relative shrink-0">
+        <div className="w-40 h-40 relative shrink-0">
           <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart innerRadius="80%" outerRadius="100%" data={stats.radialData} startAngle={90} endAngle={450}>
                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-               <RadialBar background dataKey="value" cornerRadius={24} />
+               <RadialBar background dataKey="value" cornerRadius={24} isAnimationActive={false} />
             </RadialBarChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <p className="text-3xl font-black">{stats.progress}%</p>
-            <p className="text-[9px] font-bold uppercase opacity-60 tracking-widest">{t('লক্ষ্য', 'Goal')}</p>
+            <p className="text-2xl font-black">{stats.progress}%</p>
           </div>
         </div>
-        <Target size={200} className="absolute -right-10 -bottom-10 opacity-10 rotate-12" />
       </section>
 
-      {/* Main Stats Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
          <div className="lg:col-span-2 space-y-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -85,7 +104,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
                     </div>
                   </div>
                   <div className="h-1.5 w-full bg-brand-bg rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-500 transition-all duration-1000" style={{ width: `${stats.progress}%` }}></div>
+                    <div className="h-full bg-orange-500 transition-all duration-700" style={{ width: `${stats.progress}%` }} />
                   </div>
                </div>
 
@@ -109,25 +128,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
                   <Link to="/app/syllabus" className="p-2 bg-brand-bg text-brand-primary rounded-xl hover:scale-110 transition-all"><ArrowRight size={18}/></Link>
                </div>
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {userState.subjects.map(sub => {
-                    const done = sub.chapters.filter(c => c.isCompleted).length;
-                    const total = sub.chapters.length;
-                    const perc = total > 0 ? Math.round((done/total)*100) : 0;
-                    return (
-                      <div key={sub.id} className="p-5 bg-brand-bg/40 rounded-3xl border border-brand-text-s/5 group hover:border-brand-primary transition-all">
-                        <div className="flex justify-between items-start mb-3">
-                           <div>
-                              <p className="text-xs font-black uppercase text-brand-text-p tracking-tight">{sub.name}</p>
-                              <p className="text-[9px] font-bold text-brand-text-s">Paper {sub.paper}</p>
-                           </div>
-                           <span className="text-sm font-black text-brand-primary">{perc}%</span>
-                        </div>
-                        <div className="h-1.5 w-full bg-brand-bg rounded-full overflow-hidden shadow-inner">
-                          <div className="h-full bg-brand-primary" style={{ width: `${perc}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {userState.subjects.map(sub => <SubjectMiniCard key={sub.id} sub={sub} t={t} />)}
                </div>
             </section>
          </div>
@@ -139,9 +140,9 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ userState }) => {
                   <Link to="/app/calendar" className="p-2 bg-brand-primary/10 text-brand-primary rounded-xl hover:scale-110 transition-all"><Plus size={18}/></Link>
                </div>
                <div className="space-y-3">
-                  {userState.dailyTasks.length > 0 ? userState.dailyTasks.slice(0, 5).map(task => (
+                  {userState.dailyTasks?.length > 0 ? userState.dailyTasks.slice(0, 5).map(task => (
                     <div key={task.id} className={`p-4 rounded-2xl border transition-all flex items-center gap-4 ${task.isCompleted ? 'bg-emerald-50/50 border-emerald-100 opacity-60' : 'bg-brand-bg border-transparent shadow-sm'}`}>
-                       <div className={`w-2 h-2 rounded-full ${task.isCompleted ? 'bg-emerald-500' : 'bg-brand-text-s/30'}`}></div>
+                       <div className={`w-2 h-2 rounded-full ${task.isCompleted ? 'bg-emerald-500' : 'bg-brand-text-s/30'}`} />
                        <p className={`text-xs font-bold truncate ${task.isCompleted ? 'line-through' : ''}`}>{task.name}</p>
                     </div>
                   )) : (

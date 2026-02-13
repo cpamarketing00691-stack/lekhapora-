@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './lib/supabase';
 import { UserState, Subject, Chapter } from './types';
@@ -43,9 +43,15 @@ const DEFAULT_STATE: UserState = {
   notificationsEnabled: false
 };
 
-const PanelLoader = () => (
-  <div className="h-full w-full flex items-center justify-center opacity-50 bg-brand-bg/50">
-    <Loader2 className="animate-spin text-brand-primary" size={32} />
+// High-speed Skeleton Loader
+const PanelSkeleton = () => (
+  <div className="w-full space-y-6 animate-pulse p-2">
+    <div className="h-12 bg-brand-surface rounded-3xl w-1/3 mb-10" />
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="h-48 bg-brand-surface rounded-[2.5rem] col-span-2" />
+      <div className="h-48 bg-brand-surface rounded-[2.5rem]" />
+    </div>
+    <div className="h-64 bg-brand-surface rounded-[3rem] w-full" />
   </div>
 );
 
@@ -57,7 +63,7 @@ const AppContent: React.FC = () => {
 
   const syncUserData = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('user_data')
         .select('state')
         .eq('user_id', userId)
@@ -76,16 +82,11 @@ const AppContent: React.FC = () => {
   };
 
   useEffect(() => {
-    const safetyTimeout = setTimeout(() => setLoading(false), 3000);
-
     const initSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          await syncUserData(session.user.id);
-        } else {
-          setLoading(false);
-        }
+        if (session) await syncUserData(session.user.id);
+        else setLoading(false);
       } catch (err) {
         setLoading(false);
       }
@@ -105,38 +106,29 @@ const AppContent: React.FC = () => {
     });
 
     initSession();
-    return () => {
-      clearTimeout(safetyTimeout);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   if (loading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg">
-        <div className="relative w-12 h-12">
-          <div className="absolute inset-0 border-4 border-brand-primary/20 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+        <div className="relative w-10 h-10">
+          <div className="absolute inset-0 border-2 border-brand-primary/20 rounded-full" />
+          <div className="absolute inset-0 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
         </div>
-        <p className="mt-4 font-black text-brand-primary uppercase tracking-[0.3em] text-[9px] animate-pulse italic">Lekhapora Architect Init...</p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* Public Pages Layout */}
       <Route element={<PublicLayout isAuthenticated={userState.isAuthenticated} />}>
-        <Route path="/about" element={<Suspense fallback={<PanelLoader />}><AboutPanel userState={userState} /></Suspense>} />
-        <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelLoader />}><AuthPanel mode="signin" /></Suspense>} />
-        <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelLoader />}><AuthPanel mode="signup" /></Suspense>} />
+        <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={userState} /></Suspense>} />
+        <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
+        <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signup" /></Suspense>} />
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      {/* Legacy Redirection */}
-      <Route path="/loging" element={<Navigate to="/login" replace />} />
-
-      {/* Onboarding Flow */}
       <Route 
         path="/onboarding" 
         element={
@@ -164,14 +156,13 @@ const AppContent: React.FC = () => {
         }
       />
 
-      {/* Protected App Dashboard Layout */}
       <Route 
         path="/app/*" 
         element={
           userState.isAuthenticated ? (
             !userState.profile ? <Navigate to="/onboarding" replace /> : (
               <PanelLayout userState={userState} onUpdateState={setUserState}>
-                <Suspense fallback={<PanelLoader />}>
+                <Suspense fallback={<PanelSkeleton />}>
                   <Routes>
                     <Route path="dashboard" element={<DashboardPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="syllabus" element={<SyllabusPanel userState={userState} onUpdateState={setUserState} />} />
@@ -192,26 +183,21 @@ const AppContent: React.FC = () => {
           ) : <Navigate to="/login" state={{ from: location }} replace />
         }
       />
-
-      {/* 404 Fallback */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/app/dashboard" : "/about"} replace />} />
     </Routes>
   );
 };
 
-// Basename detection for multi-tenant / sub-path environments
 const getBasename = () => {
   const path = window.location.pathname;
   const parts = path.split('/').filter(Boolean);
   return (parts.length > 0 && parts[0].length > 20) ? `/${parts[0]}` : '';
 };
 
-const App: React.FC = () => {
-  return (
-    <BrowserRouter basename={getBasename()}>
-      <AppContent />
-    </BrowserRouter>
-  );
-};
+const App: React.FC = () => (
+  <BrowserRouter basename={getBasename()}>
+    <AppContent />
+  </BrowserRouter>
+);
 
 export default App;

@@ -1,7 +1,7 @@
 
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Target, Heart, Shield, GraduationCap, Users, Sparkles, ArrowRight, Zap, BookOpen, Flame, CheckCircle2 } from 'lucide-react';
+import { Target, Heart, Shield, GraduationCap, Sparkles, ArrowRight, Zap, BookOpen, Flame, CheckCircle2 } from 'lucide-react';
 import BackgroundGrid from '../components/BackgroundGrid';
 
 const About: React.FC = () => {
@@ -11,7 +11,9 @@ const About: React.FC = () => {
 
   return (
     <div className="relative min-h-screen">
-      {/* Grid background is handled by the component */}
+      {/* Background patterns are provided by Layout/BackgroundGrid in common apps, 
+          but here we use it locally to ensure standalone About page look. */}
+      <BackgroundGrid />
       
       {/* Hero Section */}
       <section className="relative px-6 pt-20 md:pt-32 pb-24 overflow-hidden">
@@ -40,8 +42,8 @@ const About: React.FC = () => {
         </div>
       </section>
 
-      {/* Feature Section */}
-      <section className="py-24 px-6 bg-brand-surface/40 border-y border-brand-text-s/5">
+      {/* Feature Grid */}
+      <section className="py-24 px-6 bg-brand-surface/40 border-y border-brand-text-s/5 relative z-10">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-white p-12 rounded-[3.5rem] shadow-sm border border-brand-text-s/10 space-y-6 hover:shadow-xl hover:-translate-y-2 transition-all duration-500">
@@ -71,8 +73,26 @@ const About: React.FC = () => {
         </div>
       </section>
 
+      {/* Social Proof Stats */}
+      <section className="py-32 px-6 max-w-4xl mx-auto text-center relative z-10">
+        <h2 className="text-3xl md:text-5xl font-black text-brand-text-p mb-16 italic tracking-tight uppercase">The new standard for <span className="text-brand-primary underline decoration-brand-primary/20 underline-offset-8">HSC Success.</span></h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          {[
+            { label: "Daily Active", value: "2.4k+" },
+            { label: "Questions Solved", value: "1.2M" },
+            { label: "Group Rankers", value: "850+" },
+            { label: "Coverage", value: "100%" }
+          ].map((stat, i) => (
+            <div key={i} className="space-y-2">
+              <p className="text-4xl font-black text-brand-primary">{stat.value}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-text-s">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Mission Section */}
-      <section className="py-32 px-6 max-w-7xl mx-auto">
+      <section className="py-32 px-6 max-w-7xl mx-auto relative z-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-20 items-center">
           <div className="space-y-8">
             <h2 className="text-4xl md:text-6xl font-black text-brand-text-p tracking-tight leading-none uppercase italic">Our Mission</h2>
@@ -107,7 +127,7 @@ const About: React.FC = () => {
       </section>
 
       {/* CTA Footer Section */}
-      <section className="py-24 px-6">
+      <section className="py-24 px-6 relative z-10">
         <div className="max-w-5xl mx-auto bg-slate-900 p-12 md:p-20 rounded-[4rem] text-center text-white relative overflow-hidden shadow-[0_50px_100px_rgba(0,0,0,0.2)]">
           <div className="absolute inset-0 opacity-10 pointer-events-none">
              <div className="absolute top-0 left-0 w-full h-full" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />

@@ -74,7 +74,7 @@ const AppContent: React.FC = () => {
     // Safety timeout to prevent infinite loading if network or Supabase hangs
     const safetyTimeout = setTimeout(() => {
       setLoading(false);
-    }, 3000);
+    }, 2500);
 
     const initSession = async () => {
       try {
@@ -96,8 +96,8 @@ const AppContent: React.FC = () => {
       } else if (event === 'SIGNED_OUT') {
         setUserState(DEFAULT_STATE);
         setLoading(false);
-        // Navigate to login only if not on a public page
-        const publicPaths = ['/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register'];
+        // Only navigate if we're not on a public path
+        const publicPaths = ['/', '/about', '/faq', '/contact', '/privacy-policy', '/terms', '/register', '/loging', '/login'];
         if (!publicPaths.includes(location.pathname)) {
           navigate('/loging');
         }
@@ -127,7 +127,7 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* Public Routes - Landing is /about */}
       <Route element={<MarketingLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<About />} />
         <Route path="/faq" element={<FAQ />} />
@@ -189,7 +189,7 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/dashboard" replace />} />
       </Route>
 
-      {/* Catch All */}
+      {/* Catch All - Redirect to landing if public, or dashboard if auth */}
       <Route path="*" element={<Navigate to={userState.isAuthenticated ? "/dashboard" : "/about"} replace />} />
     </Routes>
   );

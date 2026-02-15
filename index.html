@@ -1,112 +1,201 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Lekhapora - Smart HSC Preparation</title>
-    
-    <!-- PWA and Icons -->
-    <link rel="icon" type="image/png" href="/app-icon.png">
-    <link rel="apple-touch-icon" href="/app-icon.png">
-    <link rel="manifest" href="/manifest.json">
-    
-    <!-- Meta Tags -->
-    <meta name="theme-color" content="#5B7DBE">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="description" content="A comprehensive study tracking application for Bangladesh HSC students.">
-    
-    <!-- Network Pre-hints -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://uycxbrcbweeuvizrgpnw.supabase.co">
-    
-    <!-- Critical Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Lekhapora - Rescue Mode</title>
+    <!-- React 18 Production CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for Browser JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-      /* Fallback CSS Loader - Shows until React mounts */
-      #initial-loader {
-        position: fixed;
-        inset: 0;
-        background: #F6F8F5;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-        font-family: 'Inter', sans-serif;
-        transition: opacity 0.5s ease-out;
-      }
-      .spinner {
-        width: 48px;
-        height: 48px;
-        border: 4px solid #5B7DBE20;
-        border-top: 4px solid #5B7DBE;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-      #timeout-message {
-        display: none;
-        margin-top: 20px;
-        text-align: center;
-        color: #ef4444;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 10px;
-        letter-spacing: 0.1em;
-      }
+        :root {
+            --primary: #764ba2;
+            --primary-light: #667eea;
+            --success: #10b981;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { 
+            background: var(--bg-gradient); 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px;
+            color: #1f2937;
+        }
+        .card {
+            background: white;
+            width: 100%;
+            max-width: 550px;
+            border-radius: 32px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            text-align: center;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .checkmark { font-size: 64px; margin-bottom: 10px; display: block; }
+        h1 { font-weight: 800; font-size: 32px; color: var(--primary); letter-spacing: -1px; margin-bottom: 8px; }
+        .subheading { font-size: 18px; font-weight: 600; color: #4b5563; margin-bottom: 24px; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            background: #ecfdf5;
+            color: var(--success);
+            padding: 8px 16px;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 30px;
+            border: 1px solid #10b98133;
+        }
+        .info-grid {
+            background: #f9fafb;
+            border-radius: 20px;
+            padding: 20px;
+            text-align: left;
+            margin-bottom: 30px;
+            border: 1px solid #e5e7eb;
+        }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+        .info-label { color: #6b7280; font-weight: 500; }
+        .info-value { color: #111827; font-weight: 600; word-break: break-all; text-align: right; padding-left: 10px; }
+        .interactive-box {
+            padding: 24px;
+            background: #f5f3ff;
+            border-radius: 20px;
+            margin-bottom: 24px;
+            border: 2px dashed #ddd6fe;
+        }
+        .counter-btn {
+            background: var(--primary);
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 14px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(118, 75, 162, 0.3);
+        }
+        .counter-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(118, 75, 162, 0.4); }
+        .counter-btn:active { transform: translateY(0); }
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .btn-secondary {
+            background: white;
+            color: #374151;
+            padding: 12px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 13px;
+            border: 1px solid #d1d5db;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover { background: #f9fafb; border-color: #9ca3af; }
+        footer { margin-top: 24px; font-size: 11px; color: #9ca3af; line-height: 1.5; }
     </style>
-
 <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "react/": "https://esm.sh/react@^19.2.4/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
     "recharts": "https://esm.sh/recharts@^3.7.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
     "framer-motion": "https://esm.sh/framer-motion@^12.34.0",
     "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
     "@capacitor/cli": "https://esm.sh/@capacitor/cli@^8.1.0",
     "webworker": "https://esm.sh/webworker@^0.8.4",
-    "web-push": "https://esm.sh/web-push@^3.6.7",
-    "tesseract.js": "https://esm.sh/tesseract.js@^5.0.5"
+    "web-push": "https://esm.sh/web-push@^3.6.7"
   }
 }
 </script>
 </head>
-<body class="light bg-brand-bg font-sans selection:bg-brand-primary/20">
-    <!-- Initial Loader -->
-    <div id="initial-loader">
-        <div class="spinner"></div>
-        <div id="timeout-message">Connection taking too long. Please refresh.</div>
-    </div>
-
+<body>
     <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
 
-    <script>
-      // 10-second safety timeout to show error if React fails to mount
-      setTimeout(() => {
-        const msg = document.getElementById('timeout-message');
-        if (msg) msg.style.display = 'block';
-      }, 10000);
+        function App() {
+            const [count, setCount] = useState(0);
+            const [time, setTime] = useState(new Date().toLocaleTimeString());
 
-      // Global loader signal function
-      window.markAppAsLoaded = () => {
-        const loader = document.getElementById('initial-loader');
-        if (loader) {
-          loader.style.opacity = '0';
-          setTimeout(() => loader.remove(), 500);
+            useEffect(() => {
+                const timer = setInterval(() => setTime(new Date().toLocaleTimeString()), 1000);
+                console.log("✅ React app loaded successfully!");
+                console.log("✅ Single-file deployment working!");
+                return () => clearInterval(timer);
+            }, []);
+
+            const handleComingSoon = (feature) => alert(`${feature} is coming soon! This proves React is working.`);
+
+            return (
+                <div className="card">
+                    <span className="checkmark">✅</span>
+                    <h1>Lekhapora</h1>
+                    <p className="subheading">Your HSC Study Tracker is WORKING!</p>
+                    
+                    <div className="badge">
+                        Deployed Successfully
+                    </div>
+
+                    <div className="info-grid">
+                        <div className="info-row">
+                            <span className="info-label">Deployment URL</span>
+                            <span className="info-value">{window.location.hostname}</span>
+                        </div>
+                        <div className="info-row">
+                            <span className="info-label">React Version</span>
+                            <span className="info-value">18.3.1</span>
+                        </div>
+                        <div className="info-row">
+                            <span className="info-label">Current Time</span>
+                            <span className="info-value">{time}</span>
+                        </div>
+                        <div className="info-row">
+                            <span className="info-label">Engine</span>
+                            <span className="info-value">Vercel Edge</span>
+                        </div>
+                    </div>
+
+                    <div className="interactive-box">
+                        <p style={{fontSize: '12px', fontWeight: '800', color: '#764ba2', marginBottom: '12px', textTransform: 'uppercase'}}>React Test Section</p>
+                        <button className="counter-btn" onClick={() => setCount(count + 1)}>
+                            Clicked {count} times
+                        </button>
+                    </div>
+
+                    <div className="action-grid">
+                        <button className="btn-secondary" onClick={() => handleComingSoon('Login')}>Login</button>
+                        <button className="btn-secondary" onClick={() => handleComingSoon('Dashboard')}>Dashboard</button>
+                        <button className="btn-secondary" onClick={() => window.location.reload()}>Refresh Page</button>
+                        <button className="btn-secondary" onClick={() => handleComingSoon('Syllabus')}>Syllabus</button>
+                    </div>
+
+                    <footer>
+                        This proves your GitHub connection and Vercel deployment are healthy.<br/>
+                        You can now safely rebuild your project files one by one.
+                    </footer>
+                </div>
+            );
         }
-      };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
-    <script type="module" src="/index.tsx"></script>
 </body>
 </html>

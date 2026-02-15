@@ -4,6 +4,7 @@ import App from './App';
 import './index.css';
 import { LekhaporaProvider } from './contexts/LekhaporaContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 // Global error tracking
 window.addEventListener('error', (event) => {
@@ -34,6 +35,7 @@ root.render(
     <AuthProvider>
       <LekhaporaProvider>
         <App />
+        <SpeedInsights />
       </LekhaporaProvider>
     </AuthProvider>
   </React.StrictMode>

@@ -1,12 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://uycxbrcbweeuvizrgpnw.supabase.co';
-// In production, these should ideally come from process.env, but hardcoded for the current environment.
 const supabaseAnonKey = 'sb_publishable_AvaNpR5XsRFbhSu7A6uHhg_W2xzhkRx';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('❌ CRITICAL: SUPABASE CREDENTIALS MISSING');
-}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -17,7 +12,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
   global: {
     headers: {
-      'x-client-info': 'lekhapora-pwa-emergency-fix'
+      'x-client-info': 'lekhapora-pwa-v2'
     }
   },
   db: {
@@ -26,31 +21,35 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 /**
- * CRITICAL: Timeout wrapper for all Supabase calls.
- * Prevents the app from staying in a loading state if a request hangs.
+ * Robust timeout wrapper with generic typing
  */
-export const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000): Promise<T> => {
+// Fix: Change promise parameter to any to support Supabase's Thenable PostgrestBuilder which is not a native Promise
+export const withTimeout = <T = any>(promise: any, timeoutMs: number = 5000): Promise<T> => {
+  let timer: any;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Operation timed out (${timeoutMs}ms)`)), timeoutMs);
+  });
+
+  // Fix: Wrap input in Promise.resolve to handle thenables (like Supabase builders) and ensure .finally is available
   return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
-    )
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    timeoutPromise
   ]);
 };
 
 /**
- * Connection test to detect network issues early
+ * Defensive connection test
  */
 export const testConnection = async () => {
   try {
-    // Fix: Explicitly cast withTimeout result to any to fix error property access errors
-    const { error }: any = await withTimeout(
-      supabase.from('user_data').select('count').limit(1)
+    // Fix: Explicitly cast result to any to correctly access the .error property from the Supabase response
+    const result: any = await withTimeout(
+      supabase.from('user_data').select('count').limit(1),
+      4000
     );
-    if (error) return false;
-    return true;
+    return !result.error;
   } catch (err) {
-    console.warn("Supabase connection check failed:", err);
+    console.warn("Supabase Check Failed:", err);
     return false;
   }
 };

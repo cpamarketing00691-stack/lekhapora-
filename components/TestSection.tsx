@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserState, Subject, Chapter, MCQ, TestAttempt } from '../types';
 import { 
@@ -29,8 +28,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   const [isLoading, setIsLoading] = useState(false);
   const [historyAttempt, setHistoryAttempt] = useState<TestAttempt | null>(null);
   
-  const [modelExams, setModelExams] = useState<any[]>([]);
-  const [loadingExams, setLoadingExams] = useState(false);
+  const [availableTests, setAvailableTests] = useState<any[]>([]);
 
   // Guards
   const isSubmissionLocked = useRef(false);
@@ -39,98 +37,61 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
   useEffect(() => {
-    const fetchModelExams = async () => {
-      setLoadingExams(true);
-      try {
-        const { data } = await supabase.from('exam_sys_exams').select('*').eq('is_active', true);
-        setModelExams(data || []);
-      } catch (e) {
-        console.error("Failed to fetch model exams");
-      } finally {
-        setLoadingExams(false);
-      }
-    };
-    fetchModelExams();
+    fetchAvailableTests();
   }, []);
 
-  useEffect(() => {
-    if (initialContext && testStatus === 'selection') {
-      setSelectedSubjectId(initialContext.subjectId);
-      setSelectedChapterId(initialContext.chapterId);
-      startExam(initialContext.subjectId, initialContext.chapterId);
-      clearContext();
+  const fetchAvailableTests = async () => {
+    try {
+      const { data, error } = await supabase.from('questions_bank').select('subject, chapter');
+      if (error) throw error;
+      
+      const map: any = {};
+      data?.forEach(q => {
+        if (!map[q.subject]) map[q.subject] = new Set();
+        map[q.subject].add(q.chapter);
+      });
+      
+      const list = Object.entries(map).flatMap(([subj, chapters]: any) => 
+        Array.from(chapters).map(ch => ({ subject: subj, chapter: ch }))
+      );
+      setAvailableTests(list);
+    } catch (e) {
+      console.error("Failed to load test catalog");
     }
-  }, [initialContext]);
-
-  const normalize = (str: any): string => {
-    if (!str) return '';
-    const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
-    const en = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    let result = String(str).toLowerCase().trim();
-    for (let i = 0; i < 10; i++) {
-      result = result.split(bn[i]).join(en[i]);
-    }
-    return result.replace(/[:.,\-\(\)\[\]\{\}\/_]/g, '').replace(/\s+/g, ' ').trim();
   };
 
-  const startExam = async (subjIdArg?: string, chapIdArg?: string) => {
-    const sId = subjIdArg || selectedSubjectId;
-    const cId = chapIdArg || selectedChapterId;
-    
-    if (!sId || !cId || testStatus === 'exam') return;
+  const startExam = async (subjName?: string, chapName?: string) => {
     setIsLoading(true);
     isSubmissionLocked.current = false;
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Auth required");
-
-      const currentSubject = userState.subjects.find(s => s.id === sId);
-      const currentChapter = currentSubject?.chapters.find(c => c.id === cId);
-
-      if (!currentSubject || !currentChapter) throw new Error("Invalid Selection");
-
-      const { data: rawData, error } = await supabase
-        .from('mcqs')
+      const { data, error } = await supabase
+        .from('questions_bank')
         .select('*')
-        .eq('subject', currentSubject.name)
-        .eq('paper', currentSubject.paper);
+        .eq('subject', subjName)
+        .eq('chapter', chapName)
+        .limit(30);
 
-      if (error) throw error;
-
-      const targetChapterNorm = normalize(currentChapter.name);
-      let filtered = (rawData || []).filter(q => {
-        const qChap = normalize(q.chapter);
-        const qTopic = normalize(q.topic);
-        return qChap.includes(targetChapterNorm) || targetChapterNorm.includes(qChap) || qTopic.includes(targetChapterNorm);
-      });
-
-      if (filtered.length === 0) {
-        filtered = (rawData || []).filter(q => q.chapter === currentChapter.name);
-      }
-
-      if (filtered.length === 0) {
-        alert(t("এই চ্যাপ্টারের জন্য পর্যাপ্ত প্রশ্ন নেই।", "No questions found for this chapter."));
-        setIsLoading(false);
+      if (error || !data || data.length === 0) {
+        alert(t("প্রশ্ন পাওয়া যায়নি!", "No questions found."));
         return;
       }
 
-      const mappedQuestions: MCQ[] = filtered.map(q => ({
+      const mapped = data.map(q => ({
         id: q.id,
-        question: q.question,
-        options: [q.option_a, q.option_b, q.option_c, q.option_d],
-        correct_index: q.correct_option,
+        question: q.question_text,
+        options: Array.isArray(q.options) ? q.options : JSON.parse(q.options),
+        correct_index: q.options.indexOf(q.correct_answer),
         explanation: q.explanation
-      })).sort(() => Math.random() - 0.5).slice(0, 30);
+      }));
 
-      setCurrentQuestions(mappedQuestions);
-      setUserAnswers(new Array(mappedQuestions.length).fill(-1));
+      setCurrentQuestions(mapped);
+      setUserAnswers(new Array(mapped.length).fill(-1));
       setCurrentIndex(0);
       setTimeLeft(1800);
       setTestStatus('exam');
     } catch (err: any) {
-      console.error(err);
-      alert(t("সার্ভার ত্রুটি। আবার চেষ্টা করো।", "Server error. Please try again."));
+      alert("Error loading exam");
     } finally {
       setIsLoading(false);
     }
@@ -140,49 +101,26 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
     if (isSubmissionLocked.current) return;
     isSubmissionLocked.current = true;
     
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
-    const correctCount = userAnswers.reduce((acc, ans, idx) => acc + (ans === currentQuestions[idx].correct_index ? 1 : 0), 0);
+    const score = userAnswers.reduce((acc, ans, idx) => acc + (ans === currentQuestions[idx].correct_index ? 1 : 0), 0);
 
     const attempt: TestAttempt = {
       id: `attempt-${Date.now()}`,
       subjectId: selectedSubjectId,
       chapterId: selectedChapterId,
-      score: correctCount,
+      score,
       total: currentQuestions.length,
       timeTakenSeconds: 1800 - timeLeft,
       date: Date.now(),
       questions: currentQuestions,
-      userAnswers: userAnswers
+      userAnswers
     };
 
     onUpdateState(prev => ({
       ...prev,
-      testHistory: [attempt, ...(prev.testHistory || [])],
-      subjects: prev.subjects.map(s => s.id === selectedSubjectId ? {
-        ...s,
-        chapters: s.chapters.map(c => c.id === selectedChapterId ? { ...c, testScore: Math.max(c.testScore || 0, correctCount) } : c)
-      } : s)
+      testHistory: [attempt, ...(prev.testHistory || [])]
     }));
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('test_attempts').insert({
-          user_id: user.id,
-          subject_id: selectedSubjectId,
-          chapter_id: selectedChapterId,
-          score: correctCount,
-          total: currentQuestions.length,
-          time_seconds: 1800 - timeLeft,
-          questions: currentQuestions,
-          user_answers: userAnswers
-        });
-      }
-    } catch (e) {}
 
     setTestStatus('result');
   };
@@ -201,269 +139,117 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
       }, 1000);
       return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
     }
-  }, [testStatus]);
+  }, [testStatus, timeLeft]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
-
-  const currentSubject = userState.subjects.find(s => s.id === selectedSubjectId);
-  const currentChapter = currentSubject?.chapters.find(c => c.id === selectedChapterId);
 
   return (
     <div className="max-w-4xl mx-auto pb-20 animate-in fade-in duration-500">
-      
       {testStatus === 'selection' && (
         <div className="space-y-8">
           <header>
-            <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট ও প্র্যাকটিস', 'Test & Practice')}</h2>
-            <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest mt-1">{t('তোমার প্রস্তুতির যাচাই করো', 'Evaluate your preparation level')}</p>
+            <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট লাইব্রেরি', 'Test Library')}</h2>
+            <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest mt-1">{t('প্রশ্ন ব্যাংক থেকে পরীক্ষা দিন', 'Practice from question bank')}</p>
           </header>
 
-          <section className="bg-brand-primary/5 p-6 rounded-[2.5rem] border border-brand-primary/20 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Trophy className="text-brand-primary" size={24} />
-                <h3 className="font-bold text-lg">{t('প্রফেশনাল মডেল টেস্ট', 'Model Exams')}</h3>
-              </div>
-              <span className="text-[10px] font-black uppercase text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">{t('লাইভ এখন', 'Live Now')}</span>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {loadingExams ? (
-                <div className="col-span-full py-10 flex flex-col items-center gap-3 opacity-50">
-                  <Loader2 className="animate-spin text-brand-primary" size={24} />
-                  <p className="text-[10px] font-black uppercase tracking-widest">{t('লোড হচ্ছে...', 'Loading Exams...')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {availableTests.map((tst, i) => (
+              <div key={i} className="bg-brand-surface p-8 rounded-[2.5rem] border border-brand-text-s/10 hover:border-brand-primary transition-all shadow-sm group">
+                <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary mb-6 group-hover:scale-110 transition-transform">
+                  <BookOpen size={24} />
                 </div>
-              ) : modelExams.length > 0 ? modelExams.map(exam => (
-                <div key={exam.id} className="bg-brand-surface p-5 rounded-3xl border border-brand-text-s/10 hover:border-brand-primary transition-all group relative overflow-hidden">
-                   <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-20 transition-opacity">
-                      <GraduationCap size={40} />
-                   </div>
-                   <h4 className="font-black text-brand-text-p text-sm mb-1">{exam.title}</h4>
-                   <p className="text-[10px] font-bold text-brand-text-s uppercase mb-4">{exam.subject} • P{exam.paper}</p>
-                   <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-3 text-[10px] font-black text-brand-text-s uppercase">
-                       <span className="flex items-center gap-1"><Clock size={12}/> {exam.duration_minutes}m</span>
-                       <span className="flex items-center gap-1"><GraduationCap size={12}/> {exam.total_marks} Marks</span>
-                     </div>
-                     <button 
-                       onClick={() => onTriggerModelExam?.(exam.id)}
-                       className="px-4 py-2 bg-brand-primary text-white text-[10px] font-black rounded-xl shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all"
-                     >
-                       {t('স্টার্ট করো', 'Start Exam')}
-                     </button>
-                   </div>
-                </div>
-              )) : (
-                <p className="col-span-full py-6 text-center text-[10px] font-black text-brand-text-s uppercase opacity-30">{t('কোনো মডেল টেস্ট নেই', 'No model tests currently active')}</p>
-              )}
-            </div>
-          </section>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <BookOpen className="text-brand-primary" size={24} />
-                <h3 className="font-bold text-lg">{t('সিলেবাস টেস্ট', 'Syllabus Test')}</h3>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1 mb-2 block">{t('বিষয় নির্বাচন করো', 'Choose Subject')}</label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {userState.subjects.map(sub => (
-                      <button 
-                        key={sub.id} 
-                        onClick={() => { setSelectedSubjectId(sub.id); setSelectedChapterId(''); }}
-                        className={`text-left px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm ${selectedSubjectId === sub.id ? 'bg-brand-primary/5 border-brand-primary text-brand-primary' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-surface'}`}
-                      >
-                        {sub.name} (P{sub.paper})
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {selectedSubjectId && (
-                  <div className="animate-in slide-in-from-top-2">
-                    <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest ml-1 mb-2 block">{t('চ্যাপ্টার নির্বাচন করো', 'Choose Chapter')}</label>
-                    <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto scrollbar-hide pr-1">
-                      {userState.subjects.find(s => s.id === selectedSubjectId)?.chapters.map(ch => (
-                        <button 
-                          key={ch.id} 
-                          onClick={() => setSelectedChapterId(ch.id)}
-                          className={`text-left px-5 py-3 rounded-2xl border-2 transition-all font-bold text-xs ${selectedChapterId === ch.id ? 'bg-brand-secondary/5 border-brand-secondary text-brand-secondary' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-surface'}`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span>{ch.name}</span>
-                            {ch.testScore !== undefined && (
-                              <span className="text-[9px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full uppercase">Score: {ch.testScore}/30</span>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
+                <h4 className="font-black text-brand-text-p text-lg leading-tight mb-2">{tst.subject}</h4>
+                <p className="text-xs font-bold text-brand-text-s uppercase mb-6">{tst.chapter}</p>
                 <button 
-                  disabled={!selectedSubjectId || !selectedChapterId || isLoading}
-                  onClick={() => startExam()}
-                  className="w-full mt-4 py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[11px] disabled:opacity-30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                  onClick={() => startExam(tst.subject, tst.chapter)}
+                  disabled={isLoading}
+                  className="w-full py-4 bg-brand-primary text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
                 >
-                  {isLoading ? <Loader2 className="animate-spin" size={18} /> : <GraduationCap size={18} />}
-                  {t('টেস্ট শুরু করো', 'Start Test Now')}
+                  {isLoading ? <Loader2 size={14} className="animate-spin"/> : <GraduationCap size={14}/>}
+                  {t('শুরু করো', 'Start Test')}
                 </button>
               </div>
-            </section>
-
-            <section className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm flex flex-col">
-              <div className="flex items-center gap-3 mb-6">
-                <History className="text-brand-secondary" size={24} />
-                <h3 className="font-bold text-lg">{t('টেস্ট হিস্ট্রি', 'Test History')}</h3>
+            ))}
+            {availableTests.length === 0 && (
+              <div className="col-span-full py-20 text-center opacity-30">
+                <AlertCircle size={48} className="mx-auto mb-4"/>
+                <p className="font-black uppercase tracking-widest">{t('কোনো টেস্ট পাওয়া যায়নি', 'No tests available')}</p>
               </div>
-              <div className="flex-1 space-y-3 overflow-y-auto scrollbar-hide">
-                {userState.testHistory && userState.testHistory.length > 0 ? userState.testHistory.map(att => {
-                  const isModelExam = att.subjectId === 'MODEL_EXAM';
-                  const subj = userState.subjects.find(s => s.id === att.subjectId);
-                  
-                  return (
-                    <button 
-                      key={att.id} 
-                      onClick={() => { setHistoryAttempt(att); setTestStatus('history'); }}
-                      className="w-full text-left p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5 group hover:border-brand-primary transition-all"
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">
-                          {new Date(att.date).toLocaleDateString()}
-                        </p>
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${att.score >= (att.total * 0.7) ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'}`}>
-                          {att.score}/{att.total}
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-bold text-brand-text-p truncate">
-                        {isModelExam ? t('মডেল টেস্ট', 'Model Exam') : (subj?.name || t('অজানা বিষয়', 'Unknown Subject'))}
-                      </h4>
-                      <p className="text-[9px] font-medium text-brand-text-s truncate">
-                        {isModelExam ? t('প্রফেশনাল এসেসমেন্ট', 'Professional Assessment') : (subj?.chapters.find(c => c.id === att.chapterId)?.name || '')}
-                      </p>
-                    </button>
-                  );
-                }) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-brand-text-s opacity-30 gap-3 py-10">
-                    <AlertCircle size={40} />
-                    <p className="text-[10px] font-black uppercase tracking-widest">{t('কোনো টেস্ট দেওয়া হয়নি', 'No tests taken yet')}</p>
-                  </div>
-                )}
-              </div>
-            </section>
+            )}
           </div>
         </div>
       )}
 
-      {testStatus === 'exam' && (
+      {testStatus === 'exam' && currentQuestions.length > 0 && (
         <div className="space-y-6">
           <header className="flex items-center justify-between bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm sticky top-0 z-50">
              <div className="flex items-center gap-4">
-               <div className="p-3 bg-brand-primary/10 rounded-2xl text-brand-primary shrink-0">
+                <div className="p-3 bg-brand-primary/10 rounded-2xl text-brand-primary">
                   <GraduationCap size={24} />
-               </div>
-               <div>
-                  <h3 className="text-sm font-black text-brand-text-p truncate max-w-[150px] sm:max-w-none">{currentSubject?.name} • {currentChapter?.name}</h3>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[9px] font-black text-brand-text-s uppercase tracking-widest">{t('প্রশ্ন', 'Question')} {currentIndex + 1} / {currentQuestions.length}</span>
-                  </div>
-               </div>
+                </div>
+                <div>
+                   <h3 className="text-sm font-black text-brand-text-p truncate max-w-[150px]">{currentQuestions[currentIndex].question.slice(0, 30)}...</h3>
+                   <p className="text-[9px] font-black text-brand-text-s uppercase tracking-widest">{t('প্রশ্ন', 'Question')} {currentIndex + 1} / {currentQuestions.length}</p>
+                </div>
              </div>
              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 px-4 py-2 bg-brand-bg rounded-xl border border-brand-text-s/10">
-                  <Clock size={16} className={timeLeft < 300 ? 'text-rose-500 animate-pulse' : 'text-brand-primary'} />
-                  <span className={`text-sm font-black tabular-nums ${timeLeft < 300 ? 'text-rose-500' : 'text-brand-text-p'}`}>{formatTime(timeLeft)}</span>
+                <div className="px-4 py-2 bg-brand-bg rounded-xl border border-brand-text-s/10 font-black tabular-nums">
+                  {formatTime(timeLeft)}
                 </div>
-                <button onClick={submitExam} className="px-6 py-2 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20">{t('সাবমিট', 'Finish')}</button>
+                <button onClick={submitExam} className="px-6 py-2 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest">Finish</button>
              </div>
           </header>
-          <div className="bg-brand-surface p-8 sm:p-12 rounded-[3rem] border border-brand-text-s/10 shadow-sm space-y-10 min-h-[400px] flex flex-col">
-            <div className="flex-1">
-              <h2 className="text-lg sm:text-2xl font-black text-brand-text-p leading-tight mb-10">{currentQuestions[currentIndex].question}</h2>
-              <div className="grid grid-cols-1 gap-4">
+          
+          <main className="bg-brand-surface p-8 sm:p-12 rounded-[3rem] border border-brand-text-s/10 shadow-sm space-y-10">
+             <h2 className="text-lg sm:text-2xl font-black text-brand-text-p leading-tight">{currentQuestions[currentIndex].question}</h2>
+             <div className="grid grid-cols-1 gap-4">
                 {currentQuestions[currentIndex].options.map((option, idx) => (
-                  <button key={idx} onClick={() => { const newAns = [...userAnswers]; newAns[currentIndex] = idx; setUserAnswers(newAns); }} className={`flex items-center gap-4 px-6 py-5 rounded-[1.5rem] border-2 transition-all text-left font-bold text-sm ${userAnswers[currentIndex] === idx ? 'bg-brand-primary border-brand-primary text-white shadow-xl shadow-brand-primary/20 scale-[1.02]' : 'bg-brand-bg border-transparent text-brand-text-s hover:bg-brand-bg/80'}`}>
+                  <button 
+                    key={idx} 
+                    onClick={() => { const newAns = [...userAnswers]; newAns[currentIndex] = idx; setUserAnswers(newAns); }} 
+                    className={`flex items-center gap-4 px-6 py-5 rounded-[1.5rem] border-2 transition-all text-left font-bold text-sm ${userAnswers[currentIndex] === idx ? 'bg-brand-primary border-brand-primary text-white' : 'bg-brand-bg border-transparent hover:bg-brand-bg/80'}`}
+                  >
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${userAnswers[currentIndex] === idx ? 'bg-white/20 border-white' : 'bg-brand-surface border-brand-text-s/10'}`}>{String.fromCharCode(65 + idx)}</div>
                     {option}
                   </button>
                 ))}
-              </div>
-            </div>
-            <div className="flex justify-between items-center pt-8 border-t border-brand-text-s/10">
-              <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)} className="p-4 bg-brand-bg text-brand-text-s rounded-2xl hover:text-brand-text-p disabled:opacity-20 transition-all"><ChevronLeft size={24} /></button>
-              <div className="flex gap-1 overflow-x-auto max-w-[200px] scrollbar-hide py-2 px-1">{currentQuestions.map((_, i) => ( <div key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-brand-secondary' : 'bg-brand-text-s/20'}`}></div> ))}</div>
-              <button onClick={() => { if (currentIndex < currentQuestions.length - 1) { setCurrentIndex(currentIndex + 1); } else { submitExam(); } }} className="p-4 bg-brand-primary text-white rounded-2xl hover:scale-110 active:scale-95 transition-all shadow-lg shadow-brand-primary/20">{currentIndex === currentQuestions.length - 1 ? <CheckCircle2 size={24} /> : <ChevronRight size={24} />}</button>
-            </div>
-          </div>
+             </div>
+             <div className="flex justify-between items-center pt-8 border-t border-brand-text-s/10">
+                <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)} className="p-4 bg-brand-bg rounded-2xl disabled:opacity-20"><ChevronLeft/></button>
+                <div className="flex gap-1">
+                   {currentQuestions.map((_, i) => (
+                      <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-emerald-500' : 'bg-brand-text-s/20'}`}></div>
+                   ))}
+                </div>
+                <button onClick={() => currentIndex < currentQuestions.length - 1 ? setCurrentIndex(currentIndex + 1) : submitExam()} className="p-4 bg-brand-primary text-white rounded-2xl"><ChevronRight/></button>
+             </div>
+          </main>
         </div>
       )}
 
       {testStatus === 'result' && (
-        <div className="max-w-2xl mx-auto space-y-8 py-10 animate-in zoom-in-95 duration-500">
-           <div className="bg-brand-surface p-10 rounded-[3rem] border border-brand-text-s/10 text-center shadow-xl space-y-8 relative overflow-hidden">
-              <Sparkles className="absolute -right-10 -bottom-10 opacity-10 text-brand-primary" size={200} />
-              <div className="relative z-10">
-                <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-6 shadow-2xl ${userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length >= 20 ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}><CheckCircle2 size={48} /></div>
-                <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট সম্পন্ন হয়েছে!', 'Test Completed!')}</h2>
+        <div className="max-w-2xl mx-auto py-10 text-center animate-in zoom-in-95">
+           <div className="bg-brand-surface p-12 rounded-[4rem] border border-brand-text-s/10 shadow-2xl space-y-8">
+              <div className="w-24 h-24 bg-emerald-500 text-white mx-auto rounded-full flex items-center justify-center shadow-xl mb-6">
+                <Trophy size={48} />
               </div>
-              <div className="grid grid-cols-2 gap-4 relative z-10">
-                 <div className="bg-brand-bg p-6 rounded-3xl border border-brand-text-s/5">
-                    <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সঠিক উত্তর', 'SCORE')}</p>
-                    <h3 className="text-3xl font-black text-brand-primary">{userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length} / {currentQuestions.length}</h3>
+              <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট সম্পন্ন!', 'Test Finished!')}</h2>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-brand-bg p-6 rounded-3xl">
+                    <p className="text-[10px] font-black uppercase text-brand-text-s mb-1">Score</p>
+                    <p className="text-3xl font-black text-brand-primary">{userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length} / {currentQuestions.length}</p>
                  </div>
-                 <div className="bg-brand-bg p-6 rounded-3xl border border-brand-text-s/5">
-                    <p className="text-[10px] font-black text-brand-text-s uppercase tracking-widest mb-1">{t('সময় লেগেছে', 'TIME USED')}</p>
-                    <h3 className="text-3xl font-black text-brand-text-p">{formatTime(1800 - timeLeft)}</h3>
+                 <div className="bg-brand-bg p-6 rounded-3xl">
+                    <p className="text-[10px] font-black uppercase text-brand-text-s mb-1">Time</p>
+                    <p className="text-3xl font-black text-brand-text-p">{formatTime(1800 - timeLeft)}</p>
                  </div>
               </div>
-              <div className="pt-4 relative z-10">
-                <button onClick={() => { 
-                   isSubmissionLocked.current = false;
-                   setTestStatus('selection'); 
-                }} className="w-full py-4 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-xs active:scale-95 transition-all">{t('ড্যাশবোর্ডে ফিরে যাও', 'Return to Selection')}</button>
-                <button onClick={() => { setHistoryAttempt(userState.testHistory[0]); setTestStatus('history'); }} className="w-full mt-3 py-4 bg-brand-bg text-brand-text-p border border-brand-text-s/10 font-black rounded-2xl uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('প্রশ্নগুলোর সমাধান দেখো', 'Review Questions')}</button>
-              </div>
+              <button onClick={() => setTestStatus('selection')} className="w-full py-5 bg-brand-primary text-white rounded-2xl font-black uppercase tracking-widest text-xs">Back to Library</button>
            </div>
-        </div>
-      )}
-
-      {testStatus === 'history' && historyAttempt && (
-        <div className="space-y-6">
-          <header className="flex items-center justify-between">
-            <button onClick={() => setTestStatus('selection')} className="flex items-center gap-2 text-brand-text-s hover:text-brand-text-p font-black text-[10px] uppercase tracking-widest transition-all"><ChevronLeft size={16} /> {t('পিছনে', 'Back')}</button>
-            <h3 className="text-sm font-black text-brand-text-p uppercase tracking-widest">{t('রিভিউ ও সমাধান', 'Review & Solutions')}</h3>
-            <div className="w-10"></div>
-          </header>
-          <div className="space-y-4">
-            {historyAttempt.questions.map((q, idx) => {
-              const isCorrect = historyAttempt.userAnswers[idx] === q.correct_index;
-              const userAns = historyAttempt.userAnswers[idx];
-              return (
-                <div key={q.id} className={`bg-brand-surface p-6 rounded-[2rem] border transition-all ${isCorrect ? 'border-emerald-100 dark:border-emerald-900/30' : 'border-rose-100 dark:border-rose-900/30'}`}>
-                   <div className="flex items-start gap-4 mb-4">
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white font-black text-xs ${isCorrect ? 'bg-emerald-500' : 'bg-rose-500'}`}>{idx + 1}</div>
-                      <h4 className="text-sm sm:text-lg font-black text-brand-text-p leading-tight">{q.question}</h4>
-                   </div>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {q.options.map((opt, oIdx) => (
-                        <div key={oIdx} className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-[11px] font-bold ${oIdx === q.correct_index ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : oIdx === userAns ? 'bg-rose-50 border-rose-500 text-rose-700' : 'bg-brand-bg border-transparent text-brand-text-s'}`}>
-                           <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border text-[9px] ${oIdx === q.correct_index ? 'bg-emerald-500 border-emerald-500 text-white' : oIdx === userAns ? 'bg-rose-500 border-rose-500 text-white' : 'bg-brand-surface border-brand-text-s/10 text-brand-text-s'}`}>{oIdx === q.correct_index ? <Check size={12} /> : oIdx === userAns ? <X size={12} /> : String.fromCharCode(65 + oIdx)}</div>
-                           {opt}
-                        </div>
-                      ))}
-                   </div>
-                </div>
-              );
-            })}
-          </div>
-          <button onClick={() => setTestStatus('selection')} className="w-full py-5 bg-brand-primary text-white font-black rounded-2xl shadow-xl shadow-brand-primary/20 uppercase tracking-widest text-[10px] active:scale-95 transition-all">{t('শেষ করো', 'Close Review')}</button>
         </div>
       )}
     </div>

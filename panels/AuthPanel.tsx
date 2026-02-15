@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -24,7 +23,6 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ mode: initialMode }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     setErrorMsg(null);
@@ -51,7 +49,10 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ mode: initialMode }) => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin }
+        options: { 
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: { access_type: 'offline', prompt: 'consent' }
+        }
       });
       if (error) throw error;
     } catch (err: any) {
@@ -77,7 +78,6 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ mode: initialMode }) => {
       if (mode === 'signin') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        // Navigation handled by App.tsx onAuthStateChange
       } else if (mode === 'signup') {
         if (password.length < 6) throw new Error("পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে।");
         if (!name.trim()) throw new Error("দয়া করে তোমার নাম লিখো।");
@@ -111,10 +111,6 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ mode: initialMode }) => {
     <div className="min-h-[80vh] flex items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-700">
       <div className="w-full max-w-md bg-brand-surface rounded-[3rem] p-8 sm:p-12 shadow-2xl border border-brand-text-s/10 relative overflow-hidden">
         
-        {/* Subtle Decorative Gradient */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 blur-3xl -z-10 rounded-full" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-secondary/5 blur-3xl -z-10 rounded-full" />
-
         <header className="text-center mb-10">
           <Link to="/about" className="inline-flex items-center gap-2 mb-4 text-brand-text-s hover:text-brand-primary transition-colors font-black text-[10px] uppercase tracking-widest">
             <ChevronLeft size={14} /> Back to Home
@@ -161,7 +157,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ mode: initialMode }) => {
               <input 
                 type="email" required value={email} onChange={e => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl font-bold outline-none transition-all text-sm"
-                placeholder="you@university.com"
+                placeholder="you@email.com"
               />
             </div>
           </div>
@@ -171,7 +167,7 @@ const AuthPanel: React.FC<AuthPanelProps> = ({ mode: initialMode }) => {
               <div className="flex justify-between items-center ml-1">
                 <label className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Password</label>
                 {mode === 'signin' && (
-                  <button type="button" onClick={() => setMode('forgot')} className="text-[9px] font-black uppercase text-brand-primary hover:underline">Forgot Password?</button>
+                  <button type="button" onClick={() => setMode('forgot')} className="text-[9px] font-black uppercase text-brand-primary hover:underline">Forgot?</button>
                 )}
               </div>
               <div className="relative">

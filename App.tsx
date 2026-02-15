@@ -1,15 +1,14 @@
-
 import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from './lib/supabase';
-import { UserState, Subject, Chapter } from './types';
-import { CHAPTER_LISTS } from './constants';
+import { supabase, testConnection } from './lib/supabase';
+import { UserState } from './types';
 import { LekhaporaProvider } from './contexts/LekhaporaContext';
 
 // Layouts
 import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
 import PanelLayout from './layouts/PanelLayout';
 import { ProtectedAdminRoute } from './components/ProtectedAdminRoute';
+import { AuthCallback } from './components/AuthCallback';
 
 // Optimized Panel Loading
 const AboutPanel = lazy(() => import('./panels/AboutPanel'));
@@ -26,9 +25,6 @@ const SystemPanel = lazy(() => import('./panels/SystemPanel'));
 const CMSDashboard = lazy(() => import('./panels/cms/CMSDashboard'));
 const AuthPanel = lazy(() => import('./panels/AuthPanel'));
 import { AdminLogin } from './components/AdminLogin';
-
-// Components
-import Onboarding from './components/Onboarding';
 
 const STATE_CACHE_KEY = 'lekhapora_user_state_v1';
 
@@ -74,7 +70,14 @@ const AppContent: React.FC = () => {
 
   const syncUserData = useCallback(async (userId: string) => {
     try {
-      const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
+      const connected = await testConnection();
+      if (!connected) throw new Error("Network issues detected");
+
+      const fetchPromise = supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Sync Timeout')), 6000));
+
+      const { data }: any = await Promise.race([fetchPromise, timeoutPromise]);
+
       if (data?.state) {
         const newState = { ...DEFAULT_STATE, ...data.state, isAuthenticated: true };
         setUserState(newState);
@@ -82,8 +85,16 @@ const AppContent: React.FC = () => {
       } else {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
-    } catch (e) { console.error("Sync Error:", e); } finally { setLoading(false); }
-  }, []);
+    } catch (e) { 
+      console.error("Sync Error:", e);
+      // If synced before, let user in offline mode
+      if (userState.profile) {
+        setUserState(prev => ({ ...prev, isAuthenticated: true }));
+      }
+    } finally { 
+      setLoading(false); 
+    }
+  }, [userState.profile]);
 
   useEffect(() => {
     let authSubscription: any;
@@ -105,17 +116,18 @@ const AppContent: React.FC = () => {
     return () => authSubscription?.unsubscribe();
   }, [syncUserData, navigate]);
 
-  if (loading && !userState.profile && !location.pathname.startsWith('/admin')) {
+  if (loading && !userState.profile && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-brand-bg">
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Waking Up Systems...</p>
       </div>
     );
   }
 
   return (
     <Routes>
-      {/* Public Branding Routes */}
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route element={<PublicLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={userState} /></Suspense>} />
         <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
@@ -123,7 +135,6 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
-      {/* Admin Protected Territory */}
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route 
         path="/admin/*" 
@@ -141,7 +152,6 @@ const AppContent: React.FC = () => {
         } 
       />
 
-      {/* Student App Territory */}
       <Route 
         path="/app/*" 
         element={

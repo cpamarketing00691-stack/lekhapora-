@@ -1,13 +1,22 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useLekhapora } from '../contexts/LekhaporaContext';
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from 'recharts';
-import { Clock, Target, Flame, GraduationCap, ChevronRight, TrendingUp, Zap } from 'lucide-react';
+import { Clock, Target, Flame, GraduationCap, ChevronRight, TrendingUp, Zap, RefreshCw, WifiOff, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useLoadingTimeout } from '../hooks/useLoadingTimeout';
 
 const DashboardPanel: React.FC = () => {
   const { state } = useLekhapora();
+  const [initialLoading, setInitialLoading] = useState(true);
+  const timedOut = useLoadingTimeout(initialLoading, 8000);
   const t = (bn: string, en: string) => state.settings.language === 'bn' ? bn : en;
+
+  useEffect(() => {
+    // Simulate data resolution check
+    if (state.user.profile) {
+      setInitialLoading(false);
+    }
+  }, [state.user.profile]);
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -20,8 +29,6 @@ const DashboardPanel: React.FC = () => {
     const doneChapters = state.subjects.reduce((acc, s) => acc + s.chapters.filter(c => c.isCompleted).length, 0);
     const syllabusCompletion = totalChapters > 0 ? doneChapters / totalChapters : 0;
 
-    // Readiness Formula: (syllabusComplete*0.4 + focusConsistency*0.35 + testAccuracy*0.25)
-    // Placeholder logic for Phase 1
     const focusConsistency = Math.min(1, todaySeconds / state.settings.focusGoalSeconds);
     const readiness = Math.round((syllabusCompletion * 0.5 + focusConsistency * 0.5) * 100);
 
@@ -40,6 +47,28 @@ const DashboardPanel: React.FC = () => {
     const m = Math.floor((s % 3600) / 60);
     return `${h}h ${m}m`;
   };
+
+  if (timedOut && initialLoading) {
+    return (
+      <div className="h-full flex items-center justify-center p-6 animate-in fade-in duration-500">
+        <div className="w-full max-w-md bg-brand-surface p-10 rounded-[3rem] border border-brand-text-s/10 shadow-2xl text-center space-y-6">
+          <div className="w-20 h-20 bg-amber-500/10 text-amber-600 mx-auto rounded-full flex items-center justify-center">
+            <AlertCircle size={40} />
+          </div>
+          <h2 className="text-xl font-black text-brand-text-p">{t('কানেকশন ধীরগতি...', 'Connection is slow...')}</h2>
+          <p className="text-xs font-medium text-brand-text-s">{t('সার্ভারের সাথে সিঙ্ক করতে সমস্যা হচ্ছে। আপনি কি অফলাইনে চালিয়ে যেতে চান?', 'Having trouble syncing with the server. Do you want to continue offline?')}</p>
+          <div className="flex flex-col gap-3">
+             <button onClick={() => window.location.reload()} className="w-full py-4 bg-brand-primary text-white rounded-2xl font-black uppercase text-xs shadow-lg flex items-center justify-center gap-2">
+               <RefreshCw size={16}/> {t('আবার চেষ্টা করুন', 'Retry Sync')}
+             </button>
+             <button onClick={() => setInitialLoading(false)} className="w-full py-4 bg-brand-bg text-brand-text-p rounded-2xl font-black uppercase text-xs border border-brand-text-s/10 flex items-center justify-center gap-2">
+               <WifiOff size={16}/> {t('অফলাইন মোড', 'Continue Offline')}
+             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">

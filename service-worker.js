@@ -2,7 +2,7 @@ const CACHE_NAME = 'lekhapora-v7-stable';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json',
+  '/site.webmanifest',
   '/app-icon.png',
   '/offline.html'
 ];

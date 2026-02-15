@@ -4,7 +4,7 @@ const CACHE_NAME = 'hsc-tracker-v4';
 const REQUIRED_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json',
+  '/site.webmanifest',
   '/app-icon.svg'
 ];
 

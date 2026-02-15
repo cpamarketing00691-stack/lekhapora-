@@ -1,58 +1,50 @@
-const CACHE_NAME = 'lekhapora-v6-emergency';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'lekhapora-v7-stable';
+const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/app-icon.png'
+  '/app-icon.png',
+  '/offline.html'
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Force new SW to take control immediately
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
-      // Comprehensive cache purge to ensure no old broken state remains
       return Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
     }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  
   const url = new URL(event.request.url);
 
-  // Strategy: Cache First for Static Assets & Vendor Chunks
-  if (url.origin === self.location.origin && (url.pathname.includes('/assets/') || ASSETS_TO_CACHE.includes(url.pathname))) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request).then((response) => {
+  // Supabase/API calls: Network only (always need fresh data)
+  if (url.origin.includes('supabase.co')) return;
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.status === 200 && response.type === 'basic') {
           const cloned = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
-          return response;
+        }
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (event.request.mode === 'navigate') return caches.match('/offline.html');
+          return new Response('Offline', { status: 503 });
         });
       })
-    );
-    return;
-  }
-
-  // Strategy: Stale-While-Revalidate for APIs and Panels
-  if (event.request.method === 'GET') {
-    event.respondWith(
-      caches.open(CACHE_NAME).then((cache) => {
-        return cache.match(event.request).then((cached) => {
-          const fetched = fetch(event.request).then((networkResponse) => {
-            if (networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => cached);
-          return cached || fetched;
-        });
-      })
-    );
-  }
+  );
 });

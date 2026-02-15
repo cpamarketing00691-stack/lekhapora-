@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://uycxbrcbweeuvizrgpnw.supabase.co';
-// In production, these should ideally come from process.env, but hardcoded for the current environment.
 const supabaseAnonKey = 'sb_publishable_AvaNpR5XsRFbhSu7A6uHhg_W2xzhkRx';
 
 if (!supabaseUrl || !supabaseAnonKey) {
@@ -13,11 +12,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    storageKey: 'lekhapora-session-v1',
     storage: window.localStorage
   },
   global: {
     headers: {
-      'x-client-info': 'lekhapora-pwa-emergency-fix'
+      'x-client-info': 'lekhapora-pwa-standard'
     }
   },
   db: {
@@ -28,7 +28,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 /**
  * CRITICAL: Timeout wrapper for all Supabase calls.
  * Prevents the app from staying in a loading state if a request hangs.
- * Fix: Changed parameter type to PromiseLike to support Supabase's thenable builders.
  */
 export const withTimeout = <T>(promise: PromiseLike<T>, timeoutMs: number = 8000): Promise<T> => {
   return Promise.race([
@@ -44,8 +43,6 @@ export const withTimeout = <T>(promise: PromiseLike<T>, timeoutMs: number = 8000
  */
 export const testConnection = async () => {
   try {
-    // Fix: Explicitly cast withTimeout result to any to fix error property access errors.
-    // The signature change to PromiseLike in withTimeout resolves the assignment error.
     const { error }: any = await withTimeout(
       supabase.from('user_data').select('count').limit(1)
     );

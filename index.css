@@ -2,7 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+* { 
+  box-sizing: border-box; 
+  -webkit-tap-highlight-color: transparent; 
+}
 
 :root {
   --brand-bg: 246 248 245;
@@ -25,23 +28,45 @@
 html, body { 
   width: 100%; 
   min-height: 100vh; 
+  /* Fix 100vh bug on mobile */
+  min-height: -webkit-fill-available;
   margin: 0; 
   padding: 0; 
   overflow-x: hidden; 
-  overflow-y: auto; /* Changed from hidden to allow scrolling */
+  overflow-y: auto; 
   background: rgb(var(--brand-bg)); 
   font-family: 'Inter', sans-serif; 
+  -webkit-font-smoothing: antialiased;
+  -webkit-overflow-scrolling: touch;
+  /* Prevent pull-to-refresh on mobile */
+  overscroll-behavior-y: contain;
 }
 
 #root { 
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   display: flex; 
   flex-direction: column; 
 }
+
+/* Touch-friendly enhancements */
+button, a {
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+/* iOS Safe Areas */
+.safe-p-t { padding-top: env(safe-area-inset-top); }
+.safe-p-b { padding-bottom: env(safe-area-inset-bottom); }
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 
-main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; }
-@media (min-width: 768px) { main { padding-bottom: 2rem !important; } }
+main { 
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; 
+}
+
+@media (min-width: 768px) { 
+  main { padding-bottom: 2rem !important; } 
+}

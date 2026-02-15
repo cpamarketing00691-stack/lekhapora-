@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { LekhaporaState, LekhaporaAction } from '../types';
 
@@ -25,7 +24,7 @@ function reducer(state: LekhaporaState, action: LekhaporaAction): LekhaporaState
 
   switch (action.type) {
     case 'SET_INITIAL_STATE':
-      return action.payload;
+      return { ...initialState, ...action.payload };
     case 'UPDATE_PROFILE':
       newState = { ...state, user: { ...state.user, profile: action.payload } };
       break;

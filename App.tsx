@@ -2,7 +2,7 @@ import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, withTimeout } from './lib/supabase';
 import { UserState, UserProfile } from './types';
-import { LekhaporaProvider } from './contexts/LekhaporaContext';
+import { LekhaporaProvider, useLekhapora } from './contexts/LekhaporaContext';
 
 // Layouts
 import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
@@ -64,16 +64,8 @@ const PanelSkeleton = () => (
 );
 
 const AppContent: React.FC = () => {
-  const [userState, setUserState] = useState<UserState>(() => {
-    const cached = localStorage.getItem(STATE_CACHE_KEY);
-    if (cached) {
-      try { return { ...JSON.parse(cached), isAuthenticated: false }; } catch (e) { return DEFAULT_STATE; }
-    }
-    return DEFAULT_STATE;
-  });
-
+  const { state: contextState, dispatch } = useLekhapora();
   const [loading, setLoading] = useState(true);
-  const [initError, setInitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -85,35 +77,23 @@ const AppContent: React.FC = () => {
       );
 
       if (response.data?.state) {
-        const newState = { ...DEFAULT_STATE, ...response.data.state, isAuthenticated: true };
-        setUserState(newState);
-        localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(newState));
-      } else {
-        setUserState(prev => ({ ...prev, isAuthenticated: true }));
+        dispatch({ type: 'SET_INITIAL_STATE', payload: response.data.state });
       }
     } catch (e) { 
       console.error("Sync Error:", e);
-      if (userState.profile) {
-        setUserState(prev => ({ ...prev, isAuthenticated: true }));
-      }
     } finally { 
       setLoading(false); 
     }
-  }, [userState.profile]);
+  }, [dispatch]);
 
   useEffect(() => {
     let authSubscription: any;
     
-    const safetyTimer = setTimeout(() => {
-      if (loading) setLoading(false);
-    }, 12000);
-
     const init = async () => {
       try {
-        const { data: { session }, error }: any = await withTimeout(supabase.auth.getSession(), 5000);
-        if (error) throw error;
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          dispatch({ type: 'SET_INITIAL_STATE', payload: { ...contextState, user: { ...contextState.user, id: session.user.id } } as any });
           await syncUserData(session.user.id);
         } else {
           setLoading(false);
@@ -121,45 +101,38 @@ const AppContent: React.FC = () => {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
           if (session) {
+            dispatch({ type: 'SET_INITIAL_STATE', payload: { ...contextState, user: { ...contextState.user, id: session.user.id } } as any });
             await syncUserData(session.user.id);
           } else if (event === 'SIGNED_OUT') {
             localStorage.removeItem(STATE_CACHE_KEY);
-            setUserState(DEFAULT_STATE);
             if (location.pathname.startsWith('/app')) navigate('/about');
             setLoading(false);
           }
         });
         authSubscription = subscription;
-      } catch (err: any) {
-        setInitError(err.message);
+      } catch (err) {
         setLoading(false);
-      } finally {
-        clearTimeout(safetyTimer);
       }
     };
 
     init();
-    return () => {
-      clearTimeout(safetyTimer);
-      authSubscription?.unsubscribe();
-    };
-  }, [syncUserData, navigate, location.pathname]);
+    return () => authSubscription?.unsubscribe();
+  }, [syncUserData, navigate, location.pathname, dispatch]);
 
   const handleOnboardingComplete = async (profile: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profileData } = profile;
     
-    // Construct initial subjects based on selection
     const initialSubjects = selectedSubjectNames.map((name, idx) => ({
       id: `sub-${Date.now()}-${idx}`,
       name,
       paper: 1 as 1 | 2,
-      chapters: [] // To be populated via tracker or manual add
+      chapters: []
     }));
 
     const newState = { 
-      ...userState, 
-      profile: profileData, 
-      subjects: initialSubjects as any 
+      ...contextState, 
+      user: { ...contextState.user, profile: profileData }, 
+      subjects: initialSubjects 
     };
 
     try {
@@ -171,21 +144,40 @@ const AppContent: React.FC = () => {
           updated_at: new Date().toISOString()
         });
       }
-      setUserState(newState);
+      dispatch({ type: 'SET_INITIAL_STATE', payload: newState as any });
       navigate('/app/dashboard');
     } catch (e) {
-      console.error("Failed to save onboarding", e);
-      alert("Something went wrong while saving your profile. Please try again.");
+      alert("Error saving profile.");
     }
   };
 
-  if (loading && !userState.profile && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
+  // Bridge for components expecting UserState
+  const legacyUserState: UserState = {
+    isAuthenticated: !!contextState.user.id,
+    profile: contextState.user.profile,
+    studyHistory: contextState.studyHistory,
+    testHistory: contextState.testHistory,
+    subjects: contextState.subjects,
+    dailyTasks: contextState.tasks,
+    streaks: 0, // Calculated in UI
+    badges: [],
+    currentMood: 'Great',
+    language: contextState.settings.language,
+    activeTimer: null,
+    reminders: [],
+    notificationsEnabled: contextState.settings.notificationsEnabled
+  };
+
+  const onUpdateLegacyState = (updater: any) => {
+    // This is a bridge to handle components still using the functional update pattern
+    console.warn("Legacy state updater called. Migration to Context required.");
+  };
+
+  if (loading && !contextState.user.profile && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
-        <div className="text-center space-y-2">
-          <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Secure Handshake...</p>
-        </div>
+        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Initializing Core...</p>
       </div>
     );
   }
@@ -193,22 +185,22 @@ const AppContent: React.FC = () => {
   return (
     <Routes>
       <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route element={<PublicLayout isAuthenticated={userState.isAuthenticated} />}>
-        <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={userState} /></Suspense>} />
+      <Route element={<PublicLayout isAuthenticated={legacyUserState.isAuthenticated} />}>
+        <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={legacyUserState} /></Suspense>} />
         <Route path="/faq" element={<Suspense fallback={<PanelSkeleton />}><FAQPanel /></Suspense>} />
         <Route path="/contact" element={<Suspense fallback={<PanelSkeleton />}><ContactPanel /></Suspense>} />
         <Route path="/privacy-policy" element={<Suspense fallback={<PanelSkeleton />}><PrivacyPanel /></Suspense>} />
         <Route path="/terms" element={<Suspense fallback={<PanelSkeleton />}><TermsPanel /></Suspense>} />
-        <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
-        <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signup" /></Suspense>} />
+        <Route path="/login" element={legacyUserState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
+        <Route path="/register" element={legacyUserState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signup" /></Suspense>} />
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
       <Route 
         path="/onboarding" 
         element={
-          userState.isAuthenticated ? (
-            userState.profile ? <Navigate to="/app/dashboard" replace /> : <Onboarding onComplete={handleOnboardingComplete} language={userState.language} />
+          legacyUserState.isAuthenticated ? (
+            legacyUserState.profile ? <Navigate to="/app/dashboard" replace /> : <Onboarding onComplete={handleOnboardingComplete} language={legacyUserState.language} />
           ) : <Navigate to="/login" replace />
         } 
       />
@@ -218,7 +210,7 @@ const AppContent: React.FC = () => {
         path="/admin/*" 
         element={
           <ProtectedAdminRoute>
-            <PanelLayout userState={userState} onUpdateState={setUserState}>
+            <PanelLayout userState={legacyUserState} onUpdateState={onUpdateLegacyState}>
               <Suspense fallback={<PanelSkeleton />}>
                 <Routes>
                   <Route path="cms" element={<CMSDashboard />} />
@@ -233,21 +225,21 @@ const AppContent: React.FC = () => {
       <Route 
         path="/app/*" 
         element={
-          userState.isAuthenticated ? (
-            !userState.profile ? <Navigate to="/onboarding" replace /> : (
-              <PanelLayout userState={userState} onUpdateState={setUserState}>
+          legacyUserState.isAuthenticated ? (
+            !legacyUserState.profile ? <Navigate to="/onboarding" replace /> : (
+              <PanelLayout userState={legacyUserState} onUpdateState={onUpdateLegacyState}>
                 <Suspense fallback={<PanelSkeleton />}>
                   <Routes>
                     <Route path="dashboard" element={<DashboardPanel />} />
-                    <Route path="syllabus" element={<SyllabusPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="tracker" element={<TrackerPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="exams" element={<ExamsPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="calendar" element={<CalendarPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="ai" element={<AIPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="analytics" element={<AnalyticsPanel userState={userState} />} />
-                    <Route path="settings" element={<SettingsPanel userState={userState} onUpdateState={setUserState} onLogout={() => supabase.auth.signOut()} />} />
-                    <Route path="ocr" element={<OCRPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="system" element={<SystemPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="syllabus" element={<SyllabusPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                    <Route path="tracker" element={<TrackerPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                    <Route path="exams" element={<ExamsPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                    <Route path="calendar" element={<CalendarPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                    <Route path="ai" element={<AIPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                    <Route path="analytics" element={<AnalyticsPanel userState={legacyUserState} />} />
+                    <Route path="settings" element={<SettingsPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} onLogout={() => supabase.auth.signOut()} />} />
+                    <Route path="ocr" element={<OCRPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                    <Route path="system" element={<SystemPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
                     <Route index element={<Navigate to="dashboard" replace />} />
                   </Routes>
                 </Suspense>

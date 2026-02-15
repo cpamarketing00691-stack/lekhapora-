@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { UserState, StudySession, Reminder, Subject, Mood } from '../types';
 import { 
@@ -90,7 +91,7 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
       durationSeconds: durationSeconds,
       breakSeconds: 0,
       numBreaks: 0,
-      focusLevel: 10,
+      // Fixed: focusLevel removed because it is not defined in type StudySession
       mood: manualSession.mood,
       isRevision: manualSession.isRevision
     };
@@ -250,7 +251,7 @@ const StudyCalendar: React.FC<StudyCalendarProps> = ({ userState, onUpdateState,
                 </button>
               </div>
 
-              <div className="flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-hide">
+              <div className="flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-hide mb-8">
                 {selectedDayData.length > 0 ? selectedDayData.map(session => (
                   <div key={session.id} className="p-4 bg-brand-bg rounded-2xl border border-emerald-500/10 group relative">
                     <div className="flex justify-between items-start mb-2">

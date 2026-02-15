@@ -156,7 +156,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       durationSeconds: finalFocus,
       breakSeconds: finalBreak,
       numBreaks: timer.numBreaks,
-      focusLevel: 8,
+      // Fixed: focusLevel removed because it is not defined in type StudySession
       mood: currentMood,
       isRevision: timer.isRevision
     };

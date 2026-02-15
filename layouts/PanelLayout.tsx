@@ -1,13 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, BookOpen, Timer, GraduationCap, 
   CalendarDays, MessageSquare, BarChart3, Settings, 
-  Cpu, Camera, LogOut, Sun, Moon, Bell, Menu, X, ChevronLeft, ChevronRight
+  Cpu, Camera, LogOut, Sun, Moon, Bell, Menu, X, ChevronLeft, ChevronRight, Lock
 } from 'lucide-react';
 import { UserState } from '../types';
 import BackgroundGrid from '../components/BackgroundGrid';
-// Fixed missing import for supabase client
 import { supabase } from '../lib/supabase';
 
 interface PanelLayoutProps {
@@ -36,6 +36,8 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
     }
   }, [isDark]);
 
+  const isAdmin = userState.profile?.role === 'admin';
+
   const navItems = [
     { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('ড্যাশবোর্ড', 'Dashboard'), path: '/app/dashboard' },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus'), path: '/app/syllabus' },
@@ -43,6 +45,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
     { id: 'exams', icon: <GraduationCap size={20} />, label: t('টেস্ট ও এক্সাম', 'Exams & Tests'), path: '/app/exams' },
     { id: 'calendar', icon: <CalendarDays size={20} />, label: t('ক্যালেন্ডার', 'Calendar'), path: '/app/calendar' },
     { id: 'ai', icon: <MessageSquare size={20} />, label: t('এআই বন্ধু', 'AI Assistant'), path: '/app/ai' },
+    ...(isAdmin ? [{ id: 'cms', icon: <Lock size={20} className="text-orange-500" />, label: 'CMS Dashboard', path: '/app/cms' }] : []),
     { id: 'analytics', icon: <BarChart3 size={20} />, label: t('এনালাইটিক্স', 'Analytics'), path: '/app/analytics' },
     { id: 'ocr', icon: <Camera size={20} />, label: t('স্ক্যানার', 'OCR Scanner'), path: '/app/ocr' },
     { id: 'settings', icon: <Settings size={20} />, label: t('সেটিংস', 'Settings'), path: '/app/settings' },
@@ -55,7 +58,6 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
     <div className="h-screen w-full flex bg-brand-bg text-brand-text-p overflow-hidden relative selection:bg-brand-primary/20">
       <BackgroundGrid />
 
-      {/* Desktop Sidebar */}
       <aside className={`hidden md:flex flex-col bg-brand-surface/80 backdrop-blur-xl border-r border-brand-text-s/10 transition-all duration-500 z-50 ${isSidebarOpen ? 'w-72 p-6' : 'w-24 p-4'}`}>
         <div className="flex items-center justify-between mb-10">
           <h1 className={`font-black text-brand-primary italic tracking-tight transition-all duration-500 overflow-hidden whitespace-nowrap ${isSidebarOpen ? 'text-2xl opacity-100' : 'text-[0px] opacity-0'}`}>
@@ -95,7 +97,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
             {isSidebarOpen && (
               <div className="min-w-0">
                 <p className="text-xs font-black truncate">{userState.profile?.fullName}</p>
-                <p className="text-[9px] uppercase font-bold text-brand-text-s">{userState.profile?.group}</p>
+                <p className="text-[9px] uppercase font-bold text-brand-text-s">{userState.profile?.group} {isAdmin ? '• Admin' : ''}</p>
               </div>
             )}
           </div>
@@ -106,9 +108,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative z-10">
-        {/* Topbar */}
         <header className="h-20 flex items-center justify-between px-6 md:px-10 bg-brand-bg/50 backdrop-blur-md border-b border-brand-text-s/5 shrink-0">
           <div className="flex items-center gap-4">
              <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-2 text-brand-text-p"><Menu size={24}/></button>
@@ -131,7 +131,6 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
           </div>
         </header>
 
-        {/* Panel Viewport */}
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           <div className="max-w-7xl mx-auto p-4 md:p-10 pb-32 md:pb-12">
             {children}
@@ -139,7 +138,6 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
         </div>
       </main>
 
-      {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-[100] md:hidden bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsMobileMenuOpen(false)}>
            <div className="w-72 h-full bg-brand-surface p-6 flex flex-col animate-in slide-in-from-left duration-500" onClick={e => e.stopPropagation()}>
@@ -155,7 +153,6 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
                 ))}
               </nav>
               <div className="pt-6 mt-auto border-t border-brand-text-s/10">
-                 {/* Fixed missing supabase client reference */}
                  <button onClick={() => supabase.auth.signOut()} className="w-full py-4 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest"><LogOut size={18}/> {t('লগ আউট', 'Logout')}</button>
               </div>
            </div>

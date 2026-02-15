@@ -7,8 +7,26 @@ export enum TaskSource { COLLEGE = 'College', COACHING = 'Coaching', BATCH = 'Ba
 export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
 export type Language = 'bn' | 'en';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
+export type UserRole = 'student' | 'admin';
 
-// Added CollegeExam interface
+export interface PostBlock {
+  id: string;
+  type: 'heading' | 'paragraph' | 'image' | 'mcq' | 'divider';
+  content: any;
+}
+
+export interface Post {
+  id: string;
+  title: string;
+  slug: string;
+  category: string;
+  blocks: PostBlock[];
+  isPublished: boolean;
+  authorId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface CollegeExam {
   id: string;
   name: string;
@@ -23,8 +41,9 @@ export interface UserProfile {
   medium: Medium;
   targetYear: string;
   religion: Religion;
+  role: UserRole;
   targetExamDate?: string;
-  collegeExams?: CollegeExam[]; // Use CollegeExam interface
+  collegeExams?: CollegeExam[];
 }
 
 export interface Chapter {
@@ -43,7 +62,6 @@ export interface Subject {
   chapters: Chapter[];
 }
 
-// Added Task interface
 export interface Task {
   id: string;
   name: string;
@@ -54,7 +72,6 @@ export interface Task {
   createdAt: number;
 }
 
-// Added Reminder interface
 export interface Reminder {
   id: string;
   title: string;
@@ -64,7 +81,6 @@ export interface Reminder {
   repeatType: 'none' | 'daily' | 'weekly';
 }
 
-// Added MCQ interface
 export interface MCQ {
   id: string;
   question: string;
@@ -73,7 +89,6 @@ export interface MCQ {
   explanation?: string;
 }
 
-// Added TestAttempt interface
 export interface TestAttempt {
   id: string;
   subjectId: string;
@@ -86,7 +101,6 @@ export interface TestAttempt {
   userAnswers: number[];
 }
 
-// Added ActiveTimer interface
 export interface ActiveTimer {
   subjectId: string;
   taskId?: string;
@@ -103,19 +117,17 @@ export interface ActiveTimer {
 export interface StudySession {
   id: string;
   subjectId: string;
-  taskId?: string; // added
+  taskId?: string;
   chapterId?: string;
   startTime: number;
-  endTime?: number; // added
+  endTime?: number;
   durationSeconds: number;
-  breakSeconds?: number; // added
-  numBreaks?: number; // added
-  focusLevel?: number; // added
+  breakSeconds?: number;
+  numBreaks?: number;
   mood: Mood;
   isRevision: boolean;
 }
 
-// Added UserState interface
 export interface UserState {
   isAuthenticated: boolean;
   profile: UserProfile | null;
@@ -138,6 +150,7 @@ export interface LekhaporaState {
   studyHistory: StudySession[];
   testHistory: TestAttempt[];
   tasks: Task[];
+  cmsPosts: Post[]; // Added for Admin
   settings: {
     language: Language;
     focusGoalSeconds: number;
@@ -153,4 +166,6 @@ export type LekhaporaAction =
   | { type: 'TOGGLE_CHAPTER'; payload: { subjectId: string; chapterId: string } }
   | { type: 'ADD_STUDY_SESSION'; payload: StudySession }
   | { type: 'SET_LANGUAGE'; payload: Language }
-  | { type: 'SYNC_COMPLETE'; payload: number };
+  | { type: 'SYNC_COMPLETE'; payload: number }
+  | { type: 'SAVE_POST'; payload: Post }
+  | { type: 'DELETE_POST'; payload: string };

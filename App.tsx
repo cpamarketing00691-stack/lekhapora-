@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { supabase } from './lib/supabase';
 import { UserState, Subject, Chapter } from './types';
 import { CHAPTER_LISTS } from './constants';
+import { LekhaporaProvider } from './contexts/LekhaporaContext';
 
 // Layouts
 import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
@@ -22,6 +23,7 @@ const AnalyticsPanel = lazy(() => import('./panels/AnalyticsPanel'));
 const SettingsPanel = lazy(() => import('./panels/SettingsPanel'));
 const OCRPanel = lazy(() => import('./panels/OCRPanel'));
 const SystemPanel = lazy(() => import('./panels/SystemPanel'));
+const CMSDashboard = lazy(() => import('./panels/cms/CMSDashboard'));
 
 // Components
 import Onboarding from './components/Onboarding';
@@ -55,13 +57,18 @@ const PanelSkeleton = () => (
   </div>
 );
 
+const ProtectedRoute = ({ children, isAdminOnly = false, userState }: any) => {
+  if (!userState.isAuthenticated) return <Navigate to="/login" replace />;
+  if (isAdminOnly && userState.profile?.role !== 'admin') return <Navigate to="/app/dashboard" replace />;
+  return children;
+};
+
 const AppContent: React.FC = () => {
-  // 1. Initial State from Cache (Fastest Path)
   const [userState, setUserState] = useState<UserState>(() => {
     const cached = localStorage.getItem(STATE_CACHE_KEY);
     if (cached) {
       try {
-        return { ...JSON.parse(cached), isAuthenticated: false }; // Set auth false until verified
+        return { ...JSON.parse(cached), isAuthenticated: false };
       } catch (e) {
         return DEFAULT_STATE;
       }
@@ -73,7 +80,6 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 2. Optimized Sync
   const syncUserData = useCallback(async (userId: string) => {
     try {
       const { data } = await supabase
@@ -98,19 +104,14 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     let authSubscription: any;
-
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await syncUserData(session.user.id);
-      } else {
-        setLoading(false);
-      }
+      if (session) await syncUserData(session.user.id);
+      else setLoading(false);
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session) {
-          await syncUserData(session.user.id);
-        } else if (event === 'SIGNED_OUT') {
+        if (session) await syncUserData(session.user.id);
+        else if (event === 'SIGNED_OUT') {
           localStorage.removeItem(STATE_CACHE_KEY);
           setUserState(DEFAULT_STATE);
           if (location.pathname.startsWith('/app')) navigate('/about');
@@ -119,7 +120,6 @@ const AppContent: React.FC = () => {
       });
       authSubscription = subscription;
     };
-
     init();
     return () => authSubscription?.unsubscribe();
   }, [syncUserData, navigate]);
@@ -152,7 +152,6 @@ const AppContent: React.FC = () => {
                 const finalSubjects: Subject[] = [];
                 selectedSubjectNames.forEach((name, idx) => {
                   [1, 2].forEach(paperNum => {
-                    // Added status and studyTimeSeconds to fix Chapter object creation
                     const chapters: Chapter[] = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
                       id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
                       name: ch,
@@ -163,7 +162,7 @@ const AppContent: React.FC = () => {
                     finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
                   });
                 });
-                const newState = { ...userState, profile: p, subjects: finalSubjects };
+                const newState = { ...userState, profile: { ...p, role: 'student' as const }, subjects: finalSubjects };
                 setUserState(newState);
                 localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(newState));
                 navigate('/app/dashboard');
@@ -176,12 +175,12 @@ const AppContent: React.FC = () => {
       <Route 
         path="/app/*" 
         element={
-          userState.isAuthenticated ? (
-            !userState.profile ? <Navigate to="/onboarding" replace /> : (
+          <ProtectedRoute userState={userState}>
+            {!userState.profile ? <Navigate to="/onboarding" replace /> : (
               <PanelLayout userState={userState} onUpdateState={setUserState}>
                 <Suspense fallback={<PanelSkeleton />}>
                   <Routes>
-                    <Route path="dashboard" element={<DashboardPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="dashboard" element={<DashboardPanel />} />
                     <Route path="syllabus" element={<SyllabusPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="tracker" element={<TrackerPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="exams" element={<ExamsPanel userState={userState} onUpdateState={setUserState} />} />
@@ -191,12 +190,13 @@ const AppContent: React.FC = () => {
                     <Route path="settings" element={<SettingsPanel userState={userState} onUpdateState={setUserState} onLogout={() => supabase.auth.signOut()} />} />
                     <Route path="ocr" element={<OCRPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="system" element={<SystemPanel userState={userState} onUpdateState={setUserState} />} />
+                    <Route path="cms" element={<ProtectedRoute userState={userState} isAdminOnly><CMSDashboard /></ProtectedRoute>} />
                     <Route index element={<Navigate to="dashboard" replace />} />
                   </Routes>
                 </Suspense>
               </PanelLayout>
-            )
-          ) : <Navigate to="/login" replace />
+            )}
+          </ProtectedRoute>
         }
       />
     </Routes>
@@ -205,7 +205,9 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => (
   <BrowserRouter>
-    <AppContent />
+    <LekhaporaProvider>
+      <AppContent />
+    </LekhaporaProvider>
   </BrowserRouter>
 );
 

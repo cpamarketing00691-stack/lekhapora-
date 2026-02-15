@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { LekhaporaState, LekhaporaAction, Group, Medium, Religion } from '../types';
+import { LekhaporaState, LekhaporaAction } from '../types';
 
 const STORAGE_KEY = 'lekhapora_user_state_v1';
 
@@ -10,9 +10,10 @@ const initialState: LekhaporaState = {
   studyHistory: [],
   testHistory: [],
   tasks: [],
+  cmsPosts: [],
   settings: {
     language: 'bn',
-    focusGoalSeconds: 21600, // 6 Hours
+    focusGoalSeconds: 21600,
     notificationsEnabled: true,
     theme: 'light'
   },
@@ -44,6 +45,18 @@ function reducer(state: LekhaporaState, action: LekhaporaAction): LekhaporaState
     case 'ADD_STUDY_SESSION':
       newState = { ...state, studyHistory: [action.payload, ...state.studyHistory] };
       break;
+    case 'SAVE_POST':
+      const exists = state.cmsPosts.find(p => p.id === action.payload.id);
+      newState = {
+        ...state,
+        cmsPosts: exists 
+          ? state.cmsPosts.map(p => p.id === action.payload.id ? action.payload : p)
+          : [...state.cmsPosts, action.payload]
+      };
+      break;
+    case 'DELETE_POST':
+      newState = { ...state, cmsPosts: state.cmsPosts.filter(p => p.id !== action.payload) };
+      break;
     case 'SET_LANGUAGE':
       newState = { ...state, settings: { ...state.settings, language: action.payload } };
       break;
@@ -53,7 +66,6 @@ function reducer(state: LekhaporaState, action: LekhaporaAction): LekhaporaState
       return state;
   }
 
-  // Tier 2: Synchronous Local Storage Write
   localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
   return newState;
 }
@@ -78,9 +90,11 @@ export const LekhaporaProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   return (
-    <LekhaporaContext.Provider value={{ state, dispatch }}>
-      {children}
-    </LekhaporaContext.Provider>
+    <div className={state.settings.theme}>
+      <LekhaporaContext.Provider value={{ state, dispatch }}>
+        {children}
+      </LekhaporaContext.Provider>
+    </div>
   );
 };
 

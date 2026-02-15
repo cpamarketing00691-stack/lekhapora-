@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy, useCallback, useRef } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, withTimeout, testConnection } from './lib/supabase';
 import { UserState } from './types';
@@ -59,27 +59,22 @@ const AppContent: React.FC = () => {
   const [userState, setUserState] = useState<UserState>(() => {
     const cached = localStorage.getItem(STATE_CACHE_KEY);
     if (cached) {
-      try { 
-        return { ...JSON.parse(cached), isAuthenticated: false }; 
-      } catch (e) { 
-        return DEFAULT_STATE; 
-      }
+      try { return { ...JSON.parse(cached), isAuthenticated: false }; } catch (e) { return DEFAULT_STATE; }
     }
     return DEFAULT_STATE;
   });
 
   const [loading, setLoading] = useState(true);
-  const [bootStatus, setBootStatus] = useState('Initializing Security...');
-  const initFlagRef = useRef(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   const syncUserData = useCallback(async (userId: string) => {
-    setBootStatus('Synchronizing Profile...');
     try {
+      // Use withTimeout to prevent hanging on fetch
       const response: any = await withTimeout(
         supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle(),
-        7000
+        6000
       );
 
       if (response.data?.state) {
@@ -90,7 +85,8 @@ const AppContent: React.FC = () => {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
     } catch (e) { 
-      console.error("🟢 APP: Boot sync error (likely slow network). Falling back to offline state.");
+      console.error("Sync Error:", e);
+      // Fallback for offline mode if local profile exists
       if (userState.profile) {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
@@ -100,25 +96,21 @@ const AppContent: React.FC = () => {
   }, [userState.profile]);
 
   useEffect(() => {
-    if (initFlagRef.current) return;
-    initFlagRef.current = true;
-
-    console.log('🟢 APP: Starting Fail-Safe Boot...');
+    console.log('Application Initializing...');
     let authSubscription: any;
     
-    // Nuclear Option: Safety "Dead Man's Switch"
-    // If we are still loading in 12 seconds, we FORCE entry into whatever state we have.
+    // Safety "Dead Man's Switch": If initialization hasn't finished in 12s, force stop loading.
     const safetyTimer = setTimeout(() => {
       if (loading) {
-        console.warn("🔴 APP: Safety hard-stop triggered. Forcing UI render.");
+        console.warn("Safety timeout triggered. Forcing loading screen termination.");
         setLoading(false);
       }
     }, 12000);
 
     const init = async () => {
       try {
-        setBootStatus('Verifying Gateway...');
-        const { data: { session }, error }: any = await withTimeout(supabase.auth.getSession(), 6000);
+        // Fix: Explicitly cast withTimeout result to any to fix data/error property access errors
+        const { data: { session }, error }: any = await withTimeout(supabase.auth.getSession(), 5000);
         
         if (error) throw error;
 
@@ -140,7 +132,8 @@ const AppContent: React.FC = () => {
         });
         authSubscription = subscription;
       } catch (err: any) {
-        console.error("🔴 APP: Boot Failure:", err.message);
+        console.error("Init sequence failed:", err);
+        setInitError(err.message);
         setLoading(false);
       } finally {
         clearTimeout(safetyTimer);
@@ -152,19 +145,15 @@ const AppContent: React.FC = () => {
       clearTimeout(safetyTimer);
       authSubscription?.unsubscribe();
     };
-  }, [syncUserData, navigate]);
+  }, [syncUserData, navigate, location.pathname]);
 
   if (loading && !userState.profile && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-6 p-6 text-center">
-        <div className="w-14 h-14 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
-        <div className="space-y-2">
-          <p className="text-[11px] font-black uppercase text-brand-primary tracking-[0.3em] animate-pulse">
-            {bootStatus}
-          </p>
-          <p className="text-[9px] font-bold text-brand-text-s uppercase tracking-widest opacity-50">
-            Secure Protocol v2.4
-          </p>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
+        <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
+        <div className="text-center space-y-2">
+          <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Secure Handshake in progress...</p>
+          {initError && <p className="text-[9px] text-rose-500 font-bold uppercase">Network delay detected. Retrying...</p>}
         </div>
       </div>
     );

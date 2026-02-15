@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lekhapora-v7-emergency';
+const CACHE_NAME = 'lekhapora-v6-emergency';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -7,7 +7,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  self.skipWaiting(); // Force new SW to take control immediately
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
@@ -16,6 +16,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
+      // Comprehensive cache purge to ensure no old broken state remains
       return Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
     }).then(() => self.clients.claim())
   );
@@ -24,12 +25,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Strategy: Network Only for Supabase (Prevents broken cache entries)
-  if (url.hostname.includes('supabase.co')) {
-    return;
-  }
-
-  // Strategy: Cache First for Static Assets
+  // Strategy: Cache First for Static Assets & Vendor Chunks
   if (url.origin === self.location.origin && (url.pathname.includes('/assets/') || ASSETS_TO_CACHE.includes(url.pathname))) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
@@ -43,10 +39,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Strategy: Stale-While-Revalidate for local navigation
-  if (event.request.mode === 'navigate') {
+  // Strategy: Stale-While-Revalidate for APIs and Panels
+  if (event.request.method === 'GET') {
     event.respondWith(
-      caches.match('/index.html').then(response => response || fetch(event.request))
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cached) => {
+          const fetched = fetch(event.request).then((networkResponse) => {
+            if (networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
+          }).catch(() => cached);
+          return cached || fetched;
+        });
+      })
     );
   }
 });

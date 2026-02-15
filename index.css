@@ -38,7 +38,7 @@ html, body {
   font-family: 'Inter', sans-serif; 
   -webkit-font-smoothing: antialiased;
   -webkit-overflow-scrolling: touch;
-  /* Prevent pull-to-refresh on mobile */
+  /* Prevent pull-to-refresh on mobile browsers */
   overscroll-behavior-y: contain;
 }
 
@@ -50,9 +50,14 @@ html, body {
 }
 
 /* Touch-friendly enhancements */
-button, a {
+button, a, input, select, textarea {
   touch-action: manipulation;
   cursor: pointer;
+}
+
+/* Force standard font size to prevent iOS zoom-on-focus */
+input, select, textarea {
+  font-size: 16px !important;
 }
 
 /* iOS Safe Areas */
@@ -64,9 +69,25 @@ button, a {
 .transition-all { transition-duration: 300ms; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
 
 main { 
-  padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important; 
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom)) !important; 
 }
 
 @media (min-width: 768px) { 
   main { padding-bottom: 2rem !important; } 
+}
+
+/* Smooth Scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Custom Animations */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
 }

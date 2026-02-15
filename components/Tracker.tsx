@@ -1,16 +1,17 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserState, StudySession, Mood, Task, Subject, Chapter } from '../types';
 import { 
   Play, Pause, Square, Clock, Brain, Coffee, 
   Zap as FocusIcon, AlertCircle, Sparkles, 
-  Target
+  Target, RotateCcw, Timer as TimerIcon
 } from 'lucide-react';
 
 interface TrackerProps {
   userState: UserState;
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
 }
+
+type TimerType = 'stopwatch' | 'pomodoro';
 
 const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [selectedSubjectName, setSelectedSubjectName] = useState<string>('');
@@ -20,15 +21,21 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [isRevision, setIsRevision] = useState(false);
   const [currentMood, setCurrentMood] = useState<Mood>('Focused');
   
+  // Pomodoro specific state
+  const [timerType, setTimerType] = useState<TimerType>('pomodoro');
+  const [pomodoroMode, setPomodoroMode] = useState<'focus' | 'break'>('focus');
+  const [pomodoroTimeLeft, setPomodoroTimeLeft] = useState(25 * 60);
+  
   const [now, setNow] = useState(Date.now());
+  const timer = userState.activeTimer;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 100);
+    const id = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(id);
   }, []);
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
-
-  const timer = userState.activeTimer;
 
   useEffect(() => {
     if (timer) {
@@ -41,7 +48,43 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       if (timer.chapterId) setSelectedChapterId(timer.chapterId);
       setIsRevision(timer.isRevision);
     }
-  }, [!!timer, timer?.subjectId]);
+  }, [!!timer, timer?.subjectId, userState.subjects]);
+
+  // Pomodoro Countdown Logic
+  useEffect(() => {
+    let interval: number;
+    if (timer?.isFocusActive && timerType === 'pomodoro') {
+      interval = window.setInterval(() => {
+        setPomodoroTimeLeft(prev => {
+          if (prev <= 1) {
+            handlePomodoroComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timer?.isFocusActive, timerType, pomodoroMode]);
+
+  const handlePomodoroComplete = () => {
+    // Play alert sound if possible
+    try {
+      const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      beep.play();
+    } catch (e) {}
+
+    if (pomodoroMode === 'focus') {
+      alert(t("ফোকাস সেশন শেষ! ৫ মিনিটের ব্রেক নাও।", "Focus session complete! Take a 5-minute break."));
+      setPomodoroMode('break');
+      setPomodoroTimeLeft(5 * 60);
+    } else {
+      alert(t("ব্রেক শেষ! আবার পড়ার সময়।", "Break over! Time to focus again."));
+      setPomodoroMode('focus');
+      setPomodoroTimeLeft(25 * 60);
+    }
+    handlePause(); // Pause to let user decide when to start break/focus
+  };
 
   const { displayFocusSeconds, displayBreakSeconds } = useMemo(() => {
     if (!timer) return { displayFocusSeconds: 0, displayBreakSeconds: 0 };
@@ -63,17 +106,13 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const chapters = useMemo(() => targetSubject?.chapters || [], [targetSubject]);
 
-  const availableTasks = useMemo(() => {
-    return userState.dailyTasks.filter((task: Task) => 
-      !task.isCompleted && (!targetSubject || task.subjectId === targetSubject.id)
-    );
-  }, [userState.dailyTasks, targetSubject]);
-
-  const formatDuration = (totalSeconds: number) => {
+  const formatTime = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
-    return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+    return h > 0 
+      ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+      : `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const handleStartResume = () => {
@@ -156,7 +195,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       durationSeconds: finalFocus,
       breakSeconds: finalBreak,
       numBreaks: timer.numBreaks,
-      // Fixed: focusLevel removed because it is not defined in type StudySession
       mood: currentMood,
       isRevision: timer.isRevision
     };
@@ -189,8 +227,8 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       };
     });
 
-    setSelectedChapterId('');
-    setActiveTaskId('');
+    setPomodoroTimeLeft(25 * 60);
+    setPomodoroMode('focus');
   };
 
   const moods: { label: Mood; icon: React.ReactNode; color: string }[] = [
@@ -202,14 +240,32 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 pb-16">
-      <header className="text-center space-y-2">
-        <h2 className="text-3xl font-black tracking-tight text-brand-text-p">{t('স্টাডি ফোকাস', 'Study Focus')}</h2>
-        <p className="text-brand-text-s text-[10px] font-black uppercase tracking-[0.2em] italic">{t('একাগ্রতার সাথে তোমার লক্ষ্য অর্জন করো', 'Focus Deeply on Your Goals')}</p>
+      <header className="flex flex-col items-center justify-center text-center space-y-4">
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-brand-text-p">{t('পড়া শুরু করো', 'Study Tracker')}</h2>
+          <p className="text-brand-text-s text-[10px] font-black uppercase tracking-[0.2em] italic">{t('একাগ্রতার সাথে তোমার লক্ষ্য অর্জন করো', 'Focus Deeply on Your Goals')}</p>
+        </div>
+
+        {/* Timer Type Toggle */}
+        <div className="flex bg-brand-surface p-1.5 rounded-2xl border border-brand-text-s/10">
+          <button 
+            onClick={() => { if(!timer) setTimerType('pomodoro'); }}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${timerType === 'pomodoro' ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s opacity-50'}`}
+          >
+            <TimerIcon size={14}/> Pomodoro
+          </button>
+          <button 
+            onClick={() => { if(!timer) setTimerType('stopwatch'); }}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${timerType === 'stopwatch' ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s opacity-50'}`}
+          >
+            <Clock size={14}/> Stopwatch
+          </button>
+        </div>
       </header>
 
       <div className="bg-brand-surface rounded-[3rem] p-8 sm:p-12 shadow-2xl border border-brand-text-s/10 relative overflow-hidden transition-all duration-500">
         <div className={`absolute top-0 left-0 h-1 bg-brand-primary transition-all duration-300`} 
-             style={{ width: timer ? `${(displayFocusSeconds % 60) * 1.66}%` : '0%' }} />
+             style={{ width: timer ? `${(timerType === 'pomodoro' ? (pomodoroTimeLeft / (pomodoroMode === 'focus' ? 1500 : 300)) * 100 : (displayFocusSeconds % 60) * 1.66)}%` : '0%' }} />
 
         <div className={`space-y-4 mb-10 transition-all duration-500 ${timer ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -257,28 +313,23 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 className="w-full bg-brand-bg border-2 border-transparent focus:border-brand-primary rounded-2xl px-5 py-3 text-xs font-bold outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="">{t('টাস্ক বেছে নাও', 'Choose Task')}</option>
-                {availableTasks.map((task: Task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+                {userState.dailyTasks.filter(t => !t.isCompleted).map((task: Task) => <option key={task.id} value={task.id}>{task.name}</option>)}
               </select>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between p-4 bg-brand-bg rounded-2xl border border-brand-text-s/5">
-             <div className="flex items-center gap-3">
-                <FocusIcon className={isRevision ? 'text-brand-secondary' : 'text-brand-primary'} size={18} />
-                <span className="text-[10px] font-black uppercase tracking-widest text-brand-text-p">{t('রিভিশন মোড', 'Revision Mode')}</span>
-             </div>
-             <button onClick={() => setIsRevision(!isRevision)} className={`w-12 h-6 rounded-full transition-all relative ${isRevision ? 'bg-brand-secondary' : 'bg-brand-text-s/30'}`}>
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isRevision ? 'left-7' : 'left-1'}`} />
-             </button>
           </div>
         </div>
 
         <div className="text-center py-6">
+          {timerType === 'pomodoro' && (
+             <p className="text-[10px] font-black uppercase text-brand-primary tracking-[0.3em] mb-4">
+               {pomodoroMode === 'focus' ? 'Focusing Deeply' : 'Rest and Recharge'}
+             </p>
+          )}
           <div 
             className={`font-black tracking-tighter tabular-nums leading-none select-none transition-all duration-700 drop-shadow-md ${timer?.isFocusActive === false ? 'text-brand-secondary scale-95 opacity-50' : 'text-brand-text-p'}`}
             style={{ fontSize: 'clamp(4rem, 20vw, 8rem)' }}
           >
-            {formatDuration(displayFocusSeconds)}
+            {timerType === 'pomodoro' ? formatTime(pomodoroTimeLeft) : formatTime(displayFocusSeconds)}
           </div>
           
           <div className="flex items-center justify-center gap-12 mt-10">
@@ -287,7 +338,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 <Target size={14} className={timer?.isFocusActive ? "animate-pulse" : ""} />
                 <span>Focus</span>
               </div>
-              <p className="text-xl font-black tabular-nums">{formatDuration(displayFocusSeconds)}</p>
+              <p className="text-xl font-black tabular-nums">{formatTime(displayFocusSeconds)}</p>
             </div>
             
             <div className="h-10 w-px bg-brand-text-s/10" />
@@ -297,7 +348,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
                 <Coffee size={14} className={timer && !timer.isFocusActive ? "animate-bounce" : ""} />
                 <span>Break</span>
               </div>
-              <p className="text-xl font-black tabular-nums">{formatDuration(displayBreakSeconds)}</p>
+              <p className="text-xl font-black tabular-nums">{formatTime(displayBreakSeconds)}</p>
             </div>
           </div>
         </div>
@@ -353,7 +404,6 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
              <p className="text-base font-black text-brand-text-p truncate">
                {selectedSubjectName} (P{selectedPaper})
                {selectedChapterId && ` • ${targetSubject?.chapters.find((c: Chapter) => c.id === selectedChapterId)?.name}`}
-               {timer.taskId && ` • ${userState.dailyTasks.find((t: Task) => t.id === timer.taskId)?.name}`}
              </p>
              <p className="text-[9px] font-bold text-brand-text-s uppercase mt-1">{t('শুরু:', 'Started:')} {new Date(timer.sessionStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
            </div>

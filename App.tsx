@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, withTimeout } from './lib/supabase';
 import { UserState, UserProfile } from './types';
 import { useLekhapora } from './contexts/LekhaporaContext';
 import { useAuth } from './contexts/AuthContext';
-// Import Loader2 from lucide-react to fix the reference error on line 134
+import { useSyncManager } from './hooks/useSyncManager';
 import { Loader2 } from 'lucide-react';
 
 // Components & UI
@@ -59,6 +58,9 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Initialize background sync
+  useSyncManager();
+
   const syncUserData = useCallback(async (userId: string) => {
     setSyncing(true);
     try {
@@ -68,6 +70,7 @@ const AppContent: React.FC = () => {
       );
 
       if (response.data?.state) {
+        // Deep merge or just overwrite with server state for consistency on login/refresh
         dispatch({ type: 'SET_INITIAL_STATE', payload: response.data.state });
       }
     } catch (e) { 
@@ -77,11 +80,12 @@ const AppContent: React.FC = () => {
     }
   }, [dispatch]);
 
+  // Initial data fetch on login/refresh
   useEffect(() => {
-    if (user && !syncing && !contextState.user.profile) {
+    if (user && !syncing && (!contextState.user.profile || contextState.user.id !== user.id)) {
       syncUserData(user.id);
     }
-  }, [user, syncing, contextState.user.profile, syncUserData]);
+  }, [user, syncing, contextState.user.id, contextState.user.profile, syncUserData]);
 
   const handleOnboardingComplete = async (profile: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profileData } = profile;
@@ -110,11 +114,11 @@ const AppContent: React.FC = () => {
       dispatch({ type: 'SET_INITIAL_STATE', payload: newState as any });
       navigate('/app/dashboard');
     } catch (e) {
-      alert("Error saving profile.");
+      alert("Error saving profile. Please try again.");
     }
   };
 
-  // Bridge for legacy components
+  // State bridge for older components
   const legacyUserState: UserState = {
     isAuthenticated: !!user,
     profile: contextState.user.profile,
@@ -122,7 +126,7 @@ const AppContent: React.FC = () => {
     testHistory: contextState.testHistory,
     subjects: contextState.subjects,
     dailyTasks: contextState.tasks,
-    streaks: 0,
+    streaks: contextState.lastSynced ? 1 : 0, // Mock streak calculation
     badges: [],
     currentMood: 'Great',
     language: contextState.settings.language,
@@ -131,11 +135,17 @@ const AppContent: React.FC = () => {
     notificationsEnabled: contextState.settings.notificationsEnabled
   };
 
+  const onUpdateLegacyState: any = (updater: any) => {
+    // Basic bridge to allow components to still function if they use the functional update pattern
+    // In a real migration, we would move all dispatches to the useLekhapora hook.
+    console.warn("Legacy State Updater called. Logic should move to Context.");
+  };
+
   if (authLoading && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg">
         <Loader2 className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Establishing Secure Socket...</p>
+        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Establishing Secure Session...</p>
       </div>
     );
   }
@@ -174,7 +184,7 @@ const AppContent: React.FC = () => {
           path="/admin/*" 
           element={
             <ProtectedAdminRoute>
-              <PanelLayout userState={legacyUserState} onUpdateState={() => {}}>
+              <PanelLayout userState={legacyUserState} onUpdateState={onUpdateLegacyState}>
                 <Suspense fallback={<PanelSkeleton />}>
                   <Routes>
                     <Route path="cms" element={<CMSDashboard />} />
@@ -192,19 +202,19 @@ const AppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               {!contextState.user.profile && !syncing ? <Navigate to="/onboarding" replace /> : (
-                <PanelLayout userState={legacyUserState} onUpdateState={() => {}}>
+                <PanelLayout userState={legacyUserState} onUpdateState={onUpdateLegacyState}>
                   <Suspense fallback={<PanelSkeleton />}>
                     <Routes>
                       <Route path="dashboard" element={<DashboardPanel />} />
-                      <Route path="syllabus" element={<SyllabusPanel userState={legacyUserState} onUpdateState={() => {}} />} />
-                      <Route path="tracker" element={<TrackerPanel userState={legacyUserState} onUpdateState={() => {}} />} />
-                      <Route path="exams" element={<ExamsPanel userState={legacyUserState} onUpdateState={() => {}} />} />
-                      <Route path="calendar" element={<CalendarPanel userState={legacyUserState} onUpdateState={() => {}} />} />
-                      <Route path="ai" element={<AIPanel userState={legacyUserState} onUpdateState={() => {}} />} />
+                      <Route path="syllabus" element={<SyllabusPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                      <Route path="tracker" element={<TrackerPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                      <Route path="exams" element={<ExamsPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                      <Route path="calendar" element={<CalendarPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                      <Route path="ai" element={<AIPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
                       <Route path="analytics" element={<AnalyticsPanel userState={legacyUserState} />} />
-                      <Route path="settings" element={<SettingsPanel userState={legacyUserState} onUpdateState={() => {}} onLogout={() => supabase.auth.signOut()} />} />
-                      <Route path="ocr" element={<OCRPanel userState={legacyUserState} onUpdateState={() => {}} />} />
-                      <Route path="system" element={<SystemPanel userState={legacyUserState} onUpdateState={() => {}} />} />
+                      <Route path="settings" element={<SettingsPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} onLogout={() => supabase.auth.signOut()} />} />
+                      <Route path="ocr" element={<OCRPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                      <Route path="system" element={<SystemPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
                       <Route index element={<Navigate to="dashboard" replace />} />
                     </Routes>
                   </Suspense>
@@ -214,7 +224,7 @@ const AppContent: React.FC = () => {
           }
         />
         
-        <Route path="*" element={<div className="p-20 text-center font-black">404 - PROTOCOL BREACH</div>} />
+        <Route path="*" element={<div className="p-20 text-center font-black">404 - RESOURCE NOT FOUND</div>} />
       </Routes>
       <PWAInstallPrompt />
     </>

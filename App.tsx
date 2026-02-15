@@ -152,10 +152,13 @@ const AppContent: React.FC = () => {
                 const finalSubjects: Subject[] = [];
                 selectedSubjectNames.forEach((name, idx) => {
                   [1, 2].forEach(paperNum => {
+                    // Added status and studyTimeSeconds to fix Chapter object creation
                     const chapters: Chapter[] = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
                       id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
                       name: ch,
-                      isCompleted: false
+                      isCompleted: false,
+                      status: 'not-started',
+                      studyTimeSeconds: 0
                     }));
                     finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
                   });

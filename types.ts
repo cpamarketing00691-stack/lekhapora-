@@ -1,4 +1,3 @@
-
 export enum Group { SCIENCE = 'Science', COMMERCE = 'Commerce', ARTS = 'Arts' }
 export enum Medium { BANGLA = 'Bangla', ENGLISH = 'English' }
 export enum Religion { ISLAM = 'Islam', HINDUISM = 'Hinduism', BUDDHISM = 'Buddhism', CHRISTIANITY = 'Christianity', OTHER = 'Other' }
@@ -7,7 +6,21 @@ export enum TaskSource { COLLEGE = 'College', COACHING = 'Coaching', BATCH = 'Ba
 export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
 export type Language = 'bn' | 'en';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
-export type UserRole = 'student' | 'admin';
+export type UserRole = 'student' | 'admin' | 'super_admin' | 'editor';
+
+export interface AdminPermissions {
+  can_publish: boolean;
+  can_delete: boolean;
+  can_manage_admins: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  user_id: string;
+  email: string;
+  role: UserRole;
+  permissions: AdminPermissions;
+}
 
 export interface PostBlock {
   id: string;
@@ -27,6 +40,10 @@ export interface Post {
   updatedAt: number;
 }
 
+/* 
+ * Core Application Interfaces 
+ */
+
 export interface CollegeExam {
   id: string;
   name: string;
@@ -41,18 +58,18 @@ export interface UserProfile {
   medium: Medium;
   targetYear: string;
   religion: Religion;
-  role: UserRole;
+  collegeExams: CollegeExam[];
   targetExamDate?: string;
-  collegeExams?: CollegeExam[];
+  role?: UserRole;
 }
 
 export interface Chapter {
   id: string;
   name: string;
   isCompleted: boolean;
-  status: 'not-started' | 'in-progress' | 'completed';
+  studyTimeSeconds?: number;
   testScore?: number;
-  studyTimeSeconds: number;
+  status?: 'not-started' | 'completed';
 }
 
 export interface Subject {
@@ -150,7 +167,7 @@ export interface LekhaporaState {
   studyHistory: StudySession[];
   testHistory: TestAttempt[];
   tasks: Task[];
-  cmsPosts: Post[]; // Added for Admin
+  cmsPosts: Post[];
   settings: {
     language: Language;
     focusGoalSeconds: number;

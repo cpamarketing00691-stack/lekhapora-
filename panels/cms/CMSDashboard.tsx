@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
 import { useLekhapora } from '../../contexts/LekhaporaContext';
+import { useAdminAuth } from '../../hooks/useAdminAuth';
 import { Post } from '../../types';
-import { LayoutGrid, FileText, Users, Activity, Plus, Search, ChevronRight, Edit3, Trash2, Globe, Lock } from 'lucide-react';
+import { LayoutGrid, FileText, Users, Activity, Plus, Search, ChevronRight, Edit3, Trash2, Globe, ShieldCheck } from 'lucide-react';
 import CMSPostEditor from '../../components/cms/CMSPostEditor';
 
 const CMSDashboard: React.FC = () => {
   const { state, dispatch } = useLekhapora();
+  const { admin, permissions } = useAdminAuth();
   const [editingPost, setEditingPost] = useState<Post | null | undefined>(undefined);
   const [search, setSearch] = useState('');
 
@@ -18,6 +20,10 @@ const CMSDashboard: React.FC = () => {
   };
 
   const deletePost = (id: string) => {
+    if (!permissions?.can_delete) {
+      alert("Unauthorized: You do not have deletion permissions.");
+      return;
+    }
     if (confirm("Permanently delete this article?")) {
       dispatch({ type: 'DELETE_POST', payload: id });
     }
@@ -31,6 +37,10 @@ const CMSDashboard: React.FC = () => {
     <div className="space-y-10 animate-in fade-in duration-700">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
+           <div className="flex items-center gap-2 mb-2">
+             <ShieldCheck size={16} className="text-emerald-500" />
+             <span className="text-[9px] font-black text-brand-text-s uppercase tracking-widest">Authenticated as {admin?.role}</span>
+           </div>
            <h2 className="text-4xl font-black tracking-tighter leading-none mb-2 uppercase italic">Admin <span className="text-brand-primary">Command.</span></h2>
            <p className="text-brand-text-s font-medium text-sm tracking-tight">Content Ecosystem Management & Analytics</p>
         </div>
@@ -47,8 +57,8 @@ const CMSDashboard: React.FC = () => {
          {[
            { label: 'Total Content', val: posts.length, icon: FileText, color: 'text-brand-primary' },
            { label: 'Published', val: posts.filter(p => p.isPublished).length, icon: Globe, color: 'text-emerald-500' },
-           { label: 'System Users', val: '12.4k', icon: Users, color: 'text-indigo-500' },
-           { label: 'Uptime', val: '99.9%', icon: Activity, color: 'text-orange-500' }
+           { label: 'Admin Access', val: admin?.role, icon: Users, color: 'text-indigo-500' },
+           { label: 'System Integrity', val: 'Verified', icon: Activity, color: 'text-orange-500' }
          ].map((s, i) => (
            <div key={i} className="bg-brand-surface p-6 rounded-[2.5rem] border border-brand-text-s/10 shadow-sm group hover:border-brand-primary transition-all">
               <div className="flex items-center justify-between mb-4">
@@ -58,12 +68,12 @@ const CMSDashboard: React.FC = () => {
                  <ChevronRight size={16} className="text-brand-text-s opacity-30 group-hover:translate-x-1 transition-transform" />
               </div>
               <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest mb-1">{s.label}</p>
-              <h4 className="text-2xl font-black text-brand-text-p">{s.val}</h4>
+              <h4 className="text-2xl font-black text-brand-text-p truncate">{s.val}</h4>
            </div>
          ))}
       </div>
 
-      {/* Content Management Table */}
+      {/* Content Library */}
       <section className="bg-brand-surface rounded-[3.5rem] p-8 border border-brand-text-s/10 shadow-sm space-y-8">
          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
             <h3 className="text-xl font-black flex items-center gap-3"><LayoutGrid className="text-brand-primary"/> Content Library</h3>
@@ -85,7 +95,7 @@ const CMSDashboard: React.FC = () => {
                      <th className="px-4 py-4">Title & Slug</th>
                      <th className="px-4 py-4">Category</th>
                      <th className="px-4 py-4">Status</th>
-                     <th className="px-4 py-4">Last Updated</th>
+                     <th className="px-4 py-4">Security</th>
                      <th className="px-4 py-4 text-right">Actions</th>
                   </tr>
                </thead>
@@ -106,7 +116,7 @@ const CMSDashboard: React.FC = () => {
                           </div>
                        </td>
                        <td className="px-4 py-5">
-                          <span className="text-[10px] font-bold text-brand-text-s">{new Date(post.updatedAt).toLocaleDateString()}</span>
+                          <ShieldCheck size={14} className="text-brand-text-s opacity-30" />
                        </td>
                        <td className="px-4 py-5 text-right space-x-2">
                           <button onClick={() => setEditingPost(post)} className="p-2.5 bg-brand-bg rounded-xl text-brand-text-s hover:text-brand-primary transition-all shadow-sm"><Edit3 size={14}/></button>
@@ -116,12 +126,6 @@ const CMSDashboard: React.FC = () => {
                   ))}
                </tbody>
             </table>
-            {posts.length === 0 && (
-              <div className="py-20 flex flex-col items-center justify-center opacity-30 text-center space-y-4">
-                 <Lock size={48} className="text-brand-primary" />
-                 <p className="text-xs font-black uppercase tracking-widest">Library is Empty. Secure Content Mode Active.</p>
-              </div>
-            )}
          </div>
       </section>
     </div>

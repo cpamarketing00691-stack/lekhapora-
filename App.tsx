@@ -9,10 +9,10 @@ import { LekhaporaProvider } from './contexts/LekhaporaContext';
 // Layouts
 import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
 import PanelLayout from './layouts/PanelLayout';
+import { ProtectedAdminRoute } from './components/ProtectedAdminRoute';
 
 // Optimized Panel Loading
 const AboutPanel = lazy(() => import('./panels/AboutPanel'));
-const AuthPanel = lazy(() => import('./panels/AuthPanel'));
 const DashboardPanel = lazy(() => import('./panels/DashboardPanel'));
 const SyllabusPanel = lazy(() => import('./panels/SyllabusPanel'));
 const TrackerPanel = lazy(() => import('./panels/TrackerPanel'));
@@ -24,6 +24,8 @@ const SettingsPanel = lazy(() => import('./panels/SettingsPanel'));
 const OCRPanel = lazy(() => import('./panels/OCRPanel'));
 const SystemPanel = lazy(() => import('./panels/SystemPanel'));
 const CMSDashboard = lazy(() => import('./panels/cms/CMSDashboard'));
+const AuthPanel = lazy(() => import('./panels/AuthPanel'));
+import { AdminLogin } from './components/AdminLogin';
 
 // Components
 import Onboarding from './components/Onboarding';
@@ -57,21 +59,11 @@ const PanelSkeleton = () => (
   </div>
 );
 
-const ProtectedRoute = ({ children, isAdminOnly = false, userState }: any) => {
-  if (!userState.isAuthenticated) return <Navigate to="/login" replace />;
-  if (isAdminOnly && userState.profile?.role !== 'admin') return <Navigate to="/app/dashboard" replace />;
-  return children;
-};
-
 const AppContent: React.FC = () => {
   const [userState, setUserState] = useState<UserState>(() => {
     const cached = localStorage.getItem(STATE_CACHE_KEY);
     if (cached) {
-      try {
-        return { ...JSON.parse(cached), isAuthenticated: false };
-      } catch (e) {
-        return DEFAULT_STATE;
-      }
+      try { return { ...JSON.parse(cached), isAuthenticated: false }; } catch (e) { return DEFAULT_STATE; }
     }
     return DEFAULT_STATE;
   });
@@ -82,12 +74,7 @@ const AppContent: React.FC = () => {
 
   const syncUserData = useCallback(async (userId: string) => {
     try {
-      const { data } = await supabase
-        .from('user_data')
-        .select('state')
-        .eq('user_id', userId)
-        .maybeSingle();
-      
+      const { data } = await supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
       if (data?.state) {
         const newState = { ...DEFAULT_STATE, ...data.state, isAuthenticated: true };
         setUserState(newState);
@@ -95,20 +82,14 @@ const AppContent: React.FC = () => {
       } else {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
-    } catch (e) {
-      console.error("Sync Error:", e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error("Sync Error:", e); } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     let authSubscription: any;
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) await syncUserData(session.user.id);
-      else setLoading(false);
-
+      if (session) await syncUserData(session.user.id); else setLoading(false);
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session) await syncUserData(session.user.id);
         else if (event === 'SIGNED_OUT') {
@@ -124,7 +105,7 @@ const AppContent: React.FC = () => {
     return () => authSubscription?.unsubscribe();
   }, [syncUserData, navigate]);
 
-  if (loading && !userState.profile) {
+  if (loading && !userState.profile && !location.pathname.startsWith('/admin')) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-brand-bg">
         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
@@ -134,6 +115,7 @@ const AppContent: React.FC = () => {
 
   return (
     <Routes>
+      {/* Public Branding Routes */}
       <Route element={<PublicLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={userState} /></Suspense>} />
         <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
@@ -141,42 +123,30 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
 
+      {/* Admin Protected Territory */}
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route 
-        path="/onboarding" 
+        path="/admin/*" 
         element={
-          userState.isAuthenticated && !userState.profile ? (
-            <Onboarding 
-              language={userState.language}
-              onComplete={(profile) => {
-                const { selectedSubjectNames, ...p } = profile;
-                const finalSubjects: Subject[] = [];
-                selectedSubjectNames.forEach((name, idx) => {
-                  [1, 2].forEach(paperNum => {
-                    const chapters: Chapter[] = (CHAPTER_LISTS[name] || ['Chapter 1']).map((ch, chIdx) => ({
-                      id: `ch-${idx}-${paperNum}-${chIdx}-${Date.now()}`,
-                      name: ch,
-                      isCompleted: false,
-                      status: 'not-started',
-                      studyTimeSeconds: 0
-                    }));
-                    finalSubjects.push({ id: `sub-${idx}-${paperNum}-${Date.now()}`, name, paper: paperNum as 1 | 2, chapters });
-                  });
-                });
-                const newState = { ...userState, profile: { ...p, role: 'student' as const }, subjects: finalSubjects };
-                setUserState(newState);
-                localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(newState));
-                navigate('/app/dashboard');
-              }} 
-            />
-          ) : <Navigate to="/app/dashboard" replace />
-        }
+          <ProtectedAdminRoute>
+            <PanelLayout userState={userState} onUpdateState={setUserState}>
+              <Suspense fallback={<PanelSkeleton />}>
+                <Routes>
+                  <Route path="cms" element={<CMSDashboard />} />
+                  <Route index element={<Navigate to="cms" replace />} />
+                </Routes>
+              </Suspense>
+            </PanelLayout>
+          </ProtectedAdminRoute>
+        } 
       />
 
+      {/* Student App Territory */}
       <Route 
         path="/app/*" 
         element={
-          <ProtectedRoute userState={userState}>
-            {!userState.profile ? <Navigate to="/onboarding" replace /> : (
+          userState.isAuthenticated ? (
+            !userState.profile ? <Navigate to="/onboarding" replace /> : (
               <PanelLayout userState={userState} onUpdateState={setUserState}>
                 <Suspense fallback={<PanelSkeleton />}>
                   <Routes>
@@ -190,13 +160,12 @@ const AppContent: React.FC = () => {
                     <Route path="settings" element={<SettingsPanel userState={userState} onUpdateState={setUserState} onLogout={() => supabase.auth.signOut()} />} />
                     <Route path="ocr" element={<OCRPanel userState={userState} onUpdateState={setUserState} />} />
                     <Route path="system" element={<SystemPanel userState={userState} onUpdateState={setUserState} />} />
-                    <Route path="cms" element={<ProtectedRoute userState={userState} isAdminOnly><CMSDashboard /></ProtectedRoute>} />
                     <Route index element={<Navigate to="dashboard" replace />} />
                   </Routes>
                 </Suspense>
               </PanelLayout>
-            )}
-          </ProtectedRoute>
+            )
+          ) : <Navigate to="/login" replace />
         }
       />
     </Routes>

@@ -87,7 +87,7 @@ const AppContent: React.FC = () => {
       }
     } catch (e) { 
       console.error("Sync Error:", e);
-      // If synced before, let user in offline mode
+      // Fallback for offline mode if profile exists
       if (userState.profile) {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
@@ -120,7 +120,7 @@ const AppContent: React.FC = () => {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Waking Up Systems...</p>
+        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Secure Handshake in progress...</p>
       </div>
     );
   }

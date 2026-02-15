@@ -73,7 +73,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         .limit(30);
 
       if (error || !data || data.length === 0) {
-        alert(t("প্রশ্ন পাওয়া যায়নি!", "No questions found."));
+        alert(t("প্রশ্ন পাওয়া যায়নি!", "No questions found for this topic."));
         return;
       }
 
@@ -81,17 +81,22 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         id: q.id,
         question: q.question_text,
         options: Array.isArray(q.options) ? q.options : JSON.parse(q.options),
-        correct_index: q.options.indexOf(q.correct_answer),
+        correct_index: Array.isArray(q.options) 
+          ? q.options.indexOf(q.correct_answer) 
+          : JSON.parse(q.options).indexOf(q.correct_answer),
         explanation: q.explanation
       }));
 
-      setCurrentQuestions(mapped);
-      setUserAnswers(new Array(mapped.length).fill(-1));
+      // Shuffle logic
+      const shuffled = [...mapped].sort(() => Math.random() - 0.5);
+
+      setCurrentQuestions(shuffled);
+      setUserAnswers(new Array(shuffled.length).fill(-1));
       setCurrentIndex(0);
       setTimeLeft(1800);
       setTestStatus('exam');
     } catch (err: any) {
-      alert("Error loading exam");
+      alert("Error loading exam library");
     } finally {
       setIsLoading(false);
     }
@@ -107,8 +112,8 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
 
     const attempt: TestAttempt = {
       id: `attempt-${Date.now()}`,
-      subjectId: selectedSubjectId,
-      chapterId: selectedChapterId,
+      subjectId: selectedSubjectId || 'PRACTICE',
+      chapterId: selectedChapterId || 'GENERAL',
       score,
       total: currentQuestions.length,
       timeTakenSeconds: 1800 - timeLeft,
@@ -153,7 +158,7 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
         <div className="space-y-8">
           <header>
             <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট লাইব্রেরি', 'Test Library')}</h2>
-            <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest mt-1">{t('প্রশ্ন ব্যাংক থেকে পরীক্ষা দিন', 'Practice from question bank')}</p>
+            <p className="text-brand-text-s text-xs font-bold uppercase tracking-widest mt-1">{t('প্রশ্ন ব্যাংক থেকে পরীক্ষা দিন', 'Practice with real board standard questions')}</p>
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -167,17 +172,22 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                 <button 
                   onClick={() => startExam(tst.subject, tst.chapter)}
                   disabled={isLoading}
-                  className="w-full py-4 bg-brand-primary text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-brand-primary text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-brand-primary/20"
                 >
                   {isLoading ? <Loader2 size={14} className="animate-spin"/> : <GraduationCap size={14}/>}
                   {t('শুরু করো', 'Start Test')}
                 </button>
               </div>
             ))}
-            {availableTests.length === 0 && (
+            {availableTests.length === 0 && !isLoading && (
               <div className="col-span-full py-20 text-center opacity-30">
                 <AlertCircle size={48} className="mx-auto mb-4"/>
-                <p className="font-black uppercase tracking-widest">{t('কোনো টেস্ট পাওয়া যায়নি', 'No tests available')}</p>
+                <p className="font-black uppercase tracking-widest">{t('কোনো টেস্ট পাওয়া যায়নি', 'No data in question bank')}</p>
+              </div>
+            )}
+            {isLoading && (
+              <div className="col-span-full py-20 text-center">
+                <Loader2 size={32} className="animate-spin mx-auto text-brand-primary" />
               </div>
             )}
           </div>
@@ -197,10 +207,10 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                 </div>
              </div>
              <div className="flex items-center gap-4">
-                <div className="px-4 py-2 bg-brand-bg rounded-xl border border-brand-text-s/10 font-black tabular-nums">
+                <div className={`px-4 py-2 bg-brand-bg rounded-xl border border-brand-text-s/10 font-black tabular-nums ${timeLeft < 120 ? 'text-rose-500 animate-pulse' : 'text-brand-text-p'}`}>
                   {formatTime(timeLeft)}
                 </div>
-                <button onClick={submitExam} className="px-6 py-2 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest">Finish</button>
+                <button onClick={() => confirm(t("শেষ করতে চাও?", "Submit exam now?")) && submitExam()} className="px-6 py-2 bg-emerald-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20">Finish</button>
              </div>
           </header>
           
@@ -219,13 +229,13 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
                 ))}
              </div>
              <div className="flex justify-between items-center pt-8 border-t border-brand-text-s/10">
-                <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)} className="p-4 bg-brand-bg rounded-2xl disabled:opacity-20"><ChevronLeft/></button>
-                <div className="flex gap-1">
+                <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)} className="p-4 bg-brand-bg rounded-2xl disabled:opacity-20 hover:bg-brand-surface transition-colors"><ChevronLeft/></button>
+                <div className="flex gap-1 overflow-x-auto max-w-[150px] scrollbar-hide">
                    {currentQuestions.map((_, i) => (
-                      <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-emerald-500' : 'bg-brand-text-s/20'}`}></div>
+                      <div key={i} className={`w-1.5 h-1.5 rounded-full shrink-0 transition-all ${i === currentIndex ? 'bg-brand-primary scale-150' : userAnswers[i] !== -1 ? 'bg-emerald-500' : 'bg-brand-text-s/20'}`}></div>
                    ))}
                 </div>
-                <button onClick={() => currentIndex < currentQuestions.length - 1 ? setCurrentIndex(currentIndex + 1) : submitExam()} className="p-4 bg-brand-primary text-white rounded-2xl"><ChevronRight/></button>
+                <button onClick={() => currentIndex < currentQuestions.length - 1 ? setCurrentIndex(currentIndex + 1) : submitExam()} className="p-4 bg-brand-primary text-white rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all"><ChevronRight/></button>
              </div>
           </main>
         </div>
@@ -237,18 +247,18 @@ const TestSection: React.FC<TestSectionProps> = ({ userState, onUpdateState, ini
               <div className="w-24 h-24 bg-emerald-500 text-white mx-auto rounded-full flex items-center justify-center shadow-xl mb-6">
                 <Trophy size={48} />
               </div>
-              <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট সম্পন্ন!', 'Test Finished!')}</h2>
+              <h2 className="text-3xl font-black text-brand-text-p">{t('টেস্ট সম্পন্ন!', 'Exam Completed!')}</h2>
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-brand-bg p-6 rounded-3xl">
-                    <p className="text-[10px] font-black uppercase text-brand-text-s mb-1">Score</p>
+                    <p className="text-[10px] font-black uppercase text-brand-text-s mb-1">Total Score</p>
                     <p className="text-3xl font-black text-brand-primary">{userAnswers.filter((a, i) => a === currentQuestions[i].correct_index).length} / {currentQuestions.length}</p>
                  </div>
                  <div className="bg-brand-bg p-6 rounded-3xl">
-                    <p className="text-[10px] font-black uppercase text-brand-text-s mb-1">Time</p>
+                    <p className="text-[10px] font-black uppercase text-brand-text-s mb-1">Time Spent</p>
                     <p className="text-3xl font-black text-brand-text-p">{formatTime(1800 - timeLeft)}</p>
                  </div>
               </div>
-              <button onClick={() => setTestStatus('selection')} className="w-full py-5 bg-brand-primary text-white rounded-2xl font-black uppercase tracking-widest text-xs">Back to Library</button>
+              <button onClick={() => setTestStatus('selection')} className="w-full py-5 bg-brand-primary text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-brand-primary/20">Back to Library</button>
            </div>
         </div>
       )}

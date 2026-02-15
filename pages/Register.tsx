@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Loader2, ArrowRight } from 'lucide-react';
@@ -29,7 +28,7 @@ const Register: React.FC = () => {
       });
       if (error) throw error;
       alert("Registration successful! Check your email to confirm your account.");
-      navigate('/loging');
+      navigate('/login');
     } catch (err: any) {
       setError(err.message || "Registration failed. Please check your information.");
     } finally {
@@ -100,12 +99,10 @@ const Register: React.FC = () => {
 
         <div className="mt-10 pt-10 border-t border-brand-text-s/10 text-center">
           <p className="text-xs font-bold text-brand-text-s">
-            Already registered? <Link to="/loging" className="text-brand-primary hover:underline font-black ml-1">Sign In</Link>
+            Already registered? <Link to="/login" className="text-brand-primary hover:underline font-black ml-1">Sign In</Link>
           </p>
         </div>
       </div>
     </div>
   );
 };
-
-export default Register;

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Target, Heart, GraduationCap, Sparkles, ArrowRight, Zap, BookOpen, Flame, CheckCircle2, TrendingUp, ShieldCheck } from 'lucide-react';
@@ -33,7 +32,7 @@ const About: React.FC = () => {
             <Link to="/register" className="px-12 py-6 bg-brand-primary text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-brand-primary/40 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all">
               Join 10,000+ Students <ArrowRight size={20} />
             </Link>
-            <Link to="/loging" className="px-12 py-6 bg-brand-surface text-brand-text-p border border-brand-text-s/10 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-brand-surface/80 hover:scale-105 active:scale-95 transition-all">
+            <Link to="/login" className="px-12 py-6 bg-brand-surface text-brand-text-p border border-brand-text-s/10 rounded-[2rem] font-black text-sm uppercase tracking-widest hover:bg-brand-surface/80 hover:scale-105 active:scale-95 transition-all">
               Login to Account
             </Link>
           </div>

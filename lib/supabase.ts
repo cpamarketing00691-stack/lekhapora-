@@ -28,10 +28,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 /**
  * CRITICAL: Timeout wrapper for all Supabase calls.
  * Prevents the app from staying in a loading state if a request hangs.
+ * Fix: Changed parameter type to PromiseLike to support Supabase's thenable builders.
  */
-export const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000): Promise<T> => {
+export const withTimeout = <T>(promise: PromiseLike<T>, timeoutMs: number = 8000): Promise<T> => {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
     )
@@ -43,7 +44,8 @@ export const withTimeout = <T>(promise: Promise<T>, timeoutMs: number = 8000): P
  */
 export const testConnection = async () => {
   try {
-    // Fix: Explicitly cast withTimeout result to any to fix error property access errors
+    // Fix: Explicitly cast withTimeout result to any to fix error property access errors.
+    // The signature change to PromiseLike in withTimeout resolves the assignment error.
     const { error }: any = await withTimeout(
       supabase.from('user_data').select('count').limit(1)
     );

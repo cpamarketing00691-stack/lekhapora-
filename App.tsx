@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { supabase, withTimeout, testConnection } from './lib/supabase';
+import { supabase, withTimeout } from './lib/supabase';
 import { UserState } from './types';
 import { LekhaporaProvider } from './contexts/LekhaporaContext';
 
@@ -24,6 +24,13 @@ const OCRPanel = lazy(() => import('./panels/OCRPanel'));
 const SystemPanel = lazy(() => import('./panels/SystemPanel'));
 const CMSDashboard = lazy(() => import('./panels/cms/CMSDashboard'));
 const AuthPanel = lazy(() => import('./panels/AuthPanel'));
+
+// Missing Public Panels
+const FAQPanel = lazy(() => import('./pages/FAQ'));
+const ContactPanel = lazy(() => import('./pages/Contact'));
+const PrivacyPanel = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsPanel = lazy(() => import('./pages/Terms'));
+
 import { AdminLogin } from './components/AdminLogin';
 
 const STATE_CACHE_KEY = 'lekhapora_user_state_v1';
@@ -71,7 +78,6 @@ const AppContent: React.FC = () => {
 
   const syncUserData = useCallback(async (userId: string) => {
     try {
-      // Use withTimeout to prevent hanging on fetch
       const response: any = await withTimeout(
         supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle(),
         6000
@@ -86,7 +92,6 @@ const AppContent: React.FC = () => {
       }
     } catch (e) { 
       console.error("Sync Error:", e);
-      // Fallback for offline mode if local profile exists
       if (userState.profile) {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
@@ -96,22 +101,15 @@ const AppContent: React.FC = () => {
   }, [userState.profile]);
 
   useEffect(() => {
-    console.log('Application Initializing...');
     let authSubscription: any;
     
-    // Safety "Dead Man's Switch": If initialization hasn't finished in 12s, force stop loading.
     const safetyTimer = setTimeout(() => {
-      if (loading) {
-        console.warn("Safety timeout triggered. Forcing loading screen termination.");
-        setLoading(false);
-      }
+      if (loading) setLoading(false);
     }, 12000);
 
     const init = async () => {
       try {
-        // Fix: Explicitly cast withTimeout result to any to fix data/error property access errors
         const { data: { session }, error }: any = await withTimeout(supabase.auth.getSession(), 5000);
-        
         if (error) throw error;
 
         if (session) {
@@ -132,7 +130,6 @@ const AppContent: React.FC = () => {
         });
         authSubscription = subscription;
       } catch (err: any) {
-        console.error("Init sequence failed:", err);
         setInitError(err.message);
         setLoading(false);
       } finally {
@@ -152,8 +149,7 @@ const AppContent: React.FC = () => {
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
         <div className="text-center space-y-2">
-          <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Secure Handshake in progress...</p>
-          {initError && <p className="text-[9px] text-rose-500 font-bold uppercase">Network delay detected. Retrying...</p>}
+          <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Secure Handshake...</p>
         </div>
       </div>
     );
@@ -164,6 +160,10 @@ const AppContent: React.FC = () => {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route element={<PublicLayout isAuthenticated={userState.isAuthenticated} />}>
         <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={userState} /></Suspense>} />
+        <Route path="/faq" element={<Suspense fallback={<PanelSkeleton />}><FAQPanel /></Suspense>} />
+        <Route path="/contact" element={<Suspense fallback={<PanelSkeleton />}><ContactPanel /></Suspense>} />
+        <Route path="/privacy-policy" element={<Suspense fallback={<PanelSkeleton />}><PrivacyPanel /></Suspense>} />
+        <Route path="/terms" element={<Suspense fallback={<PanelSkeleton />}><TermsPanel /></Suspense>} />
         <Route path="/login" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
         <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signup" /></Suspense>} />
         <Route path="/" element={<Navigate to="/about" replace />} />

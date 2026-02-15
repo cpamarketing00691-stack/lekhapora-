@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { UserProfile, Language, UserState } from '../types';
@@ -68,7 +67,7 @@ export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabCha
     { id: 'calendar', icon: <CalendarDays size={20} />, label: t('ক্যালেন্ডার', 'Calendar') },
     { id: 'tracker', icon: <Timer size={20} />, label: t('ফোকাস', 'Focus') },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus') },
-    { id: 'test', icon: <GraduationCap size={20} />, label: t('টেস্ট', 'Practice') },
+    { id: 'exams', icon: <GraduationCap size={20} />, label: t('টেস্ট', 'Practice') },
     { id: 'settings', icon: <Settings size={20} />, label: t('সেটিংস', 'Settings') },
   ];
 
@@ -93,7 +92,7 @@ export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabCha
       <CollapsibleSidebar 
         userProfile={userProfile}
         activeTab={activeTab}
-        onTabChange={(tabId) => navigate(`/${tabId}`)}
+        onTabChange={(tabId) => navigate(`/app/${tabId}`)}
         language={language}
         isDark={isDark}
         toggleTheme={toggleTheme}
@@ -120,7 +119,7 @@ export const Layout: React.FC<LayoutProps> = ({ userProfile, activeTab, onTabCha
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => navigate(`/${item.id}`)}
+              onClick={() => navigate(`/app/${item.id}`)}
               className={`flex flex-col items-center gap-1.5 p-1.5 transition-all active:scale-95 ${
                 activeTab === item.id ? 'text-brand-primary' : 'text-brand-text-s'
               }`}

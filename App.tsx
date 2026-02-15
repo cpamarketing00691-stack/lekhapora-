@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { supabase, testConnection } from './lib/supabase';
+import { supabase, withTimeout, testConnection } from './lib/supabase';
 import { UserState } from './types';
 import { LekhaporaProvider } from './contexts/LekhaporaContext';
 
@@ -65,21 +65,20 @@ const AppContent: React.FC = () => {
   });
 
   const [loading, setLoading] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   const syncUserData = useCallback(async (userId: string) => {
     try {
-      const connected = await testConnection();
-      if (!connected) throw new Error("Network issues detected");
+      // Use withTimeout to prevent hanging on fetch
+      const response: any = await withTimeout(
+        supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle(),
+        6000
+      );
 
-      const fetchPromise = supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle();
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Sync Timeout')), 6000));
-
-      const { data }: any = await Promise.race([fetchPromise, timeoutPromise]);
-
-      if (data?.state) {
-        const newState = { ...DEFAULT_STATE, ...data.state, isAuthenticated: true };
+      if (response.data?.state) {
+        const newState = { ...DEFAULT_STATE, ...response.data.state, isAuthenticated: true };
         setUserState(newState);
         localStorage.setItem(STATE_CACHE_KEY, JSON.stringify(newState));
       } else {
@@ -87,7 +86,7 @@ const AppContent: React.FC = () => {
       }
     } catch (e) { 
       console.error("Sync Error:", e);
-      // Fallback for offline mode if profile exists
+      // Fallback for offline mode if local profile exists
       if (userState.profile) {
         setUserState(prev => ({ ...prev, isAuthenticated: true }));
       }
@@ -97,30 +96,65 @@ const AppContent: React.FC = () => {
   }, [userState.profile]);
 
   useEffect(() => {
+    console.log('Application Initializing...');
     let authSubscription: any;
+    
+    // Safety "Dead Man's Switch": If initialization hasn't finished in 12s, force stop loading.
+    const safetyTimer = setTimeout(() => {
+      if (loading) {
+        console.warn("Safety timeout triggered. Forcing loading screen termination.");
+        setLoading(false);
+      }
+    }, 12000);
+
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) await syncUserData(session.user.id); else setLoading(false);
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session) await syncUserData(session.user.id);
-        else if (event === 'SIGNED_OUT') {
-          localStorage.removeItem(STATE_CACHE_KEY);
-          setUserState(DEFAULT_STATE);
-          if (location.pathname.startsWith('/app')) navigate('/about');
+      try {
+        // Fix: Explicitly cast withTimeout result to any to fix data/error property access errors
+        const { data: { session }, error }: any = await withTimeout(supabase.auth.getSession(), 5000);
+        
+        if (error) throw error;
+
+        if (session) {
+          await syncUserData(session.user.id);
+        } else {
           setLoading(false);
         }
-      });
-      authSubscription = subscription;
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session) {
+            await syncUserData(session.user.id);
+          } else if (event === 'SIGNED_OUT') {
+            localStorage.removeItem(STATE_CACHE_KEY);
+            setUserState(DEFAULT_STATE);
+            if (location.pathname.startsWith('/app')) navigate('/about');
+            setLoading(false);
+          }
+        });
+        authSubscription = subscription;
+      } catch (err: any) {
+        console.error("Init sequence failed:", err);
+        setInitError(err.message);
+        setLoading(false);
+      } finally {
+        clearTimeout(safetyTimer);
+      }
     };
+
     init();
-    return () => authSubscription?.unsubscribe();
-  }, [syncUserData, navigate]);
+    return () => {
+      clearTimeout(safetyTimer);
+      authSubscription?.unsubscribe();
+    };
+  }, [syncUserData, navigate, location.pathname]);
 
   if (loading && !userState.profile && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
         <div className="w-12 h-12 border-4 border-brand-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest">Secure Handshake in progress...</p>
+        <div className="text-center space-y-2">
+          <p className="text-[10px] font-black uppercase text-brand-text-s tracking-widest animate-pulse">Secure Handshake in progress...</p>
+          {initError && <p className="text-[9px] text-rose-500 font-bold uppercase">Network delay detected. Retrying...</p>}
+        </div>
       </div>
     );
   }

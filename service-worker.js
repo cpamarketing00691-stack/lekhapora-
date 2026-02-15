@@ -1,5 +1,4 @@
-
-const CACHE_NAME = 'lekhapora-v5-cache';
+const CACHE_NAME = 'lekhapora-v6-emergency';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -8,7 +7,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  self.skipWaiting(); // Force new SW to take control immediately
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
   );
@@ -17,6 +16,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
+      // Comprehensive cache purge to ensure no old broken state remains
       return Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
     }).then(() => self.clients.claim())
   );

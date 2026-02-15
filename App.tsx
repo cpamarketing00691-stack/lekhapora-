@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, withTimeout } from './lib/supabase';
-import { UserState } from './types';
+import { UserState, UserProfile } from './types';
 import { LekhaporaProvider } from './contexts/LekhaporaContext';
 
 // Layouts
@@ -9,6 +9,7 @@ import { MarketingLayout as PublicLayout } from './components/MarketingLayout';
 import PanelLayout from './layouts/PanelLayout';
 import { ProtectedAdminRoute } from './components/ProtectedAdminRoute';
 import { AuthCallback } from './components/AuthCallback';
+import Onboarding from './components/Onboarding';
 
 // Optimized Panel Loading
 const AboutPanel = lazy(() => import('./panels/AboutPanel'));
@@ -144,6 +145,40 @@ const AppContent: React.FC = () => {
     };
   }, [syncUserData, navigate, location.pathname]);
 
+  const handleOnboardingComplete = async (profile: UserProfile & { selectedSubjectNames: string[] }) => {
+    const { selectedSubjectNames, ...profileData } = profile;
+    
+    // Construct initial subjects based on selection
+    const initialSubjects = selectedSubjectNames.map((name, idx) => ({
+      id: `sub-${Date.now()}-${idx}`,
+      name,
+      paper: 1 as 1 | 2,
+      chapters: [] // To be populated via tracker or manual add
+    }));
+
+    const newState = { 
+      ...userState, 
+      profile: profileData, 
+      subjects: initialSubjects as any 
+    };
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('user_data').upsert({
+          user_id: user.id,
+          state: newState,
+          updated_at: new Date().toISOString()
+        });
+      }
+      setUserState(newState);
+      navigate('/app/dashboard');
+    } catch (e) {
+      console.error("Failed to save onboarding", e);
+      alert("Something went wrong while saving your profile. Please try again.");
+    }
+  };
+
   if (loading && !userState.profile && !location.pathname.startsWith('/admin') && location.pathname !== '/auth/callback') {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-brand-bg gap-4">
@@ -168,6 +203,15 @@ const AppContent: React.FC = () => {
         <Route path="/register" element={userState.isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signup" /></Suspense>} />
         <Route path="/" element={<Navigate to="/about" replace />} />
       </Route>
+
+      <Route 
+        path="/onboarding" 
+        element={
+          userState.isAuthenticated ? (
+            userState.profile ? <Navigate to="/app/dashboard" replace /> : <Onboarding onComplete={handleOnboardingComplete} language={userState.language} />
+          ) : <Navigate to="/login" replace />
+        } 
+      />
 
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route 

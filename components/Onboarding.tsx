@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import { Group, Religion, Medium, UserProfile, CollegeExam, Language } from '../types';
 import { BOARDS, YEARS, SUBJECT_OPTIONS, COMPULSORY_SUBJECTS_LIST } from '../constants';
-import { ChevronRight, ChevronLeft, BookOpen, CheckCircle2, Info, School, Plus, Trash2, Calendar } from 'lucide-react';
+import { ChevronRight, ChevronLeft, BookOpen, CheckCircle2, Info, School, Plus, Trash2, Calendar, Loader2 } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile & { selectedSubjectNames: string[] }) => void;
@@ -11,6 +10,7 @@ interface OnboardingProps {
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete, language }) => {
   const [step, setStep] = useState(1);
+  const [isFinishing, setIsFinishing] = useState(false);
   const [data, setData] = useState<Partial<UserProfile>>({
     fullName: '',
     college: '',
@@ -53,19 +53,24 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, language }) => {
     }));
   };
 
-  const finish = () => {
+  const finish = async () => {
     if (data.fullName && data.group && data.board && data.medium && data.targetYear && data.religion && data.college && selectedElectives.length === 3 && selectedFourth) {
-      const finalProfile: UserProfile = {
-        ...data as UserProfile
-      };
-      
-      const allSelectedSubjectNames = [
-        ...COMPULSORY_SUBJECTS_LIST,
-        ...selectedElectives,
-        selectedFourth
-      ];
+      setIsFinishing(true);
+      try {
+        const finalProfile: UserProfile = {
+          ...data as UserProfile
+        };
+        
+        const allSelectedSubjectNames = [
+          ...COMPULSORY_SUBJECTS_LIST,
+          ...selectedElectives,
+          selectedFourth
+        ];
 
-      onComplete({ ...finalProfile, selectedSubjectNames: allSelectedSubjectNames });
+        await onComplete({ ...finalProfile, selectedSubjectNames: allSelectedSubjectNames });
+      } finally {
+        setIsFinishing(false);
+      }
     } else {
       alert(t("দয়া করে সমস্ত প্রয়োজনীয় তথ্য পূরণ করুন।", "Please fill in all required information."));
     }
@@ -259,12 +264,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, language }) => {
 
         <div className="mt-6 flex gap-3">
           {step > 1 && (
-            <button onClick={back} className="flex-1 px-4 py-3.5 bg-brand-surface text-brand-text-p font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-brand-bg transition-all text-[10px] uppercase tracking-widest">
+            <button onClick={back} disabled={isFinishing} className="flex-1 px-4 py-3.5 bg-brand-surface text-brand-text-p font-black rounded-2xl flex items-center justify-center gap-2 hover:bg-brand-bg transition-all text-[10px] uppercase tracking-widest disabled:opacity-50">
               <ChevronLeft size={16} /> {t('পিছনে', 'Back')}
             </button>
           )}
-          <button onClick={step === 5 ? finish : next} disabled={!isStepValid} className={`flex-[2] px-4 py-3.5 font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all text-[10px] uppercase tracking-widest disabled:opacity-30 disabled:grayscale ${step >= 4 ? 'bg-brand-secondary text-white shadow-brand-secondary/20' : 'bg-brand-primary text-white shadow-brand-primary/20'}`}>
-            {step === 5 ? t('পড়া শুরু করি', 'Start Studying') : t('পরবর্তী ধাপ', 'Next Step')} <ChevronRight size={16} />
+          <button onClick={step === 5 ? finish : next} disabled={!isStepValid || isFinishing} className={`flex-[2] px-4 py-3.5 font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg transition-all text-[10px] uppercase tracking-widest disabled:opacity-30 disabled:grayscale ${step >= 4 ? 'bg-brand-secondary text-white shadow-brand-secondary/20' : 'bg-brand-primary text-white shadow-brand-primary/20'}`}>
+            {isFinishing ? <Loader2 className="animate-spin" size={16} /> : (step === 5 ? t('পড়া শুরু করি', 'Start Studying') : t('পরবর্তী ধাপ', 'Next Step'))}
+            {!isFinishing && <ChevronRight size={16} />}
           </button>
         </div>
       </div>

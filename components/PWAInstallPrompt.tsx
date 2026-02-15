@@ -2,33 +2,37 @@ import React, { useState, useEffect } from 'react';
 import { Download, X, Smartphone } from 'lucide-react';
 
 export const PWAInstallPrompt: React.FC = () => {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      // Show prompt after 5 seconds to not be intrusive
-      const timer = setTimeout(() => setShow(true), 5000);
-      return () => clearTimeout(timer);
+    // Check if prompt is already available on window (stashed by index.tsx)
+    const checkPrompt = () => {
+      if ((window as any).deferredPrompt) {
+        // Show prompt after a small delay if available
+        const timer = setTimeout(() => setShow(true), 5000);
+        return () => clearTimeout(timer);
+      }
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    checkPrompt();
+    window.addEventListener('pwa-install-ready', checkPrompt);
+    return () => window.removeEventListener('pwa-install-ready', checkPrompt);
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    const promptEvent = (window as any).deferredPrompt;
+    if (!promptEvent) return;
+
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    
     if (outcome === 'accepted') {
-      setDeferredPrompt(null);
+      (window as any).deferredPrompt = null;
       setShow(false);
     }
   };
 
-  if (!show || !deferredPrompt) return null;
+  if (!show) return null;
 
   return (
     <div className="fixed bottom-24 md:bottom-8 left-4 right-4 md:left-auto md:right-8 md:w-80 z-[100] animate-in slide-in-from-bottom duration-500">

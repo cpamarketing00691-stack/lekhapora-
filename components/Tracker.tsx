@@ -25,11 +25,12 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
   const [timerType, setTimerType] = useState<TimerType>('pomodoro');
   const [pomodoroMode, setPomodoroMode] = useState<'focus' | 'break'>('focus');
   const [pomodoroTimeLeft, setPomodoroTimeLeft] = useState(25 * 60);
+  const pomodoroTargetTimeRef = useRef<number | null>(null);
   
   const [now, setNow] = useState(Date.now());
   const timer = userState.activeTimer;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Sync visual clock
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 200);
     return () => clearInterval(id);
@@ -37,6 +38,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
 
+  // Sync UI with active timer state (on mount or when timer changes)
   useEffect(() => {
     if (timer) {
       const currentSubject = userState.subjects.find((s: Subject) => s.id === timer.subjectId);
@@ -50,25 +52,29 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     }
   }, [!!timer, timer?.subjectId, userState.subjects]);
 
-  // Pomodoro Countdown Logic
+  // Pomodoro Logic with Background Drift Protection
   useEffect(() => {
-    let interval: number;
     if (timer?.isFocusActive && timerType === 'pomodoro') {
-      interval = window.setInterval(() => {
-        setPomodoroTimeLeft(prev => {
-          if (prev <= 1) {
-            handlePomodoroComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
+      const initialSeconds = pomodoroTimeLeft;
+      const startTime = Date.now();
+      
+      const interval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const remaining = Math.max(0, initialSeconds - elapsed);
+        
+        setPomodoroTimeLeft(remaining);
+        
+        if (remaining <= 0) {
+          clearInterval(interval);
+          handlePomodoroComplete();
+        }
       }, 1000);
+      
+      return () => clearInterval(interval);
     }
-    return () => clearInterval(interval);
   }, [timer?.isFocusActive, timerType, pomodoroMode]);
 
   const handlePomodoroComplete = () => {
-    // Play alert sound if possible
     try {
       const beep = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       beep.play();
@@ -83,9 +89,10 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       setPomodoroMode('focus');
       setPomodoroTimeLeft(25 * 60);
     }
-    handlePause(); // Pause to let user decide when to start break/focus
+    handlePause();
   };
 
+  // Precise Session Calculation (for DB saving)
   const { displayFocusSeconds, displayBreakSeconds } = useMemo(() => {
     if (!timer) return { displayFocusSeconds: 0, displayBreakSeconds: 0 };
     const diffSecs = Math.max(0, Math.floor((now - timer.lastTimestamp) / 1000));
@@ -238,6 +245,9 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
     { label: 'Stressed', icon: <AlertCircle size={18} />, color: 'text-rose-500' },
   ];
 
+  const pomodoroTotal = pomodoroMode === 'focus' ? 25 * 60 : 5 * 60;
+  const pomodoroPercent = (pomodoroTimeLeft / pomodoroTotal) * 100;
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-4 duration-500 pb-16">
       <header className="flex flex-col items-center justify-center text-center space-y-4">
@@ -246,17 +256,18 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
           <p className="text-brand-text-s text-[10px] font-black uppercase tracking-[0.2em] italic">{t('একাগ্রতার সাথে তোমার লক্ষ্য অর্জন করো', 'Focus Deeply on Your Goals')}</p>
         </div>
 
-        {/* Timer Type Toggle */}
         <div className="flex bg-brand-surface p-1.5 rounded-2xl border border-brand-text-s/10">
           <button 
             onClick={() => { if(!timer) setTimerType('pomodoro'); }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${timerType === 'pomodoro' ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s opacity-50'}`}
+            disabled={!!timer}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${timerType === 'pomodoro' ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s opacity-50'} ${!!timer && 'cursor-not-allowed opacity-30'}`}
           >
             <TimerIcon size={14}/> Pomodoro
           </button>
           <button 
             onClick={() => { if(!timer) setTimerType('stopwatch'); }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${timerType === 'stopwatch' ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s opacity-50'}`}
+            disabled={!!timer}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${timerType === 'stopwatch' ? 'bg-brand-primary text-white shadow-lg' : 'text-brand-text-s opacity-50'} ${!!timer && 'cursor-not-allowed opacity-30'}`}
           >
             <Clock size={14}/> Stopwatch
           </button>
@@ -264,9 +275,11 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
       </header>
 
       <div className="bg-brand-surface rounded-[3rem] p-8 sm:p-12 shadow-2xl border border-brand-text-s/10 relative overflow-hidden transition-all duration-500">
+        {/* Visual Progress Bar */}
         <div className={`absolute top-0 left-0 h-1 bg-brand-primary transition-all duration-300`} 
-             style={{ width: timer ? `${(timerType === 'pomodoro' ? (pomodoroTimeLeft / (pomodoroMode === 'focus' ? 1500 : 300)) * 100 : (displayFocusSeconds % 60) * 1.66)}%` : '0%' }} />
+             style={{ width: timer ? `${timerType === 'pomodoro' ? (100 - pomodoroPercent) : (displayFocusSeconds % 60) * 1.66}%` : '0%' }} />
 
+        {/* Options Section - Locked during session */}
         <div className={`space-y-4 mb-10 transition-all duration-500 ${timer ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -321,7 +334,7 @@ const Tracker: React.FC<TrackerProps> = ({ userState, onUpdateState }) => {
 
         <div className="text-center py-6">
           {timerType === 'pomodoro' && (
-             <p className="text-[10px] font-black uppercase text-brand-primary tracking-[0.3em] mb-4">
+             <p className={`text-[10px] font-black uppercase tracking-[0.3em] mb-4 ${pomodoroMode === 'focus' ? 'text-brand-primary' : 'text-brand-secondary'}`}>
                {pomodoroMode === 'focus' ? 'Focusing Deeply' : 'Rest and Recharge'}
              </p>
           )}

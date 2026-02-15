@@ -15,6 +15,16 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('UNHANDLED PROMISE REJECTION:', event.reason);
 });
 
+// Capture PWA Install Prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent Chrome 67 and earlier from automatically showing the prompt
+  e.preventDefault();
+  // Stash the event so it can be triggered later.
+  (window as any).deferredPrompt = e;
+  // Notify components that the app is installable
+  window.dispatchEvent(new CustomEvent('pwa-install-ready'));
+});
+
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

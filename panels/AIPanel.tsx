@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { UserState } from '../types';
 import { 
@@ -117,7 +116,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
               </h3>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span className="text-[10px] font-bold text-brand-text-s uppercase tracking-widest opacity-60">Gemini Engine Active</span>
+                <span className="text-[10px] font-bold text-brand-text-s uppercase tracking-widest opacity-60">DeepSeek Engine</span>
               </div>
            </div>
         </div>

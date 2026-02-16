@@ -44,28 +44,38 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
 
     setInput('');
     setError(null);
-    setMessages(prev => [...prev, { role: 'user', text: textToSend }]);
+    const newMessages: Message[] = [...messages, { role: 'user', text: textToSend }];
+    setMessages(newMessages);
     setIsLoading(true);
 
     try {
       const response = await fetch('/api/ai', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           message: textToSend,
-          history: messages,
-          userId: userState.profile?.fullName || 'anonymous'
+          history: messages // Pass existing history for context
         })
       });
+
+      // Handle non-JSON responses (MIME type errors)
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("API configuration error. The server returned an invalid format.");
+      }
 
       const data = await response.json();
       
       if (!response.ok || !data.success) {
-        throw new Error(data.response || "Connection failed");
+        throw new Error(data.response || "Connection failed to AI server.");
       }
 
       setMessages(prev => [...prev, { role: 'model', text: data.response }]);
     } catch (err: any) {
+      console.error("AI Panel Error:", err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -91,7 +101,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
               <h3 className="font-black text-brand-text-p uppercase tracking-widest text-sm">{t('এআই স্টাডি অ্যাসিস্ট্যান্ট', 'AI Study Assistant')}</h3>
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span className="text-[9px] font-black text-brand-text-s uppercase tracking-widest opacity-60">Powered by DeepSeek-V3</span>
+                <span className="text-[9px] font-black text-brand-text-s uppercase tracking-widest opacity-60">Powered by DeepSeek</span>
               </div>
            </div>
         </div>

@@ -32,8 +32,8 @@
   ],
   "shortcuts": [
     {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
+      "name": "Login",
+      "short_name": "Login",
       "url": "/app/dashboard",
       "icons": [{ "src": "/app-icon.png", "sizes": "192x192" }]
     },

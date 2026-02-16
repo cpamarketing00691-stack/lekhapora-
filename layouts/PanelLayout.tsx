@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { 
@@ -39,7 +38,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
   const isAdmin = userState.profile?.role === 'admin';
 
   const navItems = [
-    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('ড্যাশবোর্ড', 'Dashboard'), path: '/app/dashboard' },
+    { id: 'dashboard', icon: <LayoutDashboard size={20} />, label: t('লগইন', 'Login'), path: '/app/dashboard' },
     { id: 'syllabus', icon: <BookOpen size={20} />, label: t('সিলেবাস', 'Syllabus'), path: '/app/syllabus' },
     { id: 'tracker', icon: <Timer size={20} />, label: t('ফোকাস ট্র্যাকার', 'Focus Tracker'), path: '/app/tracker' },
     { id: 'exams', icon: <GraduationCap size={20} />, label: t('টেস্ট ও এক্সাম', 'Exams & Tests'), path: '/app/exams' },

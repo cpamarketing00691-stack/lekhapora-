@@ -44,6 +44,7 @@ html, body {
   -webkit-overflow-scrolling: touch;
   /* Prevent pull-to-refresh on mobile browsers */
   overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
 }
 
 #root { 
@@ -80,7 +81,7 @@ main {
   main { padding-bottom: 2rem !important; } 
 }
 
-/* Smooth Scrolling */
+/* Smooth Scrolling Class */
 .scroll-smooth {
   scroll-behavior: smooth;
 }

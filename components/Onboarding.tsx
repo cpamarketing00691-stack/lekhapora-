@@ -116,7 +116,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, language }) => {
             ))}
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-brand-text-p leading-none">
-            {step === 5 ? t('কলেজ পরীক্ষা (ঐচ্ছিক)', 'College Exams (Optional)') : step === 4 ? t('বিষয় নির্বাচন (Flexible)', 'Subject Selection (Flexible)') : t(`ধাপ ${step}: প্রোফাইল তৈরি`, `Step ${step}: Profile Setup`)}
+            {t('লগইন', 'Login')}
           </h2>
           <p className="text-brand-text-s text-[10px] sm:text-xs mt-2 font-bold uppercase tracking-widest leading-tight">
             {step === 5 ? t('তোমার কলেজের আসন্ন পরীক্ষার তারিখগুলো যোগ করো', 'Add your upcoming college exam dates.') : step === 4 ? t('কলেজ অনুযায়ী তোমার বিষয়গুলো বেছে নাও', 'Select your subjects according to your college curriculum.') : t('এআই তোমার জন্য সঠিক প্ল্যান তৈরি করতে এই তথ্যগুলো প্রয়োজন', 'AI needs this information to create your personalized study plan.')}

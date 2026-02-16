@@ -1,4 +1,3 @@
-
 import React, { useState, memo } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Menu, X, ArrowRight, User, GraduationCap, ShieldCheck, HelpCircle, Mail } from 'lucide-react';
@@ -13,8 +12,8 @@ export const MarketingLayout: React.FC<Props> = memo(({ isAuthenticated }) => {
   const location = useLocation();
 
   const navLinks = [
-    { name: 'Philosophy', path: '/about', icon: <GraduationCap size={14}/> },
-    { name: 'Support', path: '/faq', icon: <HelpCircle size={14}/> },
+    { name: 'About', path: '/about', icon: <GraduationCap size={14}/> },
+    { name: 'FAQ', path: '/faq', icon: <HelpCircle size={14}/> },
     { name: 'Contact', path: '/contact', icon: <Mail size={14}/> },
   ];
 
@@ -45,7 +44,7 @@ export const MarketingLayout: React.FC<Props> = memo(({ isAuthenticated }) => {
               to={isAuthenticated ? "/app/dashboard" : "/login"} 
               className="px-8 py-3 bg-brand-primary text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
             >
-              {isAuthenticated ? <><User size={14}/> Dashboard</> : <>Gateway <ArrowRight size={14}/></>}
+              <User size={14}/> Login
             </Link>
           </div>
 
@@ -72,7 +71,7 @@ export const MarketingLayout: React.FC<Props> = memo(({ isAuthenticated }) => {
               onClick={() => setIsOpen(false)} 
               className="block w-full py-5 bg-brand-primary text-white text-center rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-brand-primary/30"
             >
-              {isAuthenticated ? 'Enter Workspace' : 'Get Started'}
+              Login
             </Link>
           </div>
         )}
@@ -99,10 +98,10 @@ export const MarketingLayout: React.FC<Props> = memo(({ isAuthenticated }) => {
           <div className="md:col-span-3 space-y-6">
             <h4 className="font-black text-brand-text-p uppercase tracking-[0.3em] text-[10px] mb-8">Navigation</h4>
             <ul className="space-y-4 text-xs font-black uppercase tracking-widest text-brand-text-s">
-              <li><Link to="/about" className="hover:text-brand-primary transition-colors">Philosophy</Link></li>
-              <li><Link to="/faq" className="hover:text-brand-primary transition-colors">Support (FAQ)</Link></li>
-              <li><Link to="/contact" className="hover:text-brand-primary transition-colors">Contact Developer</Link></li>
-              <li><Link to="/login" className="hover:text-brand-primary transition-colors">Scholar Gateway</Link></li>
+              <li><Link to="/about" className="hover:text-brand-primary transition-colors">About</Link></li>
+              <li><Link to="/faq" className="hover:text-brand-primary transition-colors">FAQ</Link></li>
+              <li><Link to="/contact" className="hover:text-brand-primary transition-colors">Contact</Link></li>
+              <li><Link to="/login" className="hover:text-brand-primary transition-colors">Login</Link></li>
             </ul>
           </div>
           <div className="md:col-span-3 space-y-6">

@@ -15,7 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
-  const API_KEY = process.env.DEEPSEEK_API_KEY;
+  // Use Environment Variable or Fallback to provided key (Server-Side Only)
+  const API_KEY = process.env.DEEPSEEK_API_KEY || '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';
 
   if (!API_KEY) {
     console.error('❌ DEEPSEEK_API_KEY not found');

@@ -158,7 +158,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
                     <h3 className="text-xs font-black uppercase tracking-widest text-brand-text-p">Notifications</h3>
                     <span className="text-[10px] font-bold bg-brand-primary/10 text-brand-primary px-2 py-0.5 rounded-lg">{unreadCount} New</span>
                   </div>
-                  <div className="max-h-80 overflow-y-auto">
+                  <div className="max-h-80 overflow-y-auto scroll-smooth scrollbar-hide">
                     {contextState.announcements.length === 0 ? (
                       <div className="p-8 text-center text-brand-text-s opacity-50">
                         <Bell size={24} className="mx-auto mb-2" />
@@ -183,7 +183,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="flex-1 overflow-y-auto scrollbar-hide scroll-smooth">
           <div className="max-w-7xl mx-auto p-4 md:p-10 pb-32 md:pb-12">
             {children}
           </div>

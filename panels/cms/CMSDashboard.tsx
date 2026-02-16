@@ -66,8 +66,15 @@ const CMSDashboard: React.FC = () => {
         alert("Broadcast Published to all users.");
         setBroadcast({ title: '', message: '', type: 'info' });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Broadcast failed", e);
+      if (manual) {
+        if (e.message?.includes('404') || e.code === '42P01') {
+          alert("Error: 'announcements' table missing. Run SQL migration in Supabase.");
+        } else {
+          alert("Failed to send broadcast: " + e.message);
+        }
+      }
     }
   };
 

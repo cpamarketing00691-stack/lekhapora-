@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, withTimeout } from './lib/supabase';
-import { UserState, UserProfile } from './types';
+import { UserState, UserProfile, Announcement } from './types';
 import { useLekhapora } from './contexts/LekhaporaContext';
 import { useAuth } from './contexts/AuthContext';
 import { useSyncManager } from './hooks/useSyncManager';
@@ -61,6 +61,35 @@ const AppContent: React.FC = () => {
 
   // Initialize background sync (handles debounced updates)
   useSyncManager();
+
+  // Fetch Announcements
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      const { data } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (data) {
+        dispatch({ type: 'SET_ANNOUNCEMENTS', payload: data as Announcement[] });
+      }
+    };
+
+    fetchAnnouncements();
+
+    // Subscribe to new announcements
+    const channel = supabase
+      .channel('public:announcements')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'announcements' }, (payload) => {
+        fetchAnnouncements(); // Refresh list on new item
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dispatch]);
 
   const syncUserData = useCallback(async (userId: string) => {
     if (syncing || syncAttemptedFor.current === userId) return;

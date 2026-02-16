@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, BookOpen, Timer, GraduationCap, 
   CalendarDays, MessageSquare, BarChart3, Settings, 
-  Cpu, Camera, LogOut, Sun, Moon, Bell, Menu, X, ChevronLeft, ChevronRight, Lock
+  Cpu, Camera, LogOut, Sun, Moon, Bell, Menu, X, ChevronLeft, ChevronRight, Lock, Megaphone
 } from 'lucide-react';
 import { UserState } from '../types';
 import BackgroundGrid from '../components/BackgroundGrid';
 import { supabase } from '../lib/supabase';
+import { useLekhapora } from '../contexts/LekhaporaContext';
 
 interface PanelLayoutProps {
   userState: UserState;
@@ -16,9 +17,13 @@ interface PanelLayoutProps {
 }
 
 const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, children }) => {
+  const { state: contextState, dispatch } = useLekhapora();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -34,6 +39,16 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
       localStorage.setItem('theme', 'light');
     }
   }, [isDark]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const isAdmin = userState.profile?.role === 'admin';
 
@@ -52,6 +67,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
   ];
 
   const currentPanelId = location.pathname.split('/').pop() || 'dashboard';
+  const unreadCount = contextState.announcements.length;
 
   return (
     <div className="h-screen w-full flex bg-brand-bg text-brand-text-p overflow-hidden relative selection:bg-brand-primary/20">
@@ -123,10 +139,47 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
               <span className="text-[10px] font-black text-brand-text-s uppercase tracking-widest">{t('লাইভ সিঙ্ক', 'Synced')}</span>
             </div>
-            <button className="p-2.5 text-brand-text-s hover:text-brand-primary transition-all relative">
-               <Bell size={20} />
-               <span className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full border-2 border-brand-bg"></span>
-            </button>
+            
+            <div className="relative" ref={notificationRef}>
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="p-2.5 text-brand-text-s hover:text-brand-primary transition-all relative rounded-xl hover:bg-brand-surface"
+              >
+                 <Bell size={20} />
+                 {unreadCount > 0 && (
+                   <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-brand-bg animate-pulse"></span>
+                 )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute top-12 right-0 w-80 bg-brand-surface border border-brand-text-s/10 rounded-[2rem] shadow-2xl z-[60] overflow-hidden animate-in slide-in-from-top-2 zoom-in-95 origin-top-right">
+                  <div className="p-4 border-b border-brand-text-s/5 bg-brand-bg/50 flex justify-between items-center">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-brand-text-p">Notifications</h3>
+                    <span className="text-[10px] font-bold bg-brand-primary/10 text-brand-primary px-2 py-0.5 rounded-lg">{unreadCount} New</span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {contextState.announcements.length === 0 ? (
+                      <div className="p-8 text-center text-brand-text-s opacity-50">
+                        <Bell size={24} className="mx-auto mb-2" />
+                        <p className="text-[10px] font-bold uppercase">No notifications</p>
+                      </div>
+                    ) : (
+                      contextState.announcements.map((ann, i) => (
+                        <div key={ann.id || i} className="p-4 border-b border-brand-text-s/5 hover:bg-brand-bg/50 transition-colors flex gap-3">
+                           <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${ann.type === 'warning' ? 'bg-orange-500' : ann.type === 'success' ? 'bg-emerald-500' : 'bg-brand-primary'}`} />
+                           <div>
+                             <h4 className="text-xs font-black text-brand-text-p mb-1">{ann.title}</h4>
+                             <p className="text-[10px] font-medium text-brand-text-s leading-relaxed">{ann.message}</p>
+                             <p className="text-[8px] font-bold text-brand-text-s/50 uppercase mt-2">Just Now</p>
+                           </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

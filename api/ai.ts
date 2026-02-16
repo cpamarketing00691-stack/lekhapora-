@@ -15,11 +15,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
-  // Use Environment Variable or Fallback to provided key (Server-Side Only)
+  // 1. SECURE KEY RETRIEVAL
+  // We check process.env first. If not found (local dev), we use the provided OpenRouter key.
   const API_KEY = process.env.DEEPSEEK_API_KEY || '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';
 
   if (!API_KEY) {
-    console.error('❌ DEEPSEEK_API_KEY not found');
+    console.error('❌ API_KEY not found');
     return res.status(500).json({ 
       error: 'AI service not configured',
       success: false,
@@ -34,6 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
+    // 2. CONTEXT & SYSTEM PROMPT
     const systemPrompt = `You are "Lekhapora AI", an expert study companion for Bangladesh HSC (Higher Secondary Certificate) students.
     
     IDENTITY & TONE:
@@ -58,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     - If asked about non-academic topics, politely redirect to studies.
     - Maximum 3 paragraphs per response unless explaining a derivation.`;
 
-    // Map history to DeepSeek format (user/assistant)
+    // 3. MESSAGE FORMATTING
     const messages = [
       { role: "system", content: systemPrompt },
       ...history.map((msg: any) => ({
@@ -68,22 +70,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { role: "user", content: message }
     ];
 
-    const deepSeekResponse = await fetch('https://api.deepseek.com/chat/completions', {
+    // 4. PROVIDER DETECTION (OpenRouter vs DeepSeek Direct)
+    const isOpenRouter = API_KEY.startsWith('sk-or-v1-');
+    
+    const apiUrl = isOpenRouter 
+      ? 'https://openrouter.ai/api/v1/chat/completions' 
+      : 'https://api.deepseek.com/chat/completions';
+    
+    // OpenRouter uses 'deepseek/deepseek-chat', Direct uses 'deepseek-chat'
+    const modelId = isOpenRouter ? 'deepseek/deepseek-chat' : 'deepseek-chat';
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`
+    };
+
+    // OpenRouter Specific Headers for Rankings/Analytics
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = 'https://lekhapora.app';
+      headers['X-Title'] = 'Lekhapora';
+    }
+
+    // 5. API CALL
+    const aiResponse = await fetch(apiUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
-      },
+      headers: headers,
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: modelId,
         messages: messages,
         temperature: 1.0,
         stream: false
       })
     });
 
-    if (!deepSeekResponse.ok) {
-      const errorText = await deepSeekResponse.text();
+    if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
       let errorJson;
       try {
         errorJson = JSON.parse(errorText);
@@ -91,22 +112,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         errorJson = { error: { message: errorText } };
       }
       
-      console.error('DeepSeek API Error:', deepSeekResponse.status, errorText);
+      console.error('AI Provider Error:', aiResponse.status, errorText);
 
-      if (deepSeekResponse.status === 401) {
-        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid API Key.', reply: 'এআই অথেন্টিকেশন সমস্যা হয়েছে।' });
+      if (aiResponse.status === 401) {
+        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid API Key.', reply: 'এআই অথেন্টিকেশন সমস্যা হয়েছে (Invalid Key)।' });
       }
-      if (deepSeekResponse.status === 429) {
+      if (aiResponse.status === 429) {
         return res.status(429).json({ success: false, error: 'Rate limit exceeded.', reply: 'আমি এখন একটু ব্যস্ত, কিছুক্ষণ পর আবার চেষ্টা করো।' });
       }
-      if (deepSeekResponse.status >= 500) {
-        return res.status(502).json({ success: false, error: 'DeepSeek Server Error.', reply: 'সার্ভারে সমস্যা হচ্ছে, পরে চেষ্টা করো।' });
+      if (aiResponse.status >= 500) {
+        return res.status(502).json({ success: false, error: 'AI Server Error.', reply: 'সার্ভারে সমস্যা হচ্ছে, পরে চেষ্টা করো।' });
       }
       
-      throw new Error(`DeepSeek API Error: ${errorJson?.error?.message || deepSeekResponse.statusText}`);
+      throw new Error(`AI API Error: ${errorJson?.error?.message || aiResponse.statusText}`);
     }
 
-    const data = await deepSeekResponse.json();
+    const data = await aiResponse.json();
     const aiReply = data.choices?.[0]?.message?.content || "";
 
     if (!aiReply) {

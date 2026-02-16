@@ -1,58 +1,38 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 1. Set CORS headers for security and browser compatibility
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle CORS Preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Only allow POST requests for security
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) {
-    console.error("CRITICAL: DEEPSEEK_API_KEY is missing in Vercel environment.");
-    return res.status(500).json({ 
-      response: "AI system is unconfigured. Please add DEEPSEEK_API_KEY in Vercel dashboard.", 
-      success: false 
-    });
+    return res.status(500).json({ response: "AI configuration missing.", success: false });
   }
 
   try {
     const { message, history } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
+    const systemPrompt = `You are "Lekhapora AI", a helpful study assistant for HSC (Higher Secondary Certificate) students in Bangladesh. 
+    - Help with Physics, Chemistry, Biology, Higher Math, ICT and other NCTB subjects.
+    - Provide clear, concise, educational responses.
+    - Use simple language and explain concepts step-by-step.
+    - Support both English and Bengali (Bangla).`;
 
-    const systemPrompt = `You are "Lekhapora AI", an elite study assistant for HSC (Higher Secondary Certificate) students in Bangladesh. 
-    - Help with Physics, Chemistry, Biology, Higher Math, and ICT strictly following the NCTB curriculum.
-    - Provide clear, step-by-step explanations for complex formulas or concepts.
-    - Use a friendly, encouraging tone.
-    - Support both English and Bengali. If the user asks in Bengali, reply in Bengali.
-    - Keep responses concise but comprehensive.`;
-
-    // Map legacy history format to DeepSeek format
     const messages = [
       { role: "system", content: systemPrompt },
       ...(history || []).map((msg: any) => ({
-        role: (msg.role === 'model' || msg.role === 'assistant') ? 'assistant' : 'user',
+        role: msg.role === 'model' ? 'assistant' : 'user',
         content: msg.text || msg.content
       })),
       { role: "user", content: message }
     ];
 
-    console.log("📨 Dispatching request to DeepSeek API...");
-
-    const deepseekResponse = await fetch("https://api.deepseek.com/chat/completions", {
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -66,40 +46,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     });
 
-    if (!deepseekResponse.ok) {
-      const errorText = await deepseekResponse.text();
-      console.error(`❌ DeepSeek API Error (${deepseekResponse.status}):`, errorText);
-      
-      if (deepseekResponse.status === 401) throw new Error("Invalid API key configured.");
-      if (deepseekResponse.status === 429) throw new Error("Rate limit exceeded. Please wait.");
-      throw new Error("DeepSeek upstream service error.");
+    if (!response.ok) {
+      const errorData = await response.json();
+      const status = response.status;
+      let msg = "AI Error";
+      if (status === 401) msg = "Invalid API Key";
+      if (status === 429) msg = "Rate limit exceeded";
+      throw new Error(msg);
     }
 
-    const data = await deepseekResponse.json();
-    const aiResponse = data.choices[0].message.content;
-
-    console.log("✅ AI Response successful. Token usage:", data.usage);
-
+    const data = await response.json();
     return res.status(200).json({ 
-      response: aiResponse, 
-      success: true 
+      response: data.choices[0].message.content, 
+      success: true,
+      usage: data.usage 
     });
 
   } catch (error: any) {
-    console.error("DeepSeek Integration Handler Failed:", error.message);
-    
-    let friendlyMessage = "দুঃখিত দোস্ত, সার্ভারে সমস্যা হচ্ছে। একটু পর চেষ্টা করো।";
-    let statusCode = 500;
-
-    if (error.message.includes("Rate limit")) {
-      statusCode = 429;
-      friendlyMessage = "অতিরিক্ত রিকোয়েস্ট পাঠানো হয়েছে। দয়া করে কিছুক্ষণ অপেক্ষা করো।";
-    }
-
-    return res.status(statusCode).json({ 
-      response: friendlyMessage, 
-      success: false,
-      error: error.message 
-    });
+    console.error("AI Error:", error);
+    return res.status(500).json({ response: error.message, success: false });
   }
 }

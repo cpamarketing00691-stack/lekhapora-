@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter, Difficulty } from './types';
 import { 
@@ -119,21 +118,31 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sub.chapters.map((ch: Chapter) => (
-                <div key={ch.id} className={`p-5 rounded-[2rem] border transition-all flex items-start gap-3 ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent'}`}>
-                  <input 
-                    type="checkbox" 
-                    checked={ch.isCompleted} 
-                    onChange={() => {
-                      onUpdateState((prev: UserState) => ({
-                        ...prev,
-                        subjects: prev.subjects.map(s => s.id === sub.id ? {
-                          ...s, chapters: s.chapters.map(c => c.id === ch.id ? {...c, isCompleted: !c.isCompleted} : c)
-                        } : s)
-                      }));
-                    }} 
-                    className="w-5 h-5 accent-emerald-500 rounded-lg cursor-pointer mt-0.5" 
-                  />
-                  <span className={`text-sm font-bold ${ch.isCompleted ? 'line-through text-emerald-600' : 'text-slate-600'}`}>{ch.name}</span>
+                <div key={ch.id} className={`p-5 rounded-[2rem] border transition-all flex items-center justify-between gap-3 ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent shadow-sm'}`}>
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <input 
+                      type="checkbox" 
+                      checked={ch.isCompleted} 
+                      onChange={() => {
+                        onUpdateState((prev: UserState) => ({
+                          ...prev,
+                          subjects: prev.subjects.map(s => s.id === sub.id ? {
+                            ...s, chapters: s.chapters.map(c => c.id === ch.id ? {...c, isCompleted: !c.isCompleted} : c)
+                          } : s)
+                        }));
+                      }} 
+                      className="w-5 h-5 accent-emerald-500 rounded-lg cursor-pointer mt-0.5 shrink-0" 
+                    />
+                    <span className={`text-sm font-bold truncate ${ch.isCompleted ? 'line-through text-emerald-600' : 'text-slate-600'}`}>{ch.name}</span>
+                  </div>
+                  
+                  <button 
+                    onClick={() => onTriggerTest(sub.id, ch.id)}
+                    title={t('কুইজ দাও', 'Take Quiz')}
+                    className="p-2 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary hover:text-white transition-all active:scale-90 shrink-0 shadow-sm group/quiz"
+                  >
+                    <GraduationCap size={18} className="group-hover/quiz:rotate-12 transition-transform" />
+                  </button>
                 </div>
               ))}
             </div>

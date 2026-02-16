@@ -1,10 +1,14 @@
-
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="256" cy="256" r="256" fill="#5B7DBE"/>
+  <rect width="512" height="512" rx="128" fill="#5B7DBE"/>
   <g transform="translate(0, -20)">
-    <path d="M256 120L400 180L256 240L112 180L256 120Z" fill="white"/>
-    <path d="M180 280C160 280 150 295 150 310V320C150 340 130 350 130 350C130 350 150 360 150 380V390C150 405 160 420 180 420" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M332 280C352 280 362 295 362 310V320C362 340 382 350 382 350C382 350 362 360 362 380V390C362 405 352 420 332 420" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Rhombus Top -->
+    <path d="M256 120L410 185L256 250L102 185L256 120Z" fill="white" fill-opacity="0.9"/>
+    <!-- Braces structure -->
+    <path d="M190 270C170 270 160 285 160 300V310C160 330 140 340 140 340C140 340 160 350 160 370V380C160 395 170 410 190 410" stroke="white" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M322 270C342 270 352 285 352 300V310C352 330 372 340 372 340C372 340 352 350 352 370V380C352 395 342 410 322 410" stroke="white" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Tassel -->
+    <circle cx="410" cy="205" r="8" fill="white"/>
+    <path d="M410 185V205" stroke="white" stroke-width="6"/>
   </g>
-  <text x="256" y="470" fill="white" font-family="sans-serif" font-weight="900" font-size="48" text-anchor="middle">LEKHAPORA</text>
+  <text x="256" y="470" fill="white" font-family="Inter, sans-serif" font-weight="900" font-size="52" text-anchor="middle" letter-spacing="-1">StudyKori.app</text>
 </svg>

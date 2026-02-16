@@ -65,12 +65,18 @@ const AppContent: React.FC = () => {
   // Fetch Announcements
   useEffect(() => {
     const fetchAnnouncements = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('announcements')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(10);
       
+      if (error) {
+        // Log error but don't crash app (usually usually table missing)
+        console.warn("Could not fetch announcements. Ensure 'announcements' table exists in Supabase.", error.message);
+        return;
+      }
+
       if (data) {
         dispatch({ type: 'SET_ANNOUNCEMENTS', payload: data as Announcement[] });
       }

@@ -147,7 +147,7 @@ const PanelLayout: React.FC<PanelLayoutProps> = ({ userState, onUpdateState, chi
               >
                  <Bell size={20} />
                  {unreadCount > 0 && (
-                   <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-brand-bg animate-pulse"></span>
+                   <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-brand-bg animate-pulse"></span>
                  )}
               </button>
 

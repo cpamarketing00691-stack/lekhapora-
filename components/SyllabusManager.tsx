@@ -1,12 +1,10 @@
-
 import React, { useState, useRef } from 'react';
 import { UserState, Subject, Chapter, Difficulty } from '../types';
 import { 
   Camera, Plus, Trash2, CheckCircle2, 
-  Loader2, X
+  Loader2, X, GraduationCap, PlayCircle
 } from 'lucide-react';
-
-const TESSERACT_URL = "https://esm.sh/tesseract.js@5.0.5";
+import ChapterExamModule from './ChapterExamModule';
 
 interface SyllabusManagerProps {
   userState: UserState;
@@ -17,44 +15,17 @@ interface SyllabusManagerProps {
 const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateState, onTriggerTest }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
+  const [activeQuizContext, setActiveQuizContext] = useState<{
+    group: string;
+    subject: string;
+    paper: number;
+    chapter: string;
+  } | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [manualSubject, setManualSubject] = useState({ name: '', paper: 1, chapters: '' });
   const t = (bn: string, en: string) => userState.language === 'bn' ? bn : en;
-
-  const handleOCR = async (file: File) => {
-    setIsProcessing(true);
-    try {
-      const tesseract: any = await import(TESSERACT_URL);
-      const worker = await tesseract.createWorker('eng+ben');
-      
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      await new Promise((resolve) => { img.onload = resolve; });
-
-      const { data: { text } } = await worker.recognize(img);
-      await worker.terminate();
-
-      const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 3);
-      
-      if (lines.length > 0) {
-        setManualSubject(prev => ({ ...prev, chapters: lines.join('\n') }));
-        setShowManualAdd(true);
-      } else {
-        throw new Error("No text detected");
-      }
-    } catch (error) {
-      console.error("OCR Error:", error);
-      alert(t("স্ক্যান করতে সমস্যা হয়েছে। পরিষ্কার ছবি ব্যবহার করো।", "Scan failed. Use a clearer image."));
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleOCR(file);
-  };
 
   const handleManualAdd = () => {
     if (!manualSubject.name || !manualSubject.chapters) return;
@@ -102,10 +73,28 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     }));
   };
 
+  const startChapterQuiz = (subject: Subject, chapter: Chapter) => {
+    setActiveQuizContext({
+      group: userState.profile?.group || 'Science',
+      subject: subject.name,
+      paper: subject.paper,
+      chapter: chapter.name
+    });
+  };
+
   const subjects = Array.isArray(userState.subjects) ? userState.subjects : [];
 
   return (
     <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500 pb-24 md:pb-20">
+      {/* Chapter Quiz Modal Overlay */}
+      {activeQuizContext && (
+        <ChapterExamModule 
+          context={activeQuizContext} 
+          onClose={() => setActiveQuizContext(null)} 
+          userState={userState} 
+        />
+      )}
+
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl md:text-4xl font-black tracking-tight">{t('সিলেবাস গাইড', 'Syllabus Guide')}</h2>
@@ -113,18 +102,12 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
         </div>
         
         <div className="flex flex-wrap gap-2 md:gap-3">
-          <button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 bg-brand-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg disabled:opacity-50">
-            {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
-            {t('স্ক্যান', 'Scan')}
-          </button>
           <button onClick={() => setShowManualAdd(!showManualAdd)} className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${showManualAdd ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
             <Plus size={16} />
             {t('ম্যানুয়াল অ্যাড', 'Manual Add')}
           </button>
         </div>
       </div>
-
-      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
 
       {showManualAdd && (
         <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] border-2 border-dashed border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95 duration-300 relative">
@@ -162,21 +145,31 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sub.chapters.map((ch: Chapter) => (
-                <div key={ch.id} className={`p-5 rounded-[2rem] border transition-all flex items-start gap-3 ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent'}`}>
-                  <input 
-                    type="checkbox" 
-                    checked={ch.isCompleted} 
-                    onChange={() => {
-                      onUpdateState((prev: UserState) => ({
-                        ...prev,
-                        subjects: prev.subjects.map((s: Subject) => s.id === sub.id ? {
-                          ...s, chapters: s.chapters.map((c: Chapter) => c.id === ch.id ? {...c, isCompleted: !c.isCompleted} : c)
-                        } : s)
-                      }));
-                    }} 
-                    className="w-5 h-5 accent-emerald-500 rounded-lg cursor-pointer mt-0.5" 
-                  />
-                  <span className={`text-sm font-bold ${ch.isCompleted ? 'line-through text-emerald-600' : 'text-slate-600'}`}>{ch.name}</span>
+                <div key={ch.id} className={`p-5 rounded-[2.5rem] border transition-all flex flex-col gap-4 ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent shadow-sm'}`}>
+                  <div className="flex items-start gap-3">
+                    <input 
+                      type="checkbox" 
+                      checked={ch.isCompleted} 
+                      onChange={() => {
+                        onUpdateState((prev: UserState) => ({
+                          ...prev,
+                          subjects: prev.subjects.map((s: Subject) => s.id === sub.id ? {
+                            ...s, chapters: s.chapters.map((c: Chapter) => c.id === ch.id ? {...c, isCompleted: !c.isCompleted} : c)
+                          } : s)
+                        }));
+                      }} 
+                      className="w-5 h-5 accent-emerald-500 rounded-lg cursor-pointer mt-0.5" 
+                    />
+                    <span className={`text-sm font-bold flex-1 ${ch.isCompleted ? 'line-through text-emerald-600' : 'text-slate-600'}`}>{ch.name}</span>
+                  </div>
+                  
+                  <button 
+                    onClick={() => startChapterQuiz(sub, ch)}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-brand-bg rounded-xl text-brand-primary border border-brand-primary/10 hover:bg-brand-primary hover:text-white transition-all text-[10px] font-black uppercase tracking-widest"
+                  >
+                    <GraduationCap size={14} />
+                    {t('কুইজ শুরু করো', 'Start Quiz')}
+                  </button>
                 </div>
               ))}
             </div>

@@ -1,3 +1,4 @@
+
 export enum Group { SCIENCE = 'Science', COMMERCE = 'Commerce', ARTS = 'Arts' }
 export enum Medium { BANGLA = 'Bangla', ENGLISH = 'English' }
 export enum Religion { ISLAM = 'Islam', HINDUISM = 'Hinduism', BUDDHISM = 'Buddhism', CHRISTIANITY = 'Christianity', OTHER = 'Other' }
@@ -7,6 +8,87 @@ export type Mood = 'Great' | 'Tired' | 'Stressed' | 'Focused' | 'Burnt Out';
 export type Language = 'bn' | 'en';
 export type Difficulty = 'Easy' | 'Medium' | 'Hard';
 export type UserRole = 'student' | 'admin' | 'super_admin' | 'editor';
+
+// Added missing Chapter interface
+export interface Chapter {
+  id: string;
+  name: string;
+  isCompleted: boolean;
+  status?: 'completed' | 'in-progress' | 'not-started';
+  studyTimeSeconds?: number;
+}
+
+// Added missing CollegeExam interface
+export interface CollegeExam {
+  id: string;
+  name: string;
+  date: string;
+}
+
+// Added missing StudySession interface
+export interface StudySession {
+  id: string;
+  subjectId: string;
+  taskId?: string;
+  chapterId?: string;
+  startTime: number;
+  endTime?: number;
+  durationSeconds: number;
+  breakSeconds?: number;
+  numBreaks?: number;
+  mood: Mood;
+  isRevision: boolean;
+}
+
+// Added missing Reminder interface
+export interface Reminder {
+  id: string;
+  title: string;
+  time: number;
+  isTriggered: boolean;
+  isDone: boolean;
+  repeatType: 'none' | 'daily' | 'weekly';
+}
+
+// Added missing MCQ interface
+export interface MCQ {
+  id: string;
+  question: string;
+  options: string[];
+  correct_index: number;
+  explanation?: string;
+}
+
+// Added missing ActiveTimer interface
+export interface ActiveTimer {
+  subjectId: string;
+  taskId?: string;
+  chapterId?: string;
+  isFocusActive: boolean;
+  isRevision: boolean;
+  accumulatedFocusSeconds: number;
+  accumulatedBreakSeconds: number;
+  numBreaks: number;
+  lastTimestamp: number;
+  sessionStartTime: number;
+}
+
+export interface CMSPage {
+  slug: string;
+  content: {
+    hero_title: string;
+    hero_subtitle: string;
+    sections: any[];
+  };
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'success';
+  created_at: number;
+}
 
 export interface AdminPermissions {
   can_publish: boolean;
@@ -40,16 +122,6 @@ export interface Post {
   updatedAt: number;
 }
 
-/* 
- * Core Application Interfaces 
- */
-
-export interface CollegeExam {
-  id: string;
-  name: string;
-  date: string;
-}
-
 export interface UserProfile {
   fullName: string;
   college: string;
@@ -61,15 +133,6 @@ export interface UserProfile {
   collegeExams: CollegeExam[];
   targetExamDate?: string;
   role?: UserRole;
-}
-
-export interface Chapter {
-  id: string;
-  name: string;
-  isCompleted: boolean;
-  studyTimeSeconds?: number;
-  testScore?: number;
-  status?: 'not-started' | 'completed';
 }
 
 export interface Subject {
@@ -89,23 +152,6 @@ export interface Task {
   createdAt: number;
 }
 
-export interface Reminder {
-  id: string;
-  title: string;
-  time: number;
-  isTriggered: boolean;
-  isDone: boolean;
-  repeatType: 'none' | 'daily' | 'weekly';
-}
-
-export interface MCQ {
-  id: string;
-  question: string;
-  options: string[];
-  correct_index: number;
-  explanation?: string;
-}
-
 export interface TestAttempt {
   id: string;
   subjectId: string;
@@ -118,33 +164,7 @@ export interface TestAttempt {
   userAnswers: number[];
 }
 
-export interface ActiveTimer {
-  subjectId: string;
-  taskId?: string;
-  chapterId?: string;
-  isFocusActive: boolean;
-  isRevision: boolean;
-  accumulatedFocusSeconds: number;
-  accumulatedBreakSeconds: number;
-  numBreaks: number;
-  lastTimestamp: number;
-  sessionStartTime: number;
-}
-
-export interface StudySession {
-  id: string;
-  subjectId: string;
-  taskId?: string;
-  chapterId?: string;
-  startTime: number;
-  endTime?: number;
-  durationSeconds: number;
-  breakSeconds?: number;
-  numBreaks?: number;
-  mood: Mood;
-  isRevision: boolean;
-}
-
+// Added missing UserState interface for legacy bridge support
 export interface UserState {
   isAuthenticated: boolean;
   profile: UserProfile | null;
@@ -168,6 +188,8 @@ export interface LekhaporaState {
   testHistory: TestAttempt[];
   tasks: Task[];
   cmsPosts: Post[];
+  cmsPages: Record<string, CMSPage>;
+  announcements: Announcement[];
   settings: {
     language: Language;
     focusGoalSeconds: number;
@@ -185,4 +207,6 @@ export type LekhaporaAction =
   | { type: 'SET_LANGUAGE'; payload: Language }
   | { type: 'SYNC_COMPLETE'; payload: number }
   | { type: 'SAVE_POST'; payload: Post }
-  | { type: 'DELETE_POST'; payload: string };
+  | { type: 'DELETE_POST'; payload: string }
+  | { type: 'UPDATE_PAGE'; payload: CMSPage }
+  | { type: 'SET_ANNOUNCEMENTS'; payload: Announcement[] };

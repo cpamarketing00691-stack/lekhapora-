@@ -1,4 +1,6 @@
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenAI } from "@google/genai";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS Headers
@@ -15,14 +17,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
-  const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+  // Use process.env.API_KEY exclusively as per guidelines
+  const API_KEY = process.env.API_KEY;
 
-  if (!DEEPSEEK_API_KEY) {
-    console.error('❌ DEEPSEEK_API_KEY not found');
+  if (!API_KEY) {
+    console.error('❌ API_KEY not found');
     return res.status(500).json({ 
       error: 'AI service not configured',
       success: false,
-      response: 'সার্ভারে এআই চাবি খুঁজে পাওয়া যায়নি। দয়া করে এডমিনকে জানান।'
+      reply: 'সার্ভারে এআই চাবি খুঁজে পাওয়া যায়নি। দয়া করে এডমিনকে জানান।'
     });
   }
 
@@ -32,6 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
+
+    // Initialize Gemini API client strictly with named parameter
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
 
     const systemPrompt = `You are "Lekhapora AI", an expert study companion for Bangladesh HSC (Higher Secondary Certificate) students.
     
@@ -57,50 +63,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     - If asked about non-academic topics, politely redirect to studies.
     - Maximum 3 paragraphs per response unless explaining a derivation.`;
 
-    const messages = [
-      { role: 'system', content: systemPrompt },
+    // Map history to Gemini format (role must be 'user' or 'model')
+    const contents = [
       ...history.map((msg: any) => ({
-        role: msg.role === 'model' ? 'assistant' : 'user',
-        content: msg.text || msg.content
+        role: msg.role === 'model' ? 'model' : 'user',
+        parts: [{ text: msg.text || msg.content || '' }]
       })),
-      { role: 'user', content: message }
+      { role: 'user', parts: [{ text: message }] }
     ];
 
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
+    // Query GenAI with model and prompt together as per @google/genai guidelines
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: contents,
+      config: {
+        systemInstruction: systemPrompt,
         temperature: 0.7,
-        max_tokens: 2048,
-        stream: false
-      })
+      }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('DeepSeek API Error:', response.status, errorText);
-      
-      if (response.status === 401) throw new Error('Invalid API Key');
-      if (response.status === 429) throw new Error('Rate limit exceeded. Please wait.');
-      throw new Error('Upstream AI service error');
-    }
-
-    const data = await response.json();
-    const aiReply = data.choices?.[0]?.message?.content;
+    // Accessing .text property directly as per extracts from response guidelines
+    const aiReply = response.text || "";
 
     if (!aiReply) {
       throw new Error('Empty response from AI');
     }
 
+    // Returning 'reply' to align with client-side service expectations
     return res.status(200).json({ 
       success: true,
-      response: aiReply,
-      usage: data.usage
+      reply: aiReply
     });
 
   } catch (error: any) {
@@ -108,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ 
       success: false,
       error: error.message,
-      response: 'দুঃখিত বন্ধু, এই মুহূর্তে আমার মাথায় একটু জট লেগেছে। দয়া করে আবার চেষ্টা করো।'
+      reply: 'দুঃখিত বন্ধু, এই মুহূর্তে আমার মাথায় একটু জট লেগেছে। দয়া করে আবার চেষ্টা করো।'
     });
   }
 }

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { UserState } from '../types';
 import { 
@@ -74,14 +75,13 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
       const data = await response.json();
       
       if (!response.ok || !data.success) {
-        throw new Error(data.response || data.error || "Connection failed.");
+        throw new Error(data.reply || data.error || "Connection failed.");
       }
 
-      setMessages(prev => [...prev, { role: 'model', text: data.response }]);
+      setMessages(prev => [...prev, { role: 'model', text: data.reply }]);
     } catch (err: any) {
       console.error("AI Panel Error:", err);
       setError(err.message);
-      // Remove the last message if failed? Optional, usually better to keep for retry.
     } finally {
       setIsLoading(false);
     }
@@ -94,12 +94,9 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
     { icon: <MessageSquareText size={14} className="text-emerald-500" />, text: t("আমার ডেইলি রুটিন কেমন হওয়া উচিত?", "Suggest a daily routine"), val: "একজন HSC পরীক্ষার্থী হিসেবে আমার ডেইলি রুটিন কেমন হওয়া উচিত বলে মনে করো?" }
   ];
 
-  // Basic markdown-like renderer for AI responses
   const renderFormattedText = (text: string) => {
     return text.split('\n').map((line, i) => {
-      // Bold handling
       let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      // List handling
       if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         return <li key={i} className="ml-4 mb-1 list-disc" dangerouslySetInnerHTML={{ __html: formatted.replace(/^[*-]\s/, '') }} />;
       }
@@ -109,7 +106,6 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
 
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col bg-brand-surface/40 backdrop-blur-xl rounded-[3rem] border border-brand-text-s/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-700">
-      {/* Enhanced Header */}
       <header className="px-8 py-5 border-b border-brand-text-s/5 bg-brand-surface/80 backdrop-blur-md flex items-center justify-between shrink-0 z-10">
         <div className="flex items-center gap-4">
            <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary border border-brand-primary/20 shadow-inner group overflow-hidden">
@@ -121,7 +117,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
               </h3>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span className="text-[10px] font-bold text-brand-text-s uppercase tracking-widest opacity-60">DeepSeek Engine Active</span>
+                <span className="text-[10px] font-bold text-brand-text-s uppercase tracking-widest opacity-60">Gemini Engine Active</span>
               </div>
            </div>
         </div>
@@ -134,7 +130,6 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
         </button>
       </header>
 
-      {/* Optimized Chat Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 md:p-10 space-y-8 scroll-smooth scrollbar-hide">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-10 animate-in fade-in duration-1000 max-w-2xl mx-auto">
@@ -220,7 +215,6 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
         )}
       </div>
 
-      {/* Input Area */}
       <footer className="p-6 md:p-10 pt-0 shrink-0">
         <div className="relative group max-w-4xl mx-auto">
           <div className="absolute inset-0 bg-brand-primary/10 blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity" />

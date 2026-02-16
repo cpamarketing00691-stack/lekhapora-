@@ -10,6 +10,8 @@ const initialState: LekhaporaState = {
   testHistory: [],
   tasks: [],
   cmsPosts: [],
+  cmsPages: {},
+  announcements: [],
   settings: {
     language: 'bn',
     focusGoalSeconds: 21600,
@@ -55,6 +57,15 @@ function reducer(state: LekhaporaState, action: LekhaporaAction): LekhaporaState
       break;
     case 'DELETE_POST':
       newState = { ...state, cmsPosts: state.cmsPosts.filter(p => p.id !== action.payload) };
+      break;
+    case 'UPDATE_PAGE':
+      newState = { 
+        ...state, 
+        cmsPages: { ...state.cmsPages, [action.payload.slug]: action.payload } 
+      };
+      break;
+    case 'SET_ANNOUNCEMENTS':
+      newState = { ...state, announcements: action.payload };
       break;
     case 'SET_LANGUAGE':
       newState = { ...state, settings: { ...state.settings, language: action.payload } };

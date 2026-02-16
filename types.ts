@@ -87,7 +87,7 @@ export interface Announcement {
   title: string;
   message: string;
   type: 'info' | 'warning' | 'success';
-  created_at: number;
+  created_at: string;
 }
 
 export interface AdminPermissions {

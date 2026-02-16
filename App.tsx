@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, withTimeout } from './lib/supabase';
 import { UserState, UserProfile } from './types';
@@ -55,14 +55,19 @@ const AppContent: React.FC = () => {
   const { state: contextState, dispatch } = useLekhapora();
   const { user, loading: authLoading } = useAuth();
   const [syncing, setSyncing] = useState(false);
+  const syncAttemptedFor = useRef<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initialize background sync
+  // Initialize background sync (handles debounced updates)
   useSyncManager();
 
   const syncUserData = useCallback(async (userId: string) => {
+    if (syncing || syncAttemptedFor.current === userId) return;
+    
     setSyncing(true);
+    syncAttemptedFor.current = userId;
+    
     try {
       const response: any = await withTimeout(
         supabase.from('user_data').select('state').eq('user_id', userId).maybeSingle(),
@@ -70,22 +75,28 @@ const AppContent: React.FC = () => {
       );
 
       if (response.data?.state) {
-        // Deep merge or just overwrite with server state for consistency on login/refresh
         dispatch({ type: 'SET_INITIAL_STATE', payload: response.data.state });
+      } else {
+        // If no remote state, initialize local user ID at least
+        dispatch({ 
+          type: 'SET_INITIAL_STATE', 
+          payload: { ...contextState, user: { ...contextState.user, id: userId } } 
+        });
       }
     } catch (e) { 
       console.error("Sync Error:", e);
+      syncAttemptedFor.current = null; // Allow retry on error
     } finally { 
       setSyncing(false); 
     }
-  }, [dispatch]);
+  }, [dispatch, contextState, syncing]);
 
   // Initial data fetch on login/refresh
   useEffect(() => {
-    if (user && !syncing && (!contextState.user.profile || contextState.user.id !== user.id)) {
+    if (user && !syncing && syncAttemptedFor.current !== user.id) {
       syncUserData(user.id);
     }
-  }, [user, syncing, contextState.user.id, contextState.user.profile, syncUserData]);
+  }, [user, syncing, syncUserData]);
 
   const handleOnboardingComplete = async (profile: UserProfile & { selectedSubjectNames: string[] }) => {
     const { selectedSubjectNames, ...profileData } = profile;
@@ -126,7 +137,7 @@ const AppContent: React.FC = () => {
     testHistory: contextState.testHistory,
     subjects: contextState.subjects,
     dailyTasks: contextState.tasks,
-    streaks: contextState.lastSynced ? 1 : 0, // Mock streak calculation
+    streaks: contextState.lastSynced ? 1 : 0, 
     badges: [],
     currentMood: 'Great',
     language: contextState.settings.language,
@@ -136,8 +147,6 @@ const AppContent: React.FC = () => {
   };
 
   const onUpdateLegacyState: any = (updater: any) => {
-    // Basic bridge to allow components to still function if they use the functional update pattern
-    // In a real migration, we would move all dispatches to the useLekhapora hook.
     console.warn("Legacy State Updater called. Logic should move to Context.");
   };
 
@@ -201,7 +210,7 @@ const AppContent: React.FC = () => {
           path="/app/*" 
           element={
             <ProtectedRoute>
-              {!contextState.user.profile && !syncing ? <Navigate to="/onboarding" replace /> : (
+              {(!contextState.user.profile && !syncing) ? <Navigate to="/onboarding" replace /> : (
                 <PanelLayout userState={legacyUserState} onUpdateState={onUpdateLegacyState}>
                   <Suspense fallback={<PanelSkeleton />}>
                     <Routes>

@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 1. SECURE KEY RETRIEVAL
-  // We check process.env first. If not found (local dev), we use the provided OpenRouter key.
+  // Use process.env if available, otherwise use the specific OpenRouter key provided.
   const API_KEY = process.env.DEEPSEEK_API_KEY || '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';
 
   if (!API_KEY) {
@@ -72,24 +72,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ];
 
     // 4. PROVIDER DETECTION (OpenRouter vs DeepSeek Direct)
-    const isOpenRouter = API_KEY.startsWith('sk-or-v1-');
+    const isOpenRouter = API_KEY.trim().startsWith('sk-or-v1-');
     
     // OpenRouter Endpoint or DeepSeek Direct
     const apiUrl = isOpenRouter 
       ? 'https://openrouter.ai/api/v1/chat/completions' 
       : 'https://api.deepseek.com/chat/completions';
     
-    // Model Selection: V3 is standard. 
-    // OpenRouter: 'deepseek/deepseek-chat' (V3)
-    // Direct: 'deepseek-chat' (V3)
+    // Model Selection: 
+    // OpenRouter: 'deepseek/deepseek-chat' (DeepSeek V3)
+    // Direct: 'deepseek-chat'
     const modelId = isOpenRouter ? 'deepseek/deepseek-chat' : 'deepseek-chat';
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`
+      'Authorization': `Bearer ${API_KEY.trim()}`
     };
 
-    // OpenRouter Specific Headers
+    // OpenRouter Specific Headers (Required for proper routing/analytics)
     if (isOpenRouter) {
       headers['HTTP-Referer'] = 'https://lekhapora.app';
       headers['X-Title'] = 'Lekhapora HSC Tracker';
@@ -102,21 +102,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: modelId,
         messages: messages,
-        temperature: 1.0, // Recommended for DeepSeek V3
-        max_tokens: 1000,
+        temperature: 1.0, 
+        max_tokens: 1500,
         stream: false
       })
     });
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      let errorJson;
-      try {
-        errorJson = JSON.parse(errorText);
-      } catch (e) {
-        errorJson = { error: { message: errorText } };
-      }
-      
       console.error('AI Provider Error:', aiResponse.status, errorText);
 
       if (aiResponse.status === 401) {
@@ -129,7 +122,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(502).json({ success: false, error: 'AI Server Error.', reply: 'সার্ভারে সমস্যা হচ্ছে, পরে চেষ্টা করো।' });
       }
       
-      throw new Error(`AI API Error: ${errorJson?.error?.message || aiResponse.statusText}`);
+      // Attempt to parse JSON error from provider
+      let errorMsg = aiResponse.statusText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson?.error?.message || errorMsg;
+      } catch (e) {}
+
+      throw new Error(`AI Provider Error: ${errorMsg}`);
     }
 
     const data = await aiResponse.json();

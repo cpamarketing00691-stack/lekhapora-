@@ -250,9 +250,9 @@ const AppContent: React.FC = () => {
                   <Suspense fallback={<PanelSkeleton />}>
                     <Routes>
                       <Route path="dashboard" element={<DashboardPanel />} />
-                      <Route path="syllabus" element={<SyllabusPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
-                      <Route path="tracker" element={<TrackerPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
-                      <Route path="exams" element={<ExamsPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
+                      <Route path="syllabus" element={<SyllabusPanel />} />
+                      <Route path="tracker" element={<TrackerPanel />} />
+                      <Route path="exams" element={<ExamsPanel />} />
                       <Route path="calendar" element={<CalendarPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
                       <Route path="ai" element={<AIPanel userState={legacyUserState} onUpdateState={onUpdateLegacyState} />} />
                       <Route path="analytics" element={<AnalyticsPanel userState={legacyUserState} />} />

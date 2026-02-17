@@ -2,25 +2,21 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { UserState } from '../types';
 import { 
   Send, Loader2, Sparkles, Trash2, BrainCircuit, 
-  Bot, User, AlertCircle, ChevronRight, BookOpen, 
-  Zap, Atom, Calculator, MessageSquareText, Copy, Check
+  Bot, User, AlertCircle, ChevronRight, Copy, Check,
+  Zap, Atom, Calculator, MessageSquareText
 } from 'lucide-react';
+import { sendMessage, ChatMessage } from '../services/ai';
 
 interface AIPanelProps {
   userState: UserState;
   onUpdateState: React.Dispatch<React.SetStateAction<UserState>>;
 }
 
-interface Message {
-  role: 'user' | 'model';
-  text: string;
-}
-
 const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,35 +48,16 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
     setInput('');
     setError(null);
     
-    const userMessage: Message = { role: 'user', text: textToSend };
-    const currentHistory = [...messages];
+    const userMessage: ChatMessage = { role: 'user', text: textToSend };
+    // Optimistic update
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/ai', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          message: textToSend,
-          history: currentHistory,
-          userProfile: userState.profile
-        })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok || !data.success) {
-        throw new Error(data.reply || data.error || "Connection failed.");
-      }
-
-      setMessages(prev => [...prev, { role: 'model', text: data.reply }]);
+      const reply = await sendMessage(textToSend, messages, userState.profile);
+      setMessages(prev => [...prev, { role: 'model', text: reply }]);
     } catch (err: any) {
-      console.error("AI Panel Error:", err);
-      setError(err.message);
+      setError(err.message || "Failed to get response.");
     } finally {
       setIsLoading(false);
     }
@@ -95,13 +72,10 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
 
   const renderFormattedText = (text: string) => {
     return text.split('\n').map((line, i) => {
-      // Bold handling
       let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      // List handling
       if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         return <li key={i} className="ml-4 mb-1 list-disc marker:text-brand-primary" dangerouslySetInnerHTML={{ __html: formatted.replace(/^[*-]\s/, '') }} />;
       }
-      // Header handling (simple)
       if (line.trim().startsWith('### ')) {
         return <h4 key={i} className="text-sm font-black mt-3 mb-1 uppercase tracking-wider opacity-80" dangerouslySetInnerHTML={{ __html: formatted.replace(/^###\s/, '') }} />;
       }

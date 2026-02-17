@@ -16,15 +16,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 1. SECURE KEY RETRIEVAL
-  // Use process.env if available, otherwise use the specific OpenRouter key provided.
-  const API_KEY = process.env.DEEPSEEK_API_KEY || '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';
+  // PRIORITIZING USER PROVIDED KEY TO FIX 401 ERROR
+  const API_KEY = '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';
 
   if (!API_KEY) {
-    console.error('❌ DEEPSEEK_API_KEY not found');
+    console.error('❌ API_KEY missing');
     return res.status(500).json({ 
       error: 'AI service not configured',
       success: false,
-      reply: 'সার্ভারে এআই চাবি (API Key) খুঁজে পাওয়া যায়নি। দয়া করে এডমিনকে জানান।'
+      reply: 'সার্ভারে এআই চাবি (API Key) কনফিগার করা নেই।'
     });
   }
 
@@ -71,29 +71,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { role: "user", content: message }
     ];
 
-    // 4. PROVIDER DETECTION (OpenRouter vs DeepSeek Direct)
-    const isOpenRouter = API_KEY.trim().startsWith('sk-or-v1-');
-    
-    // OpenRouter Endpoint or DeepSeek Direct
-    const apiUrl = isOpenRouter 
-      ? 'https://openrouter.ai/api/v1/chat/completions' 
-      : 'https://api.deepseek.com/chat/completions';
-    
-    // Model Selection: 
-    // OpenRouter: 'deepseek/deepseek-chat' (DeepSeek V3)
-    // Direct: 'deepseek-chat'
-    const modelId = isOpenRouter ? 'deepseek/deepseek-chat' : 'deepseek-chat';
+    // 4. PROVIDER CONFIGURATION (OpenRouter)
+    // Explicitly using OpenRouter configuration for the provided key
+    const apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    const modelId = 'deepseek/deepseek-chat'; // DeepSeek V3 via OpenRouter
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY.trim()}`
+      'Authorization': `Bearer ${API_KEY}`,
+      'HTTP-Referer': 'https://lekhapora.app', // Required by OpenRouter
+      'X-Title': 'Lekhapora HSC Tracker' // Required by OpenRouter
     };
-
-    // OpenRouter Specific Headers (Required for proper routing/analytics)
-    if (isOpenRouter) {
-      headers['HTTP-Referer'] = 'https://lekhapora.app';
-      headers['X-Title'] = 'Lekhapora HSC Tracker';
-    }
 
     // 5. API CALL
     const aiResponse = await fetch(apiUrl, {
@@ -102,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: modelId,
         messages: messages,
-        temperature: 1.0, 
+        temperature: 0.7, 
         max_tokens: 1500,
         stream: false
       })
@@ -112,24 +100,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const errorText = await aiResponse.text();
       console.error('AI Provider Error:', aiResponse.status, errorText);
 
+      let errorJson;
+      try {
+        errorJson = JSON.parse(errorText);
+      } catch (e) {
+        errorJson = { error: { message: errorText } };
+      }
+
+      const specificMessage = errorJson?.error?.message || aiResponse.statusText;
+
       if (aiResponse.status === 401) {
-        return res.status(401).json({ success: false, error: 'Unauthorized: Invalid API Key.', reply: 'এআই অথেন্টিকেশন সমস্যা হয়েছে (Invalid Key)।' });
+        return res.status(401).json({ 
+          success: false, 
+          error: `Unauthorized: ${specificMessage}`, 
+          reply: 'এআই কী (Key) টি সঠিক নয় বা মেয়াদ শেষ হয়েছে। দয়া করে ব্যালেন্স চেক করো।' 
+        });
+      }
+      if (aiResponse.status === 402) {
+        return res.status(402).json({ 
+          success: false, 
+          error: `Payment Required: ${specificMessage}`, 
+          reply: 'এআই অ্যাকাউন্টে পর্যাপ্ত ক্রেডিট নেই। দয়া করে রিচার্জ করো।' 
+        });
       }
       if (aiResponse.status === 429) {
         return res.status(429).json({ success: false, error: 'Rate limit exceeded.', reply: 'আমি এখন একটু ব্যস্ত, কিছুক্ষণ পর আবার চেষ্টা করো।' });
       }
-      if (aiResponse.status >= 500) {
-        return res.status(502).json({ success: false, error: 'AI Server Error.', reply: 'সার্ভারে সমস্যা হচ্ছে, পরে চেষ্টা করো।' });
-      }
       
-      // Attempt to parse JSON error from provider
-      let errorMsg = aiResponse.statusText;
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMsg = errorJson?.error?.message || errorMsg;
-      } catch (e) {}
-
-      throw new Error(`AI Provider Error: ${errorMsg}`);
+      throw new Error(`AI Provider Error (${aiResponse.status}): ${specificMessage}`);
     }
 
     const data = await aiResponse.json();
@@ -149,7 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ 
       success: false,
       error: error.message,
-      reply: 'দুঃখিত বন্ধু, এই মুহূর্তে আমার মাথায় একটু জট লেগেছে। দয়া করে আবার চেষ্টা করো।'
+      reply: 'দুঃখিত বন্ধু, সংযোগে সমস্যা হচ্ছে। দয়া করে একটু পর আবার চেষ্টা করো।'
     });
   }
 }

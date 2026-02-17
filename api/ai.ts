@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const API_KEY = process.env.DEEPSEEK_API_KEY || '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';
 
   if (!API_KEY) {
-    console.error('❌ API_KEY not found');
+    console.error('❌ DEEPSEEK_API_KEY not found');
     return res.status(500).json({ 
       error: 'AI service not configured',
       success: false,
@@ -58,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     STRICT RULES:
     - Follow the NCTB syllabus only.
     - If asked about non-academic topics, politely redirect to studies.
-    - Maximum 3 paragraphs per response unless explaining a derivation.`;
+    - Maximum 3 paragraphs per response unless explaining a derivation.
+    - Use Markdown for bolding key terms.`;
 
     // 3. MESSAGE FORMATTING
     const messages = [
@@ -73,11 +74,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 4. PROVIDER DETECTION (OpenRouter vs DeepSeek Direct)
     const isOpenRouter = API_KEY.startsWith('sk-or-v1-');
     
+    // OpenRouter Endpoint or DeepSeek Direct
     const apiUrl = isOpenRouter 
       ? 'https://openrouter.ai/api/v1/chat/completions' 
       : 'https://api.deepseek.com/chat/completions';
     
-    // OpenRouter uses 'deepseek/deepseek-chat', Direct uses 'deepseek-chat'
+    // Model Selection: V3 is standard. 
+    // OpenRouter: 'deepseek/deepseek-chat' (V3)
+    // Direct: 'deepseek-chat' (V3)
     const modelId = isOpenRouter ? 'deepseek/deepseek-chat' : 'deepseek-chat';
 
     const headers: Record<string, string> = {
@@ -85,10 +89,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'Authorization': `Bearer ${API_KEY}`
     };
 
-    // OpenRouter Specific Headers for Rankings/Analytics
+    // OpenRouter Specific Headers
     if (isOpenRouter) {
       headers['HTTP-Referer'] = 'https://lekhapora.app';
-      headers['X-Title'] = 'Lekhapora';
+      headers['X-Title'] = 'Lekhapora HSC Tracker';
     }
 
     // 5. API CALL
@@ -98,7 +102,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: JSON.stringify({
         model: modelId,
         messages: messages,
-        temperature: 1.0,
+        temperature: 1.0, // Recommended for DeepSeek V3
+        max_tokens: 1000,
         stream: false
       })
     });

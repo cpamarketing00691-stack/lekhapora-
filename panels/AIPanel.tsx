@@ -95,9 +95,15 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
 
   const renderFormattedText = (text: string) => {
     return text.split('\n').map((line, i) => {
+      // Bold handling
       let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      // List handling
       if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-        return <li key={i} className="ml-4 mb-1 list-disc" dangerouslySetInnerHTML={{ __html: formatted.replace(/^[*-]\s/, '') }} />;
+        return <li key={i} className="ml-4 mb-1 list-disc marker:text-brand-primary" dangerouslySetInnerHTML={{ __html: formatted.replace(/^[*-]\s/, '') }} />;
+      }
+      // Header handling (simple)
+      if (line.trim().startsWith('### ')) {
+        return <h4 key={i} className="text-sm font-black mt-3 mb-1 uppercase tracking-wider opacity-80" dangerouslySetInnerHTML={{ __html: formatted.replace(/^###\s/, '') }} />;
       }
       return <p key={i} className="mb-2 last:mb-0" dangerouslySetInnerHTML={{ __html: formatted }} />;
     });
@@ -116,7 +122,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
               </h3>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                <span className="text-[10px] font-bold text-brand-text-s uppercase tracking-widest opacity-60">DeepSeek Engine</span>
+                <span className="text-[10px] font-bold text-brand-text-s uppercase tracking-widest opacity-60">DeepSeek V3 Live</span>
               </div>
            </div>
         </div>
@@ -142,7 +148,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
                  {t('তোমার ব্যক্তিগত এআই পড়ার সঙ্গী', 'Your Personal Study Companion')}
                </h4>
                <p className="text-sm font-medium text-brand-text-s max-w-md mx-auto leading-relaxed">
-                 {t('সিলেবাস, কঠিন ম্যাথ বা প্রস্তুতির রুটিন নিয়ে আমাকে যেকোনো প্রশ্ন করো। আমি তোমাকে সেরা উপায় বলে দেব।', 'Ask me anything about your syllabus, difficult math, or preparation strategy. I am here to guide you.')}
+                 {t('সিলেবাস, কঠিন ম্যাথ বা প্রস্তুতির রুটিন নিয়ে আমাকে যেকোনো প্রশ্ন করো। আমি DeepSeek ইঞ্জিনে চলছি।', 'Ask me anything about your syllabus, math, or routine. I am powered by DeepSeek engine.')}
                </p>
              </div>
 
@@ -177,12 +183,15 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
                    {m.role === 'model' ? renderFormattedText(m.text) : m.text}
                  </div>
                  {m.role === 'model' && (
-                   <button 
-                     onClick={() => handleCopy(m.text, i)}
-                     className="absolute -bottom-2 -right-2 p-1.5 bg-brand-bg border border-brand-text-s/10 rounded-lg text-brand-text-s hover:text-brand-primary opacity-0 group-hover:opacity-100 transition-all shadow-sm"
-                   >
-                     {copiedId === i ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                   </button>
+                   <div className="absolute -bottom-5 left-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                     <button 
+                       onClick={() => handleCopy(m.text, i)}
+                       className="p-1 text-brand-text-s hover:text-brand-primary transition-colors text-[10px] font-bold uppercase tracking-widest flex items-center gap-1"
+                     >
+                       {copiedId === i ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                       {copiedId === i ? 'Copied' : 'Copy'}
+                     </button>
+                   </div>
                  )}
                </div>
             </div>
@@ -195,7 +204,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
               <div className="w-10 h-10 rounded-xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary"><Bot size={20}/></div>
               <div className="px-6 py-4 rounded-[2rem] bg-brand-bg/50 border border-brand-text-s/5 rounded-tl-none flex items-center gap-3">
                 <Loader2 size={16} className="animate-spin text-brand-primary" /> 
-                <span className="text-xs font-black uppercase tracking-widest text-brand-text-s">Thinking...</span>
+                <span className="text-xs font-black uppercase tracking-widest text-brand-text-s">DeepSeek Thinking...</span>
               </div>
             </div>
           </div>
@@ -241,7 +250,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ userState }) => {
         </div>
         <div className="flex items-center justify-center gap-6 mt-6 opacity-40">
            <p className="text-[9px] font-black uppercase text-brand-text-s tracking-[0.3em]">
-            Strict NCTB Protocol • High Fidelity Explanations
+            Strict NCTB Protocol • DeepSeek Intelligence
           </p>
         </div>
       </footer>

@@ -16,8 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 1. SECURE KEY RETRIEVAL
-  // UPDATED KEY provided by user
-  const API_KEY = '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';
+  // Using the specific OpenRouter key provided by the user
+  const API_KEY = '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';
 
   if (!API_KEY) {
     console.error('❌ API_KEY missing');
@@ -72,6 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ];
 
     // 4. PROVIDER CONFIGURATION (OpenRouter)
+    // Key starts with sk-or-v1, identifying OpenRouter
     const apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
     const modelId = 'deepseek/deepseek-chat'; // DeepSeek V3 via OpenRouter
 
@@ -112,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ 
           success: false, 
           error: `Unauthorized: ${specificMessage}`, 
-          reply: 'এআই কী (Key) টি সঠিক নয় বা মেয়াদ শেষ হয়েছে। দয়া করে ব্যালেন্স চেক করো।' 
+          reply: 'এআই কী (Key) টি সঠিক নয় বা মেয়াদ শেষ হয়েছে। দয়া করে ওপেনরাউটার ব্যালেন্স চেক করো।' 
         });
       }
       if (aiResponse.status === 402) {

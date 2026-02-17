@@ -16,8 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 1. SECURE KEY RETRIEVAL
-  // PRIORITIZING USER PROVIDED KEY TO FIX 401 ERROR
-  const API_KEY = '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';
+  // UPDATED KEY provided by user
+  const API_KEY = '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';
 
   if (!API_KEY) {
     console.error('❌ API_KEY missing');
@@ -72,7 +72,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ];
 
     // 4. PROVIDER CONFIGURATION (OpenRouter)
-    // Explicitly using OpenRouter configuration for the provided key
     const apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
     const modelId = 'deepseek/deepseek-chat'; // DeepSeek V3 via OpenRouter
 

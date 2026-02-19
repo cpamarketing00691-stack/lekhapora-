@@ -3,8 +3,9 @@ import { UserState, Subject, Chapter, Difficulty } from './types';
 import { 
   Camera, Plus, Trash2, Calendar, CheckCircle2, 
   Loader2, FileText, CheckCircle, 
-  Search, Tag, GraduationCap, Clock, X
+  Search, Tag, GraduationCap, Clock, X, GripVertical
 } from 'lucide-react';
+import { Reorder } from 'framer-motion';
 
 interface SyllabusManagerProps {
   userState: UserState;
@@ -43,6 +44,15 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
     }));
     setManualSubject({ name: '', paper: 1, chapters: '' });
     setShowManualAdd(false);
+  };
+
+  const handleReorder = (subjectId: string, newChapters: Chapter[]) => {
+    onUpdateState((prev: UserState) => ({
+      ...prev,
+      subjects: prev.subjects.map((s: Subject) => 
+        s.id === subjectId ? { ...s, chapters: newChapters } : s
+      )
+    }));
   };
 
   const deleteSubject = (id: string) => {
@@ -116,10 +126,22 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                 <button onClick={() => deleteSubject(sub.id)} className="p-2 text-slate-300 hover:text-rose-500"><Trash2 size={18} /></button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Reorder.Group 
+              axis="y" 
+              values={sub.chapters} 
+              onReorder={(newChapters) => handleReorder(sub.id, newChapters)}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            >
               {sub.chapters.map((ch: Chapter) => (
-                <div key={ch.id} className={`p-5 rounded-[2rem] border transition-all flex items-center justify-between gap-3 ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent shadow-sm'}`}>
+                <Reorder.Item 
+                  key={ch.id} 
+                  value={ch}
+                  className={`p-5 rounded-[2rem] border transition-all flex items-center justify-between gap-3 cursor-grab active:cursor-grabbing ${ch.isCompleted ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent shadow-sm'}`}
+                >
                   <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="mt-1 text-slate-300 hover:text-slate-400 transition-colors">
+                      <GripVertical size={16} />
+                    </div>
                     <input 
                       type="checkbox" 
                       checked={ch.isCompleted} 
@@ -143,9 +165,9 @@ const SyllabusManager: React.FC<SyllabusManagerProps> = ({ userState, onUpdateSt
                   >
                     <GraduationCap size={18} className="group-hover/quiz:rotate-12 transition-transform" />
                   </button>
-                </div>
+                </Reorder.Item>
               ))}
-            </div>
+            </Reorder.Group>
           </div>
         ))}
       </div>

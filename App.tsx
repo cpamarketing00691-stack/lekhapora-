@@ -37,6 +37,8 @@ const FAQPanel = lazy(() => import('./pages/FAQ'));
 const ContactPanel = lazy(() => import('./pages/Contact'));
 const PrivacyPanel = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsPanel = lazy(() => import('./pages/Terms'));
+const Blog = lazy(() => import('./pages/Blog')); // dynamic import for Blog
+const BlogPost = lazy(() => import('./pages/BlogPost')); // dynamic import for BlogPost
 
 import { AdminLogin } from './components/AdminLogin';
 
@@ -203,13 +205,15 @@ const AppContent: React.FC = () => {
         {/* Public Marketing Routes */}
         <Route element={<PublicLayout isAuthenticated={!!user} />}>
           <Route path="/about" element={<Suspense fallback={<PanelSkeleton />}><AboutPanel userState={legacyUserState} /></Suspense>} />
+          <Route path="/blog" element={<Suspense fallback={<PanelSkeleton />}><Blog /></Suspense>} />
+          <Route path="/blog/:slug" element={<Suspense fallback={<PanelSkeleton />}><BlogPost /></Suspense>} />
           <Route path="/faq" element={<Suspense fallback={<PanelSkeleton />}><FAQPanel /></Suspense>} />
           <Route path="/contact" element={<Suspense fallback={<PanelSkeleton />}><ContactPanel /></Suspense>} />
           <Route path="/privacy-policy" element={<Suspense fallback={<PanelSkeleton />}><PrivacyPanel /></Suspense>} />
           <Route path="/terms" element={<Suspense fallback={<PanelSkeleton />}><TermsPanel /></Suspense>} />
           <Route path="/login" element={user ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signin" /></Suspense>} />
           <Route path="/register" element={user ? <Navigate to="/app/dashboard" replace /> : <Suspense fallback={<PanelSkeleton />}><AuthPanel mode="signup" /></Suspense>} />
-          <Route path="/" element={<Navigate to="/about" replace />} />
+          <Route path="/" element={<Navigate to="/blog" replace />} />
         </Route>
 
         {/* Onboarding */}

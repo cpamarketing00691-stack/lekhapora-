@@ -8,12 +8,12 @@
 }
 
 :root {
-  --brand-bg: 246 248 245;
-  --brand-primary: 91 125 190;
-  --brand-secondary: 127 174 158;
-  --brand-surface: 233 237 240;
-  --brand-text-p: 47 52 55;
-  --brand-text-s: 107 114 128;
+  --brand-bg: 23 23 23;
+  --brand-primary: 168 85 247;
+  --brand-secondary: 6 182 212;
+  --brand-surface: 38 38 38;
+  --brand-text-p: 255 255 255;
+  --brand-text-s: 156 163 175;
 }
 
 .dark {

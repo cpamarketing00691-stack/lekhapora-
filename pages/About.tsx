@@ -1,141 +1,114 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Target, Heart, GraduationCap, Sparkles, ArrowRight, Zap, BookOpen, Flame, CheckCircle2, TrendingUp, ShieldCheck, Rocket, Brain, Shield } from 'lucide-react';
-import BackgroundGrid from '../components/BackgroundGrid';
+import { Shield, Sparkles, Zap, Brain, Rocket, Lock, ArrowRight, Activity, Crosshair } from 'lucide-react';
 import { useLekhapora } from '../contexts/LekhaporaContext';
-import { motion, useScroll, useSpring } from 'framer-motion';
-import Lenis from 'lenis';
+import { motion } from 'framer-motion';
 
 const About: React.FC = () => {
   const { state } = useLekhapora();
   const cmsContent = state.cmsPages['about']?.content;
-  const { scrollYProgress } = useScroll();
-  const scaleX = useSpring(scrollYProgress, {
-    stiffness: 100,
-    damping: 30,
-    restDelta: 0.001
-  });
 
   useEffect(() => {
-    document.title = "About - Lekhapora";
+    document.title = "Lekhapora | Reclaim Your Focus & Crush HSC";
     window.scrollTo(0, 0);
-
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: 'vertical',
-      gestureOrientation: 'vertical',
-      smoothWheel: true,
-      wheelMultiplier: 1,
-      touchMultiplier: 2,
-    });
-
-    function raf(time: number) {
-      lenis.raf(time);
-      requestAnimationFrame(raf);
-    }
-
-    requestAnimationFrame(raf);
-
-    return () => {
-      lenis.destroy();
-    };
   }, []);
 
   const features = [
     {
-      icon: <Brain className="text-brand-primary" size={32} />,
+      icon: <Brain className="text-purple-500" size={32} />,
       title: "AI-Powered Insights",
       description: "Our proprietary algorithms analyze your study patterns to predict exactly where you need focus.",
-      color: "bg-brand-primary/10"
+      glow: "group-hover:shadow-[0_0_30px_rgba(168,85,247,0.3)]"
     },
     {
-      icon: <Target className="text-emerald-500" size={32} />,
-      title: "NCTB Precision",
-      description: "Every chapter, every topic, and every MCQ is mapped directly to the latest Bangladesh curriculum.",
-      color: "bg-emerald-500/10"
+      icon: <Crosshair className="text-cyan-500" size={32} />,
+      title: "Prime Focus Mode",
+      description: "Lock out distractions with our rigorous timer. Build deep work habits required for HSC success.",
+      glow: "group-hover:shadow-[0_0_30px_rgba(6,182,212,0.3)]"
     },
     {
-      icon: <Shield className="text-orange-500" size={32} />,
-      title: "Strict Progress",
-      description: "No more guessing. Our tracker ensures you cover 100% of the syllabus before your exams.",
-      color: "bg-orange-500/10"
+      icon: <Activity className="text-emerald-500" size={32} />,
+      title: "Progress Analytics",
+      description: "Track your performance against the NCTB curriculum in real-time. Know your weak points instantly.",
+      glow: "group-hover:shadow-[0_0_30px_rgba(16,185,129,0.3)]"
     }
   ];
 
   return (
-    <div className="relative min-h-screen bg-brand-bg selection:bg-brand-primary/30 overflow-x-hidden scroll-smooth">
-      <motion.div
-        className="fixed top-0 left-0 right-0 h-1 bg-brand-primary z-50 origin-left"
-        style={{ scaleX }}
-      />
-      <BackgroundGrid />
+    <div className="w-full bg-[#171717] min-h-screen text-white font-sans selection:bg-purple-500/30">
       
-      <section className="relative px-6 pt-24 md:pt-36 pb-24 overflow-hidden">
-        <div className="max-w-7xl mx-auto flex flex-col items-center text-center relative z-10">
+      {/* Hero Section */}
+      <section className="relative px-6 pt-32 md:pt-48 pb-32 overflow-hidden flex flex-col items-center text-center">
+        {/* Glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-purple-600/30 blur-[150px] rounded-full pointer-events-none" />
+        
+        <div className="relative z-10 max-w-5xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-primary/10 rounded-full border border-brand-primary/20 text-brand-primary font-black text-[10px] uppercase tracking-widest mb-10"
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-purple-400 font-bold text-xs uppercase tracking-widest mb-8 backdrop-blur-md"
           >
-            <Flame size={14} className="animate-pulse" /> The Smart Choice for HSC 2025/26
+            <Shield size={14} className="text-cyan-400" /> AI-Powered HSC Tracker
           </motion.div>
           
           <motion.h1 
             initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-5xl md:text-9xl font-black text-brand-text-p tracking-tighter leading-[0.85] mb-10"
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[1.1] mb-8"
           >
-            {cmsContent?.hero_title || "STRATEGIC STUDYING."}<br />
-            <span className="text-brand-primary italic underline decoration-brand-primary/20 underline-offset-[12px]">PRECISE RESULTS.</span>
+            Reclaim Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-cyan-500">Focus.</span><br/>
+            Dominate HSC.
           </motion.h1>
           
           <motion.p 
             initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="max-w-2xl text-lg md:text-2xl text-brand-text-s font-medium mb-12 leading-relaxed"
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="max-w-2xl mx-auto text-lg md:text-xl text-gray-400 font-medium mb-12 leading-relaxed"
           >
-            {cmsContent?.hero_subtitle || "Lekhapora is the first intelligence-driven study platform built specifically for the Bangladesh NCTB curriculum."}
+            {cmsContent?.hero_subtitle || "Lekhapora is the first intelligence-driven study platform built specifically to eliminate distractions and accelerate your NCTB curriculum preparation."}
           </motion.p>
-
+          
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="flex flex-col sm:flex-row gap-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-6"
           >
-            <Link to="/register" className="px-12 py-6 bg-brand-primary text-white rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl shadow-brand-primary/40 flex items-center gap-3 hover:scale-105 active:scale-95 transition-all">
-              Join 10,000+ Students <ArrowRight size={20} />
+            <Link to="/register" className="w-full sm:w-auto px-8 py-4 bg-white text-black rounded-xl font-bold text-sm hover:bg-purple-500 hover:text-white hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] transition-all flex items-center justify-center gap-2">
+              Start Free Trial <ArrowRight size={18} />
             </Link>
+            <a href="#features" className="w-full sm:w-auto px-8 py-4 bg-white/5 text-white border border-white/10 rounded-xl font-bold text-sm hover:bg-white/10 transition-all text-center">
+              View Features
+            </a>
           </motion.div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="relative px-6 py-24 bg-white/50 backdrop-blur-sm border-y border-brand-text-s/10">
+      {/* Features Grid */}
+      <section id="features" className="relative px-6 py-24 bg-[#0a0a0a] border-y border-white/5">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-black tracking-tight mb-4">Engineered for <span className="text-purple-500">Deep Work</span></h2>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">Stop doomscrolling and start studying. Our tools are designed to build unbreakable focus.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {features.map((feature, idx) => (
               <motion.div
                 key={idx}
                 initial={{ opacity: 0, y: 40 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6, delay: idx * 0.2 }}
-                className="p-10 rounded-[3rem] bg-brand-surface border border-brand-text-s/5 hover:shadow-xl transition-all group"
+                transition={{ duration: 0.5, delay: idx * 0.1 }}
+                className={`p-8 rounded-3xl bg-[#171717] border border-white/5 transition-all duration-300 group ${feature.glow}`}
               >
-                <div className={`w-16 h-16 ${feature.color} rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform`}>
+                <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center mb-6">
                   {feature.icon}
                 </div>
-                <h3 className="text-2xl font-black mb-4">{feature.title}</h3>
-                <p className="text-brand-text-s font-medium leading-relaxed">
+                <h3 className="text-2xl font-bold mb-4 text-white">{feature.title}</h3>
+                <p className="text-gray-400 leading-relaxed font-medium">
                   {feature.description}
                 </p>
               </motion.div>
@@ -144,96 +117,30 @@ const About: React.FC = () => {
         </div>
       </section>
 
-      {/* Mission Section */}
-      <section className="relative px-6 py-32 overflow-hidden">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-          >
-            <h2 className="text-4xl md:text-6xl font-black tracking-tighter mb-8 italic uppercase">
-              Our Mission: <span className="text-brand-primary">Democratizing</span> Excellence.
-            </h2>
-            <div className="space-y-6 text-lg text-brand-text-s font-medium leading-relaxed">
-              <p>
-                We believe that every student in Bangladesh deserves access to world-class study tools, regardless of their location or background.
-              </p>
-              <p>
-                Lekhapora was founded by a team of educators and engineers who saw the gap between traditional coaching and modern technology. We're here to bridge that gap.
-              </p>
-            </div>
-            
-            <div className="mt-12 grid grid-cols-2 gap-8">
-              <div className="p-6 rounded-3xl bg-brand-primary/5 border border-brand-primary/10">
-                <p className="text-4xl font-black text-brand-primary mb-1">98%</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-brand-text-s">Success Rate</p>
-              </div>
-              <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10">
-                <p className="text-4xl font-black text-emerald-500 mb-1">24/7</p>
-                <p className="text-xs font-bold uppercase tracking-widest text-brand-text-s">AI Support</p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
-            whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1 }}
-            className="relative"
-          >
-            <div className="aspect-square rounded-[4rem] bg-gradient-to-br from-brand-primary to-brand-secondary overflow-hidden shadow-2xl relative z-10">
-              <img 
-                src="https://picsum.photos/seed/study/800/800" 
-                alt="Students studying" 
-                className="w-full h-full object-cover mix-blend-overlay opacity-50"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Rocket size={120} className="text-white animate-bounce" />
-              </div>
-            </div>
-            {/* Decorative elements */}
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-brand-primary/20 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-brand-secondary/20 rounded-full blur-3xl animate-pulse" />
-          </motion.div>
-        </div>
-      </section>
-
       {/* CTA Section */}
-      <section className="relative px-6 py-32">
+      <section className="relative px-6 py-32 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#171717] to-[#0a0a0a] z-0" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-cyan-600/10 blur-[150px] rounded-full pointer-events-none" />
+        
         <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="max-w-5xl mx-auto p-12 md:p-24 rounded-[4rem] bg-slate-900 text-white text-center relative overflow-hidden"
+          className="max-w-5xl mx-auto p-12 md:p-20 rounded-[3rem] bg-white/5 border border-white/10 text-center relative z-10 backdrop-blur-xl"
         >
-          <div className="relative z-10">
-            <h2 className="text-4xl md:text-7xl font-black tracking-tighter mb-8">
-              READY TO <span className="text-brand-primary italic">TRANSFORM</span> YOUR FUTURE?
-            </h2>
-            <p className="text-xl text-slate-400 mb-12 max-w-2xl mx-auto">
-              Join thousands of HSC candidates who are already using Lekhapora to dominate their exams.
-            </p>
-            <Link to="/register" className="inline-flex items-center gap-3 px-12 py-6 bg-white text-slate-900 rounded-full font-black text-sm uppercase tracking-widest hover:bg-brand-primary hover:text-white transition-all">
-              Get Started Now <Zap size={20} />
-            </Link>
-          </div>
-          
-          {/* Background pattern */}
-          <div className="absolute inset-0 opacity-10">
-            <BackgroundGrid />
-          </div>
+          <Lock className="w-16 h-16 text-purple-500 mx-auto mb-6" />
+          <h2 className="text-4xl md:text-6xl font-black tracking-tight mb-6">
+            Secure Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-cyan-400">Future.</span>
+          </h2>
+          <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+            Join thousands of HSC candidates breaking free from digital distractions. Reclaim hours of lost time every day.
+          </p>
+          <Link to="/register" className="inline-flex items-center justify-center gap-3 px-10 py-5 bg-gradient-to-r from-purple-600 to-cyan-600 text-white rounded-xl font-bold text-sm uppercase tracking-widest hover:shadow-[0_0_40px_rgba(168,85,247,0.4)] hover:scale-105 transition-all">
+            Get Lekhapora Now <Zap size={18} />
+          </Link>
         </motion.div>
       </section>
-
-      <footer className="px-6 py-12 text-center border-t border-brand-text-s/10">
-        <p className="text-brand-text-s text-sm font-medium">
-          © 2026 Lekhapora. Built with ❤️ for Bangladesh.
-        </p>
-      </footer>
+      
     </div>
   );
 };
